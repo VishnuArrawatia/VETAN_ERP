@@ -1,0 +1,26 @@
+{
+  "collections": {
+    "payroll_system": {
+      "schema": {
+        "id": "string",
+        "employees": "array",
+        "attendance": "array",
+        "payroll_runs": "array",
+        "payslips": "array",
+        "leave_applications": "array",
+        "ff_settlements": "array",
+        "loans": "array",
+        "departments": "array",
+        "companies": "array",
+        "salary_revisions": "array",
+        "audit_logs": "array",
+        "assets": "array",
+        "travel_reimbursements": "array",
+        "broadcasts": "array",
+        "attendance_corrections": "array",
+        "comp_off_requests": "array",
+        "overtime_requests": "array"
+      }
+    }
+  }
+}

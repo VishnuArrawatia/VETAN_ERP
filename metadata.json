@@ -1,0 +1,6 @@
+{
+  "name": "VETAN ERP",
+  "description": "A full-stack ERP for staff payroll processing with interactive Excel-like sheets, automated salary structures (PF/ESIC/PT/Tax), attendance tracking, printable payslips, and a live SQL-relational database query interface.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
