@@ -87,6 +87,7 @@ import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
+import { fetchJsonWithOfflineFallback, filterEmployeesByCompany } from './lib/offlineStore';
 
 // Define simulated HR Users & Powers
 const SIMULATED_HR_USERS = [
@@ -721,8 +722,7 @@ export default function App() {
 
   const fetchCompanies = async () => {
     try {
-      const res = await fetch('/api/companies');
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback('/api/companies', (store) => store.companies || []);
       setCompanies(data);
     } catch (e) {
       console.error('Error fetching companies list', e);
@@ -731,8 +731,7 @@ export default function App() {
 
   const fetchDepartments = async () => {
     try {
-      const res = await fetch('/api/departments');
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback('/api/departments', (store) => store.departments || []);
       setDepartments(data);
     } catch (e) {
       console.error('Error fetching departments list', e);
@@ -1306,8 +1305,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/employees?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/employees?company=${companyParam}`, (store) =>
+        filterEmployeesByCompany(store.employees || [], companyParam)
+      );
       setEmployees(data);
     } catch (e) {
       console.error('Error fetching employees directory', e);
@@ -1332,8 +1332,7 @@ export default function App() {
 
   const fetchLoans = async () => {
     try {
-      const res = await fetch('/api/loans');
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback('/api/loans', (store) => store.loans || []);
       setLoans(data);
       fetchLoanPolicy();
     } catch (e) {
@@ -1343,8 +1342,7 @@ export default function App() {
 
   const fetchRevisions = async () => {
     try {
-      const res = await fetch('/api/revisions');
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback('/api/revisions', (store) => store.salary_revisions || []);
       setAllRevisions(data);
     } catch (e) {
       console.error('Error fetching salary revisions list', e);
@@ -1355,8 +1353,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/compoff?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/compoff?company=${companyParam}`, (store) =>
+        store.compoff_requests || []
+      );
       setCompoffRequests(data);
     } catch (e) {
       console.error('Error fetching compoff requests list', e);
@@ -1367,8 +1366,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/gate-passes?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/gate-passes?company=${companyParam}`, (store) =>
+        store.gate_passes || []
+      );
       setGatePasses(data);
     } catch (e) {
       console.error('Error fetching gate passes list', e);
@@ -1485,8 +1485,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/leaves?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/leaves?company=${companyParam}`, (store) =>
+        store.leave_applications || []
+      );
       setLeaveApps(data);
     } catch (e) {
       console.error('Error with leave applications fetch', e);
@@ -1498,8 +1499,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/attendance/corrections?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/attendance/corrections?company=${companyParam}`, (store) =>
+        store.attendance_corrections || []
+      );
       setCorrectionsList(data);
     } catch (e) {
       console.error('Error fetching corrections', e);
@@ -1541,8 +1543,9 @@ export default function App() {
     try {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
-      const res = await fetch(`/api/ff?company=${companyParam}`);
-      const data = await res.json();
+      const data = await fetchJsonWithOfflineFallback(`/api/ff?company=${companyParam}`, (store) =>
+        store.ff_settlements || []
+      );
       setFfRecords(data);
     } catch (e) {
       console.error('Error fetching F&F settlement registry', e);
@@ -1551,22 +1554,30 @@ export default function App() {
 
   const fetchPayrollRuns = async () => {
     try {
-      // Runs list
-      const res = await fetch('/api/payroll-runs');
-      const data = await res.json();
-      setPayrollRuns(data);
+      const runs = await fetchJsonWithOfflineFallback('/api/payroll-runs', (store) => store.payroll_runs || []);
+      setPayrollRuns(runs);
 
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
 
-      // Payslips for active month & company selection
-      const resSlips = await fetch(`/api/payslips/month/${activeMonth}?company=${companyParam}`);
-      const dataSlips = await resSlips.json();
+      const dataSlips = await fetchJsonWithOfflineFallback(`/api/payslips/month/${activeMonth}?company=${companyParam}`, (store) => {
+        const slips = store.payslips || [];
+        return slips.filter((s: any) => {
+          const monthOk = !activeMonth || s.month === activeMonth || s.payroll_month === activeMonth;
+          const companyOk = !companyParam || companyParam === 'ALL' || s.company === companyParam;
+          return monthOk && companyOk;
+        });
+      });
       setMonthlySlips(dataSlips);
 
-      // Attendance records for active month
-      const resAtt = await fetch(`/api/attendance?month=${activeMonth}&company=${companyParam}`);
-      const dataAtt = await resAtt.json();
+      const dataAtt = await fetchJsonWithOfflineFallback(`/api/attendance?month=${activeMonth}&company=${companyParam}`, (store) => {
+        const rows = store.attendance || [];
+        return rows.filter((a: any) => {
+          const monthOk = !activeMonth || a.month === activeMonth;
+          const companyOk = !companyParam || companyParam === 'ALL' || a.company === companyParam;
+          return monthOk && companyOk;
+        });
+      });
       setAttendance(dataAtt);
     } catch (e) {
       console.error('Error loading payroll runs list', e);
