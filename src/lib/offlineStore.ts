@@ -36,12 +36,61 @@ function looksLikeJson(text: string): boolean {
   return t.startsWith('{') || t.startsWith('[');
 }
 
+const COMPANY_MASTER_CORRECTIONS: Record<
+  string,
+  { name: string; registered_office: string; factory_address: string }
+> = {
+  'SVN-1': {
+    name: 'SVN Opto Electronics Pvt Ltd',
+    registered_office: 'Survey No 143/E, 143/F, 143/G & 143/H, Village Dhabhel, Daman 396210',
+    factory_address: 'Survey No 143/E, 143/F, 143/G & 143/H, Village Dhabhel, Daman 396210'
+  },
+  'SVN-II': {
+    name: 'SVN Opto Electronics Pvt Ltd',
+    registered_office: 'Survey No 143/E, 143/F, 143/G & 143/H, Village Dhabhel, Daman 396210',
+    factory_address: 'Survey No 370 (2)/1, Premises no. - 2, Building no. 1 & 2, Kachigam, Daman 396210'
+  },
+  'Sakar-I': {
+    name: 'Sakar Electricals & Electronics Pvt Ltd',
+    registered_office: 'Survey No. 352/1, Vapi Kachigam Road, Kachigam, Daman-396210',
+    factory_address: 'Survey No. 352/1, Vapi Kachigam Road, Kachigam, Daman-396210'
+  },
+  'Sakar-III': {
+    name: 'Sakar Electricals & Electronics Pvt Ltd',
+    registered_office: 'Survey No. 352/1, Vapi Kachigam Road, Kachigam, Daman-396210',
+    factory_address: 'Plot No 60, Daman Ganga Industrial Park, Dungra, Vapi (Gujarat)'
+  },
+  'Flare-1': {
+    name: 'Flare Luminaires Pvt. Ltd.',
+    registered_office: 'Survey No 370/2 (6), Vapi-Kachigam Road, Kachigam, Daman 396210',
+    factory_address: 'Survey No 370/2 (6), Vapi-Kachigam Road, Kachigam, Daman 396210'
+  },
+  'Zenivo-1': {
+    name: 'Zenivo Opto Electronics Pvt Ltd',
+    registered_office: 'Survey No 98/8, Daman Industrial Estate, Kadlya, Daman',
+    factory_address: 'Survey No 98/8, Daman Industrial Estate, Kadlya, Daman'
+  }
+};
+
 function normalizeCompanyNames(store: OfflineStore): OfflineStore {
   const companies = (store.companies || []).map((c) => {
     const id = String(c?.id || '');
+    const corr = COMPANY_MASTER_CORRECTIONS[id];
+    if (corr) {
+      return {
+        ...c,
+        name: corr.name,
+        registered_office: corr.registered_office,
+        factory_address: corr.factory_address
+      };
+    }
+    // Legacy name cleanup
     const name = String(c?.name || '');
     if (/flare/i.test(id) && /flare\s+technologies/i.test(name)) {
       return { ...c, name: 'Flare Luminaires Pvt. Ltd.' };
+    }
+    if (/zenivo/i.test(id) && /zenivo\s+systems/i.test(name)) {
+      return { ...c, name: 'Zenivo Opto Electronics Pvt Ltd' };
     }
     return c;
   });
@@ -69,15 +118,27 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
+    const finalize = async (raw: OfflineStore, fromRemote: boolean) => {
+      const before = JSON.stringify(raw.companies || []);
+      const normalized = normalizeCompanyNames(raw);
+      const changed = JSON.stringify(normalized.companies || []) !== before;
+      persistLocal(normalized);
+      if (changed) {
+        // Push corrected legal names/addresses back to cloud
+        void pushStoreToSupabase(normalized);
+      } else if (!fromRemote) {
+        void bootstrapSupabaseFromLocal(normalized);
+      } else {
+        void bootstrapSupabaseFromLocal(normalized);
+      }
+      return normalized;
+    };
+
     // 1) Supabase live (permanent cloud DB)
     try {
       const remote = await pullStoreFromSupabase();
       if (remote && Array.isArray(remote.employees) && remote.employees.length > 0) {
-        const normalized = normalizeCompanyNames(remote);
-        persistLocal(normalized);
-        // Ensure monthly backup exists
-        void bootstrapSupabaseFromLocal(normalized);
-        return normalized;
+        return await finalize(remote, true);
       }
     } catch (e) {
       console.warn('[Store] Supabase pull skipped:', e);
@@ -90,7 +151,7 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
       if (backupStr && looksLikeJson(backupStr)) {
         const parsed = JSON.parse(backupStr);
         if (parsed?.employees?.length) {
-          localStore = normalizeCompanyNames(parsed);
+          localStore = parsed;
         }
       }
     } catch {
@@ -103,15 +164,10 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
       if (!res.ok) {
         throw new Error('Could not load offline payroll store');
       }
-      localStore = normalizeCompanyNames(await res.json());
+      localStore = await res.json();
     }
 
-    persistLocal(localStore);
-
-    // First-time upload to Supabase so data is not only in this browser
-    void bootstrapSupabaseFromLocal(localStore);
-
-    return localStore;
+    return await finalize(localStore, false);
   })();
 
   try {
