@@ -15,6 +15,22 @@ View your app in AI Studio: https://ai.studio/apps/0305d3a0-ef2b-415e-affb-18e97
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Copy `.env.example` to `.env.local` and set:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. Run the frontend:
    `npm run dev`
+4. (Optional) Full Express + SQLite backend locally:
+   `npm run dev:server`
+
+## Deploy on Vercel
+
+1. Framework preset: **Vite** (or use the included `vercel.json`)
+2. Build command: `npm run build`
+3. Output directory: `dist`
+4. In Vercel → Project Settings → Environment Variables, add:
+   - `VITE_SUPABASE_URL` = your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon/public key
+5. Redeploy after saving env vars
+
+> Note: The old Express/SQLite API (`server.ts`) does not run on Vercel serverless. The current Vercel deploy is the Vite frontend talking to Supabase.
