@@ -32,7 +32,8 @@ View your app in AI Studio: https://ai.studio/apps/0305d3a0-ef2b-415e-affb-18e97
    - Add only `VITE_SUPABASE_ANON_KEY` = Supabase **Publishable** key (`sb_publishable_...`)
    - Keep **Sensitive** OFF while creating it, then Save
 5. Redeploy after saving env vars
+6. Run SQL setup once: see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) (permanent data from April 2026+)
 
 > The Supabase project URL is already set in code (`https://wffkgzzrninmcbtqbdcf.supabase.co`), so you do not need `VITE_SUPABASE_URL` on Vercel.
 >
-> Note: The old Express/SQLite API (`server.ts`) does not run on Vercel serverless. The current Vercel deploy is the Vite frontend talking to Supabase.
+> Note: The old Express/SQLite API (`server.ts`) does not run on Vercel serverless. Live ERP data should be stored in Supabase (`vetan_erp_store` + backups).
