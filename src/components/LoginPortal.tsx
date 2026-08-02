@@ -40,7 +40,8 @@ const SIMULATED_HR_USERS = [
     name: 'Vishnu Arrawatia',
     title: 'Company Management',
     role: 'SUPER_HR',
-    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1']
+    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'],
+    password: 'Varrawatia'
   },
   {
     id: 'USR002',
@@ -48,7 +49,8 @@ const SIMULATED_HR_USERS = [
     name: 'Mr. V. K. Saraf (MD)',
     title: 'Managing Director',
     role: 'MANAGEMENT',
-    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1']
+    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'],
+    password: 'VKS'
   },
   {
     id: 'USR003',
@@ -56,7 +58,8 @@ const SIMULATED_HR_USERS = [
     name: 'Vijendra',
     title: 'HR Officer (SVN Unit I)',
     role: 'COMPANY_HR',
-    company_rights: ['SVN-1']
+    company_rights: ['SVN-1'],
+    password: 'vijendra'
   },
   {
     id: 'USR004',
@@ -64,7 +67,8 @@ const SIMULATED_HR_USERS = [
     name: 'Manisha Sapate',
     title: 'HR Officer (SVN Unit II)',
     role: 'COMPANY_HR',
-    company_rights: ['SVN-II']
+    company_rights: ['SVN-II'],
+    password: 'manisha_s'
   },
   {
     id: 'USR005',
@@ -72,7 +76,8 @@ const SIMULATED_HR_USERS = [
     name: 'Manisha',
     title: 'HR Officer (Sakar Unit I)',
     role: 'COMPANY_HR',
-    company_rights: ['Sakar-I']
+    company_rights: ['Sakar-I'],
+    password: 'manisha'
   },
   {
     id: 'USR006',
@@ -80,7 +85,8 @@ const SIMULATED_HR_USERS = [
     name: 'Indraprakash',
     title: 'HR Officer (Sakar Unit III)',
     role: 'COMPANY_HR',
-    company_rights: ['Sakar-III']
+    company_rights: ['Sakar-III'],
+    password: 'indraprakash'
   },
   {
     id: 'USR007',
@@ -88,7 +94,8 @@ const SIMULATED_HR_USERS = [
     name: 'Nilesh',
     title: 'HR Officer (Flare)',
     role: 'COMPANY_HR',
-    company_rights: ['Flare-1']
+    company_rights: ['Flare-1'],
+    password: 'nilesh'
   },
   {
     id: 'USR008',
@@ -96,9 +103,44 @@ const SIMULATED_HR_USERS = [
     name: 'Pinki',
     title: 'HR Officer (Zenivo)',
     role: 'COMPANY_HR',
-    company_rights: ['Zenivo-1']
+    company_rights: ['Zenivo-1'],
+    password: 'pinki'
   }
 ];
+
+/** Vercel hosts only the frontend — /api/* Express routes are missing there. */
+async function readApiJson(res: Response): Promise<{ ok: true; data: any } | { ok: false; missingApi: boolean; message: string }> {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    return {
+      ok: false,
+      missingApi: true,
+      message: 'Server API not available on this host (Vercel frontend-only). Using offline login.'
+    };
+  }
+  try {
+    return { ok: true, data: JSON.parse(text) };
+  } catch {
+    // Often HTML index.html from SPA rewrite instead of JSON API
+    return {
+      ok: false,
+      missingApi: true,
+      message: 'Server API not available on this host (Vercel frontend-only). Using offline login.'
+    };
+  }
+}
+
+function offlineAdminLogin(username: string, password: string) {
+  const user = SIMULATED_HR_USERS.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
+  if (!user) {
+    return { success: false as const, error: 'User Not Found' };
+  }
+  if (user.password !== password) {
+    return { success: false as const, error: 'Password Incorrect' };
+  }
+  const { password: _pw, ...safeUser } = user;
+  return { success: true as const, user: safeUser, forcePinChange: false };
+}
 
 export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginPortalProps) {
   const [activeTab, setActiveTab] = useState<'employee' | 'admin'>('employee');
@@ -130,13 +172,17 @@ export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginP
 
   useEffect(() => {
     fetch('/api/hr/users')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setAdminUsers(data);
+      .then(async res => {
+        const parsed = await readApiJson(res);
+        if (parsed.ok && Array.isArray(parsed.data) && parsed.data.length > 0) {
+          setAdminUsers(parsed.data);
+        } else {
+          setAdminUsers(SIMULATED_HR_USERS.map(({ password: _p, ...u }) => u));
         }
       })
-      .catch(err => console.error('Error loading users:', err));
+      .catch(() => {
+        setAdminUsers(SIMULATED_HR_USERS.map(({ password: _p, ...u }) => u));
+      });
   }, []);
 
   const handleEmployeeLoginSubmit = async (e: React.FormEvent) => {
@@ -149,7 +195,47 @@ export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employeeId, password })
       });
-      const data = await res.json();
+      const parsed = await readApiJson(res);
+      if (!parsed.ok) {
+        // Offline/demo fallback for Vercel (no Express API)
+        const demo = DEMO_EMPLOYEES.find(d => d.id.toLowerCase() === employeeId.trim().toLowerCase());
+        if (demo && password === '123456') {
+          onLoginSuccess({
+            id: demo.id,
+            name: demo.name,
+            designation: demo.title,
+            company: 'SVN-1',
+            department: 'Production',
+            email: `${demo.id.toLowerCase()}@sakarelectricals.com`,
+            phone: '',
+            joining_date: '2020-01-01',
+            status: 'ACTIVE',
+            bank_name: '',
+            bank_account: '',
+            ifsc: '',
+            pan: '',
+            uan: '',
+            base_salary: 0,
+            hra: 0,
+            special_allowance: 0,
+            da: 0,
+            pf_opt_in: true,
+            esic_opt_in: true,
+            professional_tax_opt_in: true,
+            leave_balance_pl: 0,
+            leave_balance_cl: 0,
+            leave_balance_sl: 0
+          });
+          return;
+        }
+        setErrorMsg(
+          'missingApi' in parsed && parsed.missingApi
+            ? 'Server API missing on Vercel. For demo employee login use ID EMP001 and password 123456.'
+            : ('message' in parsed ? parsed.message : 'Login failed')
+        );
+        return;
+      }
+      const data = parsed.data;
       if (data.success) {
         if (data.needsPasswordChange) {
           setCompulsoryEmployee(data.employee);
@@ -289,7 +375,19 @@ export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: adminUsername, password: adminPassword })
       });
-      const data = await res.json();
+      const parsed = await readApiJson(res);
+
+      if (!parsed.ok) {
+        const offline = offlineAdminLogin(adminUsername, adminPassword);
+        if (offline.success) {
+          onHRAdminSuccess(offline.user, offline.forcePinChange);
+          return;
+        }
+        setErrorMsg(offline.error || ('message' in parsed ? parsed.message : 'Login failed'));
+        return;
+      }
+
+      const data = parsed.data;
       if (data.success) {
         if (data.needsPasswordChange) {
           setCompulsoryHR(data.user);
@@ -301,7 +399,13 @@ export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginP
         setErrorMsg(data.error || 'Authentication failure. Check Username and password.');
       }
     } catch (err: any) {
-      setErrorMsg('Authentication error: ' + err.message);
+      // Network failure — still try offline credentials (Vercel has no /api)
+      const offline = offlineAdminLogin(adminUsername, adminPassword);
+      if (offline.success) {
+        onHRAdminSuccess(offline.user, offline.forcePinChange);
+      } else {
+        setErrorMsg(offline.error || ('Authentication error: ' + err.message));
+      }
     } finally {
       setLoading(false);
     }
