@@ -28,6 +28,7 @@ import {
   Scale
 } from 'lucide-react';
 import { CompanyMaster } from '../types';
+import { upsertOfflineCompany } from '../lib/offlineStore';
 
 interface CompanyMasterViewProps {
   companies: CompanyMaster[];
@@ -306,32 +307,47 @@ export function CompanyMasterView({
       const activeHRUser = localStorage.getItem('vetan_active_hr');
       const operatorName = activeHRUser ? JSON.parse(activeHRUser).name : 'Group HR Director';
 
-      let response;
-      if (isEditing && selectedCompany) {
-        response = await fetch(`/api/companies/${selectedCompany.id}`, {
-          method: 'PUT',
-          headers: { 
-            'Content-Type': 'application/json',
-            'X-Operator-Name': operatorName,
-            'X-Operator-Role': activeHR?.role || 'SUPER_HR'
-          },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        response = await fetch('/api/companies', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'X-Operator-Name': operatorName,
-            'X-Operator-Role': activeHR?.role || 'SUPER_HR'
-          },
-          body: JSON.stringify(payload)
-        });
+      let response: Response | null = null;
+      try {
+        if (isEditing && selectedCompany) {
+          response = await fetch(`/api/companies/${selectedCompany.id}`, {
+            method: 'PUT',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Operator-Name': operatorName,
+              'X-Operator-Role': activeHR?.role || 'SUPER_HR'
+            },
+            body: JSON.stringify(payload)
+          });
+        } else {
+          response = await fetch('/api/companies', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Operator-Name': operatorName,
+              'X-Operator-Role': activeHR?.role || 'SUPER_HR'
+            },
+            body: JSON.stringify(payload)
+          });
+        }
+      } catch {
+        response = null;
       }
 
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.error || 'Failed to save company settings');
+      const rawText = response ? await response.text() : '';
+      let resData: any = null;
+      try {
+        resData = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        resData = null;
+      }
+
+      const apiOk = !!(response && response.ok && resData && (resData.success !== false));
+      if (!apiOk) {
+        // Vercel has no Express /api — keep the edited legal name in offline store
+        await upsertOfflineCompany(payload);
+      } else if (response && !response.ok) {
+        throw new Error(resData?.error || 'Failed to save company settings');
       }
 
       // Automatically register any newly declared departments into the database so they are usable immediately

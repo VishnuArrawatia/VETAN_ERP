@@ -129,7 +129,13 @@ export function CompanyLogo({ company, className = "h-8", showText = true }: { c
 }
 
 export function getCompanyName(companyCode: string): string {
-  const normalized = String(companyCode || '').trim().replace(/[-_]/g, ' ').toLowerCase();
+  const raw = String(companyCode || '').trim();
+  // If caller already passed a full legal name, keep it (do not override edits)
+  if (/pvt\.?\s*ltd/i.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/[-_]/g, ' ').toLowerCase();
   
   if (normalized === 'svn 1' || normalized === 'svn i' || normalized === 'svn' || normalized.startsWith('svn 1') || normalized.includes('svn opto') || normalized === 'svn-1') {
     return 'SVN Opto Electronics Pvt Ltd.';
@@ -144,17 +150,17 @@ export function getCompanyName(companyCode: string): string {
     return 'Sakar Electricals & Electronics Pvt Ltd (Unit III)';
   }
   if (normalized.includes('flare')) {
-    return 'Flare Technologies Pvt Ltd';
+    return 'Flare Luminaires Pvt. Ltd.';
   }
   if (normalized.includes('zenivo')) {
     return 'Zenivo Systems Pvt Ltd';
   }
   
   // Specific fallback lookups
-  if (companyCode.includes('SVN-1')) return 'SVN Opto Electronics Pvt Ltd.';
-  if (companyCode.includes('SVN II') || companyCode.includes('SVN-II')) return 'SVN Opto Electronics Pvt Ltd.(Unit II)';
-  if (companyCode.includes('Sakar I') || companyCode.includes('Sakar-I')) return 'Sakar Electricals & Electronics Pvt Ltd';
-  if (companyCode.includes('Sakar III') || companyCode.includes('Sakar-III')) return 'Sakar Electricals & Electronics Pvt Ltd (Unit III)';
+  if (raw.includes('SVN-1')) return 'SVN Opto Electronics Pvt Ltd.';
+  if (raw.includes('SVN II') || raw.includes('SVN-II')) return 'SVN Opto Electronics Pvt Ltd.(Unit II)';
+  if (raw.includes('Sakar I') || raw.includes('Sakar-I')) return 'Sakar Electricals & Electronics Pvt Ltd';
+  if (raw.includes('Sakar III') || raw.includes('Sakar-III')) return 'Sakar Electricals & Electronics Pvt Ltd (Unit III)';
   
-  return companyCode || 'Sakar Electricals & Electronics Pvt Ltd';
+  return raw || 'Sakar Electricals & Electronics Pvt Ltd';
 }

@@ -2944,7 +2944,7 @@ export default function App() {
                         {[
                           { brand: 'SVN', name: 'SVN Division', desc: 'SVN-1 & SVN-II manufacturing units', units: ['SVN-1', 'SVN-II'], theme: 'emerald' },
                           { brand: 'Sakar', name: 'Sakar Electricals Division', desc: 'Sakar-I & Sakar-III electronics plants', units: ['Sakar-I', 'Sakar-III'], theme: 'orange' },
-                          { brand: 'Flare', name: 'Flare Technologies Division', desc: 'Savli Unit I specialized systems', units: ['Flare-1'], theme: 'rose' },
+                          { brand: 'Flare', name: 'Flare Luminaires Division', desc: 'Savli Unit I specialized systems', units: ['Flare-1'], theme: 'rose' },
                           { brand: 'Zenivo', name: 'Zenivo Systems Division', desc: 'Makarpura Unit I digital tech', units: ['Zenivo-1'], theme: 'blue' },
                         ].map(group => {
                           const groupEmps = employees.filter(e => group.units.includes(e.company));
