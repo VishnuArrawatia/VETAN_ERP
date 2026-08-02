@@ -26,11 +26,10 @@ export default function App() {
       return;
     }
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseAnonKey) {
       setErrorMsg(
-        'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel environment variables.'
+        'Supabase is not configured. Set VITE_SUPABASE_ANON_KEY in Vercel → Settings → Environment Variables (use the Publishable key), then Redeploy.'
       );
       return;
     }

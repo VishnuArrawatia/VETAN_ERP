@@ -1,15 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+/**
+ * Project URL is public (not a secret). Hardcoded so a stuck/wrong
+ * Vercel env var like https://aBcDe.supabase.co cannot break production.
+ */
+const SUPABASE_URL = 'https://wffkgzzrninmcbtqbdcf.supabase.co';
+
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseAnonKey) {
   console.error(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Add them in Vercel Project Settings → Environment Variables.'
+    'Missing VITE_SUPABASE_ANON_KEY. Add the Supabase Publishable key in Vercel → Settings → Environment Variables.'
   );
 }
 
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
+  SUPABASE_URL,
   supabaseAnonKey || 'placeholder-anon-key'
 );

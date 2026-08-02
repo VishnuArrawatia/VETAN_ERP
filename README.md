@@ -16,8 +16,7 @@ View your app in AI Studio: https://ai.studio/apps/0305d3a0-ef2b-415e-affb-18e97
 1. Install dependencies:
    `npm install`
 2. Copy `.env.example` to `.env.local` and set:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_SUPABASE_ANON_KEY` (Supabase Publishable key)
 3. Run the frontend:
    `npm run dev`
 4. (Optional) Full Express + SQLite backend locally:
@@ -28,9 +27,12 @@ View your app in AI Studio: https://ai.studio/apps/0305d3a0-ef2b-415e-affb-18e97
 1. Framework preset: **Vite** (or use the included `vercel.json`)
 2. Build command: `npm run build`
 3. Output directory: `dist`
-4. In Vercel → Project Settings → Environment Variables, add:
-   - `VITE_SUPABASE_URL` = your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon/public key
+4. In Vercel → Project Settings → Environment Variables:
+   - **Delete** any old `VITE_SUPABASE_URL` entry (do not keep editing it — Vercel Sensitive vars often fail to update)
+   - Add only `VITE_SUPABASE_ANON_KEY` = Supabase **Publishable** key (`sb_publishable_...`)
+   - Keep **Sensitive** OFF while creating it, then Save
 5. Redeploy after saving env vars
 
+> The Supabase project URL is already set in code (`https://wffkgzzrninmcbtqbdcf.supabase.co`), so you do not need `VITE_SUPABASE_URL` on Vercel.
+>
 > Note: The old Express/SQLite API (`server.ts`) does not run on Vercel serverless. The current Vercel deploy is the Vite frontend talking to Supabase.
