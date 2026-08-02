@@ -14,8 +14,11 @@ import {
   Calculator,
   ShieldAlert,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  Cloud
 } from 'lucide-react';
+import { createSupabaseBackup, supabaseSyncStatus } from '../lib/supabaseData';
+import { loadOfflineStore, saveStoreEverywhere } from '../lib/offlineStore';
 
 interface DatabaseHealthViewProps {
   employeesCount: number;
@@ -23,12 +26,13 @@ interface DatabaseHealthViewProps {
 }
 
 export default function DatabaseHealthView({ employeesCount, onRefreshAll }: DatabaseHealthViewProps) {
-  const [dbType, setDbType] = useState('SQLite Persistent (Cloud Run Sandbox) & LocalStorage Sync');
+  const [dbType, setDbType] = useState('Supabase Cloud + Local Snapshot (Vercel)');
   const [lastSave, setLastSave] = useState<string>('Never');
   const [lastBackup, setLastBackup] = useState<string>('Never');
   const [lastRestore, setLastRestore] = useState<string>('Never');
   const [checking, setChecking] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string>('Online & Persistent');
+  const [syncStatus, setSyncStatus] = useState<string>('Checking Supabase...');
+  const [supabaseEmployees, setSupabaseEmployees] = useState(0);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [purgePin, setPurgePin] = useState('');
 
@@ -42,12 +46,56 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
     if (restoreTime) setLastRestore(new Date(restoreTime).toLocaleString('en-IN'));
   };
 
+  const refreshSupabaseStatus = async () => {
+    const status = await supabaseSyncStatus();
+    if (!status.configured) {
+      setSyncStatus('Supabase key missing — add VITE_SUPABASE_ANON_KEY on Vercel');
+      setSupabaseEmployees(0);
+      return;
+    }
+    setSupabaseEmployees(status.liveEmployees);
+    if (status.liveEmployees > 0) {
+      setSyncStatus(`Supabase LIVE · ${status.liveEmployees} employees · ${status.lastUpdated ? new Date(status.lastUpdated).toLocaleString('en-IN') : 'ok'}`);
+      setDbType('Supabase permanent cloud store (April 2026+)');
+    } else {
+      setSyncStatus('Supabase connected but empty — click “Upload / Sync to Supabase”');
+    }
+  };
+
   useEffect(() => {
     loadTimes();
-    const interval = setInterval(loadTimes, 5000);
+    void refreshSupabaseStatus();
+    const interval = setInterval(() => {
+      loadTimes();
+      void refreshSupabaseStatus();
+    }, 8000);
     return () => clearInterval(interval);
   }, []);
 
+  const handleSyncToSupabase = async () => {
+    setChecking(true);
+    setMsg(null);
+    try {
+      const store = await loadOfflineStore();
+      await saveStoreEverywhere(store);
+      const label = `manual-${new Date().toISOString().slice(0, 19)}`;
+      const backup = await createSupabaseBackup(store, label, 'Manual backup from Database Health');
+      localStorage.setItem('vetan_last_save_time', new Date().toISOString());
+      localStorage.setItem('vetan_last_backup_time', new Date().toISOString());
+      await refreshSupabaseStatus();
+      setMsg({
+        type: backup.ok ? 'success' : 'error',
+        text: backup.ok
+          ? `Cloud sync OK. Live store + backup saved (${store.employees?.length || 0} employees).`
+          : `Live store saved, backup issue: ${backup.error || 'unknown'}`
+      });
+      onRefreshAll();
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e?.message || 'Supabase sync failed. Did you run supabase/schema.sql?' });
+    } finally {
+      setChecking(false);
+    }
+  };
   const handlePurgeEmployees = async () => {
     if (!confirm('⚠️ CRITICAL WARNING: Are you absolutely sure you want to permanently delete ALL employees and respective historical payroll ledger entries? This cannot be undone!')) {
       return;
@@ -91,6 +139,25 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
     setChecking(true);
     setMsg(null);
     try {
+      // Prefer full local/Supabase path on Vercel (no Express /api)
+      const store = await loadOfflineStore();
+      if (store?.employees?.length) {
+        await saveStoreEverywhere(store);
+        const label = new Date().toISOString().slice(0, 7);
+        await createSupabaseBackup(store, `sync-${label}-${Date.now()}`, 'Manual sync from Database Health');
+        const nowStr = new Date().toISOString();
+        localStorage.setItem('vetan_last_save_time', nowStr);
+        localStorage.setItem('vetan_last_backup_time', nowStr);
+        loadTimes();
+        await refreshSupabaseStatus();
+        setMsg({
+          type: 'success',
+          text: `Saved to browser + Supabase cloud. Verified ${store.employees.length} employees.`
+        });
+        onRefreshAll();
+        return;
+      }
+
       const res = await fetch('/api/backup-json');
       if (res.ok) {
         const data = await res.json();
@@ -103,7 +170,9 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
           const nowStr = new Date().toISOString();
           localStorage.setItem('vetan_last_save_time', nowStr);
           localStorage.setItem('vetan_last_backup_time', nowStr);
+          await saveStoreEverywhere(data);
           loadTimes();
+          await refreshSupabaseStatus();
           setMsg({
             type: 'success',
             text: `Database sync snapshot saved successfully! Backup verified for ${data.employees.length} employees.`
@@ -116,7 +185,7 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
         setMsg({ type: 'error', text: 'Server returned error during backup generation.' });
       }
     } catch (err: any) {
-      setMsg({ type: 'error', text: 'Failed to connect to database: ' + err.message });
+      setMsg({ type: 'error', text: 'Failed to sync database: ' + err.message });
     } finally {
       setChecking(false);
     }
@@ -169,7 +238,25 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
           <h2 className="text-2xl font-black tracking-tight font-display">Database Health & Resilience Portal</h2>
           <p className="text-slate-300 text-xs max-w-2xl mt-1 leading-relaxed">
             Verify database persistence stability, review background auto-sync logs, and execute manual recovery or backup operations.
+            Permanent cloud copy lives on Supabase so April 2026+ records survive laptop/browser changes.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] px-2 py-1 rounded-full bg-white/10 border border-white/20 text-blue-100">
+              Cloud: {supabaseEmployees} employees
+            </span>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-white/10 border border-white/20 text-emerald-100 max-w-xl truncate">
+              {syncStatus}
+            </span>
+            <button
+              type="button"
+              onClick={handleSyncToSupabase}
+              disabled={checking}
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            >
+              <Cloud size={14} />
+              {checking ? 'Syncing…' : 'Upload / Sync to Supabase'}
+            </button>
+          </div>
         </div>
       </div>
 

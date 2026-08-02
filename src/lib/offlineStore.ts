@@ -1,7 +1,13 @@
 /**
  * Offline/static payroll snapshot for Vercel (no Express /api).
- * Source of truth in repo: payroll_persisted_store.json
+ * Priority: Supabase live store → localStorage → repo snapshot JSON
  */
+
+import {
+  bootstrapSupabaseFromLocal,
+  pullStoreFromSupabase,
+  pushStoreToSupabase
+} from './supabaseData';
 
 export type OfflineStore = {
   employees?: any[];
@@ -42,31 +48,70 @@ function normalizeCompanyNames(store: OfflineStore): OfflineStore {
   return { ...store, companies };
 }
 
+function persistLocal(store: OfflineStore) {
+  memoryStore = store;
+  try {
+    localStorage.setItem('vetan_erp_auto_save_backup', JSON.stringify(store));
+    localStorage.setItem(
+      'vetan_erp_auto_save_backup_stats',
+      JSON.stringify({
+        employeesCount: store.employees?.length || 0,
+        savedAt: new Date().toISOString()
+      })
+    );
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export async function loadOfflineStore(): Promise<OfflineStore> {
   if (memoryStore) return memoryStore;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    // Prefer browser auto-save backup if present (newer local edits)
+    // 1) Supabase live (permanent cloud DB)
+    try {
+      const remote = await pullStoreFromSupabase();
+      if (remote && Array.isArray(remote.employees) && remote.employees.length > 0) {
+        const normalized = normalizeCompanyNames(remote);
+        persistLocal(normalized);
+        // Ensure monthly backup exists
+        void bootstrapSupabaseFromLocal(normalized);
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('[Store] Supabase pull skipped:', e);
+    }
+
+    // 2) Browser auto-save backup
+    let localStore: OfflineStore | null = null;
     try {
       const backupStr = localStorage.getItem('vetan_erp_auto_save_backup');
       if (backupStr && looksLikeJson(backupStr)) {
         const parsed = JSON.parse(backupStr);
         if (parsed?.employees?.length) {
-          memoryStore = normalizeCompanyNames(parsed);
-          return memoryStore;
+          localStore = normalizeCompanyNames(parsed);
         }
       }
     } catch {
       // ignore
     }
 
-    const res = await fetch('/data/payroll_store.json', { cache: 'no-store' });
-    if (!res.ok) {
-      throw new Error('Could not load offline payroll store');
+    // 3) Repo snapshot shipped with the app
+    if (!localStore) {
+      const res = await fetch('/data/payroll_store.json', { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error('Could not load offline payroll store');
+      }
+      localStore = normalizeCompanyNames(await res.json());
     }
-    memoryStore = normalizeCompanyNames(await res.json());
-    return memoryStore!;
+
+    persistLocal(localStore);
+
+    // First-time upload to Supabase so data is not only in this browser
+    void bootstrapSupabaseFromLocal(localStore);
+
+    return localStore;
   })();
 
   try {
@@ -76,7 +121,7 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
   }
 }
 
-/** Try live /api first; if missing (Vercel HTML/empty), use offline snapshot mapper. */
+/** Try live /api first; if missing (Vercel HTML/empty), use offline/Supabase snapshot mapper. */
 export async function fetchJsonWithOfflineFallback<T = any>(
   apiUrl: string,
   offlinePick: (store: OfflineStore) => T
@@ -101,7 +146,7 @@ export function filterEmployeesByCompany(employees: any[], companyParam?: string
   return employees.filter((e) => e.company === companyParam);
 }
 
-/** Persist an updated company into the offline snapshot (Vercel has no /api write). */
+/** Persist an updated company into local + Supabase. */
 export async function upsertOfflineCompany(company: Record<string, any>): Promise<any[]> {
   const store = await loadOfflineStore();
   const companies = [...(store.companies || [])];
@@ -111,18 +156,15 @@ export async function upsertOfflineCompany(company: Record<string, any>): Promis
   } else {
     companies.push(company);
   }
-  memoryStore = { ...store, companies };
-  try {
-    localStorage.setItem('vetan_erp_auto_save_backup', JSON.stringify(memoryStore));
-    localStorage.setItem(
-      'vetan_erp_auto_save_backup_stats',
-      JSON.stringify({
-        employeesCount: memoryStore.employees?.length || 0,
-        savedAt: new Date().toISOString()
-      })
-    );
-  } catch {
-    // ignore quota errors
-  }
+  const next = { ...store, companies };
+  persistLocal(next);
+  void pushStoreToSupabase(next);
   return companies;
+}
+
+/** Persist any patched store (employees/attendance/etc.) to local + Supabase. */
+export async function saveStoreEverywhere(store: OfflineStore): Promise<void> {
+  const normalized = normalizeCompanyNames(store);
+  persistLocal(normalized);
+  await pushStoreToSupabase(normalized);
 }
