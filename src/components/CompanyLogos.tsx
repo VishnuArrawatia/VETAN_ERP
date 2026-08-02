@@ -153,7 +153,7 @@ export function getCompanyName(companyCode: string): string {
     return 'Flare Luminaires Pvt. Ltd.';
   }
   if (normalized.includes('zenivo')) {
-    return 'Zenivo Systems Pvt Ltd';
+    return 'Zenivo Opto Electronics Pvt Ltd';
   }
   
   // Specific fallback lookups

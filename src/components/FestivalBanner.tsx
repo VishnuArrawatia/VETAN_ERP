@@ -16,7 +16,7 @@ const COMPANY_UNITS = [
   { id: 'SVN-I', name: 'SVN Opto Unit I (Factory)', img: '/src/assets/images/svn_i_factory_1784275461192.jpg', color: 'border-emerald-400' },
   { id: 'SVN-II', name: 'SVN Opto Unit II (Factory)', img: '/src/assets/images/svn_ii_factory_1784278017538.jpg', color: 'border-sky-400' },
   { id: 'FLARE', name: 'Flare Luminaires (Factory)', img: '/src/assets/images/flare_factory_1784275493334.jpg', color: 'border-purple-400' },
-  { id: 'ZENIVO', name: 'Zenivo Systems (Factory)', img: '/src/assets/images/zenivo_factory_1784275508025.jpg', color: 'border-pink-500' }
+  { id: 'ZENIVO', name: 'Zenivo Opto Electronics (Factory)', img: '/src/assets/images/zenivo_factory_1784275508025.jpg', color: 'border-pink-500' }
 ];
 
 // Inline SVGs for beautiful colorful celebration rain
