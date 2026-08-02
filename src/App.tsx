@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Building2, ShieldCheck, Lock, Eye, EyeOff, KeyRound, ArrowRight, AlertCircle, User, Sparkles } from 'lucide-react';
+import { Building2, Lock, Eye, EyeOff, ArrowRight, AlertCircle, User, Sparkles } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
 export default function App() {
   const [roleTab, setRoleTab] = useState<'admin' | 'hr' | 'employee'>('admin');
-  
+
   // Credentials state
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // UI states
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -26,30 +26,46 @@ export default function App() {
       return;
     }
 
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseAnonKey) {
+      setErrorMsg(
+        'Supabase is not configured. Set VITE_SUPABASE_ANON_KEY in Vercel → Settings → Environment Variables (use the Publishable key), then Redeploy.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
       // Form email if username/id is given
       let email = identifier.trim();
       if (!email.includes('@')) {
-        email = ${identifier.trim().toLowerCase()}@sakarelectricals.com;
+        email = `${identifier.trim().toLowerCase()}@sakarelectricals.com`;
       }
 
       // 1. Direct Supabase Auth SignIn
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        // Fallback: If auth fails, check employees table directly for plain demo check
+        // Fallback: If auth fails, check employees table directly for demo users
         const { data: empData, error: empError } = await supabase
           .from('employees')
           .select('*')
-          .or(email.eq.${email},employee_id.eq.${identifier.trim()})
-          .single();
+          .or(`email.eq.${email},employee_id.eq.${identifier.trim()}`)
+          .maybeSingle();
 
         if (empError || !empData) {
+          throw new Error('Invalid login credentials. Please check username and password.');
+        }
+
+        const storedPassword =
+          (empData as { password?: string; demo_password?: string }).password ||
+          (empData as { password?: string; demo_password?: string }).demo_password;
+
+        if (storedPassword && storedPassword !== password) {
           throw new Error('Invalid login credentials. Please check username and password.');
         }
       }
@@ -58,9 +74,9 @@ export default function App() {
       setTimeout(() => {
         window.location.reload();
       }, 1000);
-
-    } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred during login.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An error occurred during login.';
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
@@ -69,7 +85,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-        
         {/* Left Branding Panel */}
         <div className="flex flex-col justify-between space-y-6">
           <div>
@@ -107,6 +122,7 @@ export default function App() {
             {(['admin', 'hr', 'employee'] as const).map((tab) => (
               <button
                 key={tab}
+                type="button"
                 onClick={() => setRoleTab(tab)}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${
                   roleTab === tab ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
@@ -120,9 +136,7 @@ export default function App() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                USERNAME / EMAIL / ID
-              </label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">USERNAME / EMAIL / ID</label>
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                 <input
@@ -136,9 +150,7 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">
-                PASSWORD
-              </label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">PASSWORD</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                 <input
@@ -176,12 +188,11 @@ export default function App() {
               disabled={loading}
               className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center space-x-2 disabled:opacity-50"
             >
-              <span>{loading ? 'Authenticating...' : Sign In as ${roleTab.toUpperCase()}}</span>
+              <span>{loading ? 'Authenticating...' : `Sign In as ${roleTab.toUpperCase()}`}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         </div>
-
       </div>
     </div>
   );
