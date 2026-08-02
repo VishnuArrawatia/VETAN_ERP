@@ -30,6 +30,18 @@ function looksLikeJson(text: string): boolean {
   return t.startsWith('{') || t.startsWith('[');
 }
 
+function normalizeCompanyNames(store: OfflineStore): OfflineStore {
+  const companies = (store.companies || []).map((c) => {
+    const id = String(c?.id || '');
+    const name = String(c?.name || '');
+    if (/flare/i.test(id) && /flare\s+technologies/i.test(name)) {
+      return { ...c, name: 'Flare Luminaires Pvt. Ltd.' };
+    }
+    return c;
+  });
+  return { ...store, companies };
+}
+
 export async function loadOfflineStore(): Promise<OfflineStore> {
   if (memoryStore) return memoryStore;
   if (loadPromise) return loadPromise;
@@ -41,7 +53,7 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
       if (backupStr && looksLikeJson(backupStr)) {
         const parsed = JSON.parse(backupStr);
         if (parsed?.employees?.length) {
-          memoryStore = parsed;
+          memoryStore = normalizeCompanyNames(parsed);
           return memoryStore;
         }
       }
@@ -53,7 +65,7 @@ export async function loadOfflineStore(): Promise<OfflineStore> {
     if (!res.ok) {
       throw new Error('Could not load offline payroll store');
     }
-    memoryStore = await res.json();
+    memoryStore = normalizeCompanyNames(await res.json());
     return memoryStore!;
   })();
 
@@ -87,4 +99,30 @@ export function filterEmployeesByCompany(employees: any[], companyParam?: string
     return employees;
   }
   return employees.filter((e) => e.company === companyParam);
+}
+
+/** Persist an updated company into the offline snapshot (Vercel has no /api write). */
+export async function upsertOfflineCompany(company: Record<string, any>): Promise<any[]> {
+  const store = await loadOfflineStore();
+  const companies = [...(store.companies || [])];
+  const idx = companies.findIndex((c) => String(c.id).toLowerCase() === String(company.id).toLowerCase());
+  if (idx >= 0) {
+    companies[idx] = { ...companies[idx], ...company };
+  } else {
+    companies.push(company);
+  }
+  memoryStore = { ...store, companies };
+  try {
+    localStorage.setItem('vetan_erp_auto_save_backup', JSON.stringify(memoryStore));
+    localStorage.setItem(
+      'vetan_erp_auto_save_backup_stats',
+      JSON.stringify({
+        employeesCount: memoryStore.employees?.length || 0,
+        savedAt: new Date().toISOString()
+      })
+    );
+  } catch {
+    // ignore quota errors
+  }
+  return companies;
 }
