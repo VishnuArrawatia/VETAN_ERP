@@ -2197,8 +2197,10 @@ export default function App() {
         fetchPayrollRuns();
         return true;
       }
+      alert(data.error || 'Failed to save attendance');
     } catch (e) {
       console.error(e);
+      alert('Failed to save attendance');
     }
     return false;
   };
@@ -2216,8 +2218,10 @@ export default function App() {
         fetchPayrollRuns();
         return true;
       }
+      alert(data.error || 'Salary calculation failed. Pehle attendance commit & lock karein.');
     } catch (e) {
       console.error(e);
+      alert('Salary calculation failed');
     }
     return false;
   };

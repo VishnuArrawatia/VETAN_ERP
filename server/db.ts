@@ -2553,6 +2553,11 @@ export class PayrollDatabase {
     if (idx === -1) return null;
 
     const loan = this.data.loans[idx];
+    const emp = this.getEmployeeById(loan.employee_id);
+    if (this.isPayrollLocked(month, emp?.company)) {
+      throw new Error(`Payroll for ${month} is CLOSED/frozen. Loan EMI skip/unskip is not allowed.`);
+    }
+
     let skipped = Array.isArray(loan.skipped_months) ? [...loan.skipped_months] : [];
 
     if (action === 'SKIP') {
@@ -2567,7 +2572,7 @@ export class PayrollDatabase {
 
     this.dbSqlite.run(`UPDATE loans SET skipped_months = ? WHERE id = ?`, [JSON.stringify(skipped), loanId]);
 
-    // Update existing payslips for this month if already generated
+    // Update existing payslips for this month if already generated (DRAFT only — CLOSED blocked above)
     const empPayslips = (this.data.payslips || []).filter(p => p.employee_id === loan.employee_id && p.month === month);
     for (const slip of empPayslips) {
       if (action === 'SKIP') {
@@ -2663,6 +2668,64 @@ export class PayrollDatabase {
     return records;
   }
 
+  /** True when monthly summary has been entered (not a blank/auto stub). */
+  public isAttendanceCommitted(att: Attendance | undefined | null): boolean {
+    if (!att) return false;
+    return att.present !== undefined && att.present !== null;
+  }
+
+  /** All ACTIVE employees for company must have locked attendance for the month. */
+  public isAttendanceMonthLocked(month: string, companyFilter?: string): boolean {
+    const targets = this.getEmployees(companyFilter).filter(e => e.status === 'ACTIVE');
+    if (targets.length === 0) return false;
+    for (const emp of targets) {
+      const att = this.data.attendance.find(a => a.employee_id === emp.id && a.month === month);
+      if (!att || !att.is_locked || !this.isAttendanceCommitted(att)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Gate for payroll calculate:
+   * - every active employee must have committed attendance
+   * - attendance month must be locked
+   * Does NOT change salary structure / PF / ESIC / Bonus formulas.
+   */
+  public validateAttendanceReadyForPayroll(month: string, companyFilter?: string): { ok: boolean; missing: string[]; unlocked: string[]; message?: string } {
+    const targets = this.getEmployees(companyFilter).filter(e => e.status === 'ACTIVE');
+    const missing: string[] = [];
+    const unlocked: string[] = [];
+
+    for (const emp of targets) {
+      const att = this.data.attendance.find(a => a.employee_id === emp.id && a.month === month);
+      if (!this.isAttendanceCommitted(att)) {
+        missing.push(`${emp.id} (${emp.name})`);
+        continue;
+      }
+      if (!att!.is_locked) {
+        unlocked.push(`${emp.id} (${emp.name})`);
+      }
+    }
+
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        missing,
+        unlocked,
+        message: `Attendance missing for ${missing.length} employee(s). Update & Commit attendance before salary. Examples: ${missing.slice(0, 5).join(', ')}`
+      };
+    }
+    if (unlocked.length > 0) {
+      return {
+        ok: false,
+        missing,
+        unlocked,
+        message: `Attendance is not locked for ${unlocked.length} employee(s). Use "Commit & lock" / Lock before salary. Examples: ${unlocked.slice(0, 5).join(', ')}`
+      };
+    }
+    return { ok: true, missing, unlocked };
+  }
+
   public getEmployeeAttendance(employeeId: string): Attendance[] {
     return this.data.attendance.filter(a => a.employee_id === employeeId);
   }
@@ -2686,33 +2749,39 @@ export class PayrollDatabase {
 
       const idx = this.data.attendance.findIndex(a => a.employee_id === record.employee_id && a.month === record.month);
       if (idx !== -1) {
-        this.data.attendance[idx] = { ...this.data.attendance[idx], ...record };
+        const existing = this.data.attendance[idx];
+        // Locked rows can only be changed when explicitly unlocking (is_locked: false)
+        if (existing.is_locked && record.is_locked !== false) {
+          throw new Error(`Attendance for ${record.employee_id} (${record.month}) is locked. Unlock attendance first.`);
+        }
+        this.data.attendance[idx] = { ...existing, ...record };
       } else {
         record.id = `ATT-${record.employee_id}-${record.month}`;
         this.data.attendance.push(record);
       }
       
+      const saved = this.data.attendance.find(a => a.employee_id === record.employee_id && a.month === record.month)!;
       this.dbSqlite.run(
         `INSERT OR REPLACE INTO attendance (
           id, employee_id, month, total_days, working_days, lop_days, overtime_hours,
           present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          record.id,
-          record.employee_id,
-          record.month,
-          record.total_days || 0,
-          record.working_days || 0,
-          record.lop_days || 0,
-          record.overtime_hours || 0,
-          record.present !== undefined ? record.present : null,
-          record.absent !== undefined ? record.absent : null,
-          record.weekly_off !== undefined ? record.weekly_off : null,
-          record.paid_holiday !== undefined ? record.paid_holiday : null,
-          record.leave !== undefined ? record.leave : null,
-          record.lwp !== undefined ? record.lwp : null,
-          record.ot_hours !== undefined ? record.ot_hours : null,
-          record.is_locked ? 1 : 0
+          saved.id,
+          saved.employee_id,
+          saved.month,
+          saved.total_days || 0,
+          saved.working_days || 0,
+          saved.lop_days || 0,
+          saved.overtime_hours || 0,
+          saved.present !== undefined ? saved.present : null,
+          saved.absent !== undefined ? saved.absent : null,
+          saved.weekly_off !== undefined ? saved.weekly_off : null,
+          saved.paid_holiday !== undefined ? saved.paid_holiday : null,
+          saved.leave !== undefined ? saved.leave : null,
+          saved.lwp !== undefined ? saved.lwp : null,
+          saved.ot_hours !== undefined ? saved.ot_hours : null,
+          saved.is_locked ? 1 : 0
         ]
       );
     }
@@ -2879,6 +2948,45 @@ export class PayrollDatabase {
     this.recomputeAttendanceAggregates(record);
   }
 
+  private assertCanPostLeaveToAttendance(app: LeaveApplication): void {
+    if (!app?.employee_id || !app.start_date || !app.end_date) return;
+    if ((app as any).attendance_posted) return;
+
+    const start = new Date(app.start_date + 'T00:00:00');
+    const end = new Date(app.end_date + 'T00:00:00');
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+
+    const emp = this.getEmployeeById(app.employee_id);
+    const touchedMonths = new Set<string>();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      touchedMonths.add(`${yyyy}-${mm}`);
+    }
+    for (const month of touchedMonths) {
+      if (this.isPayrollLocked(month, emp?.company)) {
+        throw new Error(`Cannot approve leave: payroll for ${month} is CLOSED.`);
+      }
+      const att = this.data.attendance.find(a => a.employee_id === app.employee_id && a.month === month);
+      if (att?.is_locked) {
+        throw new Error(`Cannot approve leave: ${month} attendance is locked. Unlock attendance first.`);
+      }
+    }
+  }
+
+  private assertCanPostAttendanceCorrection(req: any): void {
+    if (!req?.employee_id || !req.date || req.attendance_posted) return;
+    const month = String(req.date).substring(0, 7);
+    const emp = this.getEmployeeById(req.employee_id);
+    if (this.isPayrollLocked(month, emp?.company)) {
+      throw new Error(`Cannot approve miss-punch: payroll for ${month} is CLOSED.`);
+    }
+    const existing = this.data.attendance.find(a => a.employee_id === req.employee_id && a.month === month);
+    if (existing?.is_locked) {
+      throw new Error(`Cannot approve miss-punch: ${month} attendance is locked. Unlock attendance first.`);
+    }
+  }
+
   /** Post each calendar day of an approved leave onto monthly attendance ledgers. */
   private postApprovedLeaveToAttendance(app: LeaveApplication): void {
     if (!app?.employee_id || !app.start_date || !app.end_date) return;
@@ -2887,6 +2995,8 @@ export class PayrollDatabase {
     const start = new Date(app.start_date + 'T00:00:00');
     const end = new Date(app.end_date + 'T00:00:00');
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+
+    this.assertCanPostLeaveToAttendance(app);
 
     const touched = new Map<string, Attendance>();
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -2908,6 +3018,7 @@ export class PayrollDatabase {
   /** Apply an approved miss-punch / attendance correction to the monthly ledger. */
   private postApprovedAttendanceCorrection(req: any): void {
     if (!req?.employee_id || !req.date || req.attendance_posted) return;
+    this.assertCanPostAttendanceCorrection(req);
     const month = String(req.date).substring(0, 7);
     const record = this.ensureMonthlyAttendance(req.employee_id, month);
     this.shiftAttendanceDayStatus(record, req.original_status || 'ABSENT', req.requested_status || 'PRESENT');
@@ -2930,6 +3041,9 @@ export class PayrollDatabase {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
     const wasApproved = app.status === 'APPROVED';
+    if (status === 'APPROVED' && !wasApproved) {
+      this.assertCanPostLeaveToAttendance(app);
+    }
     app.status = status;
 
     if (status === 'APPROVED' && !wasApproved) {
@@ -2964,6 +3078,7 @@ export class PayrollDatabase {
     } else if (app.status === 'PENDING_HR') {
       if (isHR) {
         if (action === 'APPROVE') {
+          this.assertCanPostLeaveToAttendance(app);
           app.status = 'APPROVED';
           app.hr_approved_date = new Date().toISOString();
           app.hr_id = actorId || 'HR';
@@ -2978,6 +3093,7 @@ export class PayrollDatabase {
     } else if (isSuper && priorStatus !== 'APPROVED') {
       // Super Admin Override approval from any non-final state
       if (action === 'APPROVE') {
+        this.assertCanPostLeaveToAttendance(app);
         app.status = 'APPROVED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
         app.hod_id = app.hod_id || actorId || 'SuperAdmin';
@@ -3052,6 +3168,7 @@ export class PayrollDatabase {
     } else if (req.status === 'PENDING_HR') {
       if (isHR) {
         if (action === 'APPROVE') {
+          this.assertCanPostAttendanceCorrection(req);
           req.status = 'APPROVED';
           req.hr_approved_date = new Date().toISOString();
           req.hr_id = actorId || 'HR';
@@ -3064,6 +3181,7 @@ export class PayrollDatabase {
       }
     } else if (isSuper && priorStatus !== 'APPROVED') {
       if (action === 'APPROVE') {
+        this.assertCanPostAttendanceCorrection(req);
         req.status = 'APPROVED';
         req.hod_approved_date = req.hod_approved_date || new Date().toISOString();
         req.hr_approved_date = new Date().toISOString();
@@ -3885,6 +4003,12 @@ export class PayrollDatabase {
   }
 
   public runPayroll(month: string, companyFilter?: string): PayrollRun {
+    // Gate BEFORE wiping slips — salary structure untouched; only attendance readiness
+    const readiness = this.validateAttendanceReadyForPayroll(month, companyFilter);
+    if (!readiness.ok) {
+      throw new Error(readiness.message || 'Attendance is not ready for payroll.');
+    }
+
     // Snapshot variable / manual inputs BEFORE deleting slips (otherwise recalculate wipes them)
     const snapshot = new Map<string, any>();
     for (const p of this.data.payslips || []) {
@@ -3949,21 +4073,9 @@ export class PayrollDatabase {
     const targets = this.getEmployees(companyFilter).filter(e => e.status === 'ACTIVE');
 
     for (const emp of targets) {
-      let att = this.data.attendance.find(a => a.employee_id === emp.id && a.month === month);
+      const att = this.data.attendance.find(a => a.employee_id === emp.id && a.month === month);
       if (!att) {
-        att = {
-          id: `ATT-${emp.id}-${month}`,
-          employee_id: emp.id,
-          month,
-          total_days: 30,
-          working_days: 30,
-          lop_days: 0,
-          overtime_hours: 0
-        };
-        this.data.attendance.push(att);
-        this.dbSqlite.run(`INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours]
-        );
+        throw new Error(`Attendance missing for ${emp.id}. Cannot generate salary.`);
       }
 
       const slip = this.calculateSingleSlip(emp, att, month);

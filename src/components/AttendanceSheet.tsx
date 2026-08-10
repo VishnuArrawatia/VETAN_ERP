@@ -593,6 +593,7 @@ export default function AttendanceSheet({
 
     try {
       // Convert our parsed format to standard Attendance model properties
+      // Commit & lock must actually lock the month ledger
       const mappedPayload: Attendance[] = parsedRecords.map(rec => ({
         id: `ATT-${rec.Worker_Code}-${currentMonth}`,
         employee_id: rec.Worker_Code,
@@ -610,13 +611,25 @@ export default function AttendanceSheet({
         leave: rec.Leave,
         lwp: rec.LWP,
         ot_hours: rec.OT_Hours,
-        is_locked: isLocked
+        is_locked: true
       }));
 
       const res = await onSaveAttendance(mappedPayload);
       if (res) {
+        setIsLocked(true);
+        setCurrentStep('LOCK');
         setSuccess(true);
         loadExistingAttendance(currentMonth);
+
+        await fetch('/api/audit/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'Attendance Locked',
+            details: `Committed and locked monthly attendance for ${currentMonth} (${activeCompany}). Records: ${mappedPayload.length}.`
+          })
+        }).catch(() => {});
+
         setTimeout(() => setSuccess(false), 3000);
       } else {
         setErrorMsg('Failed to commit monthly attendance summary back to the server.');
