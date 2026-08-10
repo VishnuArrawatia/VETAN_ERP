@@ -4844,7 +4844,7 @@ export default function App() {
 
               {/* SYSTEM OPERATION GUIDE MANUAL */}
               {activeTab === 'guide' && (
-                <UserGuideView />
+                <UserGuideView onNavigate={(tab) => setActiveTab(tab as any)} />
               )}
 
               {/* BUSINESS LOGIC COMPLIANCE VAULT */}
