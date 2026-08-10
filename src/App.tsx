@@ -244,6 +244,7 @@ export default function App() {
   }, [loggedInEmployee]);
   const [activeMonth, setActiveMonth] = useState('2026-05');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault'>('dashboard');
+  const [payrollLandingSubTab, setPayrollLandingSubTab] = useState<'INPUTS' | 'MASTERS' | 'SUMMARY' | 'EXCEL_IMPORT' | 'PREVIEW_FREEZE' | null>(null);
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
@@ -3159,6 +3160,12 @@ export default function App() {
                         fetchEmployees();
                         fetchRevisions();
                       }}
+                      onNavigate={(tab, opts) => {
+                        setActiveTab(tab as any);
+                        if (opts?.payrollSubTab) {
+                          setPayrollLandingSubTab(opts.payrollSubTab);
+                        }
+                      }}
                     />
 
                     {/* Salary Revision Table List */}
@@ -4681,6 +4688,8 @@ export default function App() {
                     setActiveMonth={setActiveMonth}
                     onRefresh={fetchPayrollRuns}
                     activeHR={activeHR}
+                    landingInputsSubTab={payrollLandingSubTab || undefined}
+                    onLandingConsumed={() => setPayrollLandingSubTab(null)}
                   />
                 </div>
               )}

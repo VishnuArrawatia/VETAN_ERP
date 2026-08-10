@@ -7,6 +7,7 @@ interface SalaryRevisionFormProps {
   activeCompany: string;
   activeHRName: string;
   onSuccess: () => void;
+  onNavigate?: (tab: string, opts?: { payrollSubTab?: 'INPUTS' | 'MASTERS' | 'SUMMARY' }) => void;
 }
 
 type RevisionMode = 'INCREMENT' | 'RESTRUCTURE';
@@ -92,7 +93,8 @@ export default function SalaryRevisionForm({
   employees,
   activeCompany,
   activeHRName,
-  onSuccess
+  onSuccess,
+  onNavigate
 }: SalaryRevisionFormProps) {
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
@@ -328,12 +330,61 @@ export default function SalaryRevisionForm({
       </div>
 
       {/* Clear guidance box */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-950 leading-relaxed space-y-1">
-        <p className="font-bold text-amber-900">Kaise use karein (short guide)</p>
-        <p>1) Pehle mode choose karo: <strong>Increment</strong> (salary badhana) ya <strong>Restructure</strong> (heads shift).</p>
-        <p>2) Phir scope choose karo: <strong>One Employee</strong> / <strong>Current Unit</strong> / <strong>All Employees</strong>.</p>
-        <p>3) Effective Date dalo → heads me +/− karo → Commit.</p>
-        <p>Note: Unit-wide ke liye left sidebar me specific company select honi chahiye (GROUP Dashboard pe Unit option kaam nahi karega).</p>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-950 leading-relaxed space-y-2">
+        <p className="font-bold text-amber-900">Kaise use karein</p>
+        <p>1) Mode: <strong>Increment</strong> (salary badhana) ya <strong>Restructure</strong> (heads shift).</p>
+        <p>2) Scope: <strong>One Employee</strong> / <strong>Current Unit</strong> / <strong>All Employees</strong>.</p>
+        <p>3) Effective Date → heads me +/− → Commit.</p>
+        <p>Note: Unit-wide ke liye left sidebar me specific company select karein (GROUP Dashboard nahi).</p>
+      </div>
+
+      {/* Where to add heads / check deductions */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Naya Head / Loan / Advance / Other — kahan?</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-slate-700 leading-relaxed">
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 space-y-1.5">
+            <p className="font-bold text-emerald-900">Naya Earning / Deduction Head add karna</p>
+            <p>Monthly variable heads (Bonus incentive, Canteen, Custom recovery, etc.) yahan add hote hain:</p>
+            <p className="font-mono text-[10px] text-emerald-800">Payroll → Payroll Input & Deduction System → Earning & Deduction Masters → Add Head</p>
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('payroll', { payrollSubTab: 'MASTERS' })}
+                className="mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg cursor-pointer"
+              >
+                Masters pe jao (Add Head)
+              </button>
+            )}
+            <p className="text-[10px] text-emerald-800/80 pt-1">
+              Permanent structure heads (Basic / HRA / Conveyance / Edu / Medical / Special) employee master pe fixed hain — Increment/Restructure unhi pe +/− karta hai.
+            </p>
+          </div>
+          <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-3 space-y-1.5">
+            <p className="font-bold text-amber-950">Loan / Advance / Other deductions check</p>
+            <p><strong>Loan EMI:</strong> Left menu → Loan Management (EMI, Skip, Settlement).</p>
+            <p><strong>Advance + Other + Canteen…:</strong> Payroll → Monthly Variable Inputs Sheet (columns me dikhega).</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {onNavigate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('loans')}
+                    className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg cursor-pointer"
+                  >
+                    Loan Management kholo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('payroll', { payrollSubTab: 'INPUTS' })}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg cursor-pointer"
+                  >
+                    Advance / Other Inputs kholo
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
