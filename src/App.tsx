@@ -160,23 +160,24 @@ const SIMULATED_HR_USERS = [
 const getNormalizedUnit = (val: string): string => {
   if (!val) return '';
   const upper = val.toUpperCase().trim();
-  if (upper.includes('SVN-I') || upper === 'SVN-1' || upper === 'SVN I' || upper === 'SVN_I' || (upper.includes('SVN') && (upper.includes('I') && !upper.includes('II')))) {
-    return 'SVN-I';
-  }
+  // Check II / III before bare I so "SVN-II" is not classified as SVN-1
   if (upper.includes('SVN-II') || upper === 'SVN-2' || upper === 'SVN II' || upper === 'SVN_II' || (upper.includes('SVN') && upper.includes('II'))) {
     return 'SVN-II';
   }
-  if (upper.includes('SAKAR-I') || upper === 'SAKAR-1' || upper === 'SAKAR I' || upper === 'SAKAR_I' || (upper.includes('SAKAR') && (upper.includes('I') && !upper.includes('III')))) {
-    return 'Sakar-I';
+  if (upper.includes('SVN-I') || upper === 'SVN-1' || upper === 'SVN I' || upper === 'SVN_I' || (upper.includes('SVN') && upper.includes('I') && !upper.includes('II'))) {
+    return 'SVN-1';
   }
   if (upper.includes('SAKAR-III') || upper === 'SAKAR-3' || upper === 'SAKAR III' || upper === 'SAKAR_III' || (upper.includes('SAKAR') && upper.includes('III'))) {
     return 'Sakar-III';
   }
+  if (upper.includes('SAKAR-I') || upper === 'SAKAR-1' || upper === 'SAKAR I' || upper === 'SAKAR_I' || (upper.includes('SAKAR') && upper.includes('I') && !upper.includes('III'))) {
+    return 'Sakar-I';
+  }
   if (upper.includes('ZENIVO')) {
-    return 'Zenivo';
+    return 'Zenivo-1';
   }
   if (upper.includes('FLARE')) {
-    return 'Flare';
+    return 'Flare-1';
   }
   return '';
 };
@@ -388,7 +389,7 @@ export default function App() {
   const [manualBankAccount, setManualBankAccount] = useState('');
   const [manualIfsc, setManualIfsc] = useState('HDFC0000124');
   const [manualDOJ, setManualDOJ] = useState(() => new Date().toISOString().split('T')[0]);
-  const [manualUnit, setManualUnit] = useState<'SVN-1' | 'SVN II' | 'Sakar I' | 'Sakar III'>('SVN-1');
+  const [manualUnit, setManualUnit] = useState<string>('SVN-1');
   const [manualQualification, setManualQualification] = useState('');
   const [manualLocation, setManualLocation] = useState('');
   const [manualVehicleDetail, setManualVehicleDetail] = useState('');
@@ -1602,7 +1603,8 @@ export default function App() {
     const bonusVal = Math.round(baseVal * 0.0833);
 
     const grossVal = baseVal + hraVal + specialVal + daVal + eduVal + medVal + convVal;
-    const pfEmployerVal = manualPfOptIn ? Math.round((baseVal + daVal) * (sets.pf_employer_rate / 100)) : 0;
+    const pfWageCeiling = Number(sets.pf_wage_ceiling ?? 15000);
+    const pfEmployerVal = manualPfOptIn ? Math.round(Math.min(pfWageCeiling, baseVal + daVal) * (sets.pf_employer_rate / 100)) : 0;
     const esicEmployerVal = (manualEsicOptIn && grossVal <= sets.esic_opt_in_threshold) ? Math.round(grossVal * (sets.esic_employer_rate / 100)) : 0;
     const calculatedCtcVal = grossVal + pfEmployerVal + esicEmployerVal + bonusVal;
 
@@ -2298,13 +2300,13 @@ export default function App() {
         matchesCompany = cmpUpper === 'SAKAR-I' || cmpUpper === 'SAKAR-1' || cmpUpper === 'SAKAR I' || cmpUpper === 'SAKAR_I';
       } else if (filterUpper === 'SAKAR-III') {
         matchesCompany = cmpUpper === 'SAKAR-III' || cmpUpper === 'SAKAR-3' || cmpUpper === 'SAKAR III' || cmpUpper === 'SAKAR_III';
-      } else if (filterUpper === 'SVN-I') {
-        matchesCompany = cmpUpper === 'SVN-I' || cmpUpper === 'SVN-1' || cmpUpper === 'SVN I' || cmpUpper === 'SVN_I' || cmpUpper === 'SVN-1' || cmpUpper === 'SVN-II';
+      } else if (filterUpper === 'SVN-I' || filterUpper === 'SVN-1') {
+        matchesCompany = cmpUpper === 'SVN-I' || cmpUpper === 'SVN-1' || cmpUpper === 'SVN I' || cmpUpper === 'SVN_I';
       } else if (filterUpper === 'SVN-II') {
         matchesCompany = cmpUpper === 'SVN-II' || cmpUpper === 'SVN-2' || cmpUpper === 'SVN II' || cmpUpper === 'SVN_II';
-      } else if (filterUpper === 'FLARE') {
+      } else if (filterUpper === 'FLARE' || filterUpper === 'FLARE-1') {
         matchesCompany = cmpUpper.includes('FLARE');
-      } else if (filterUpper === 'ZENIVO') {
+      } else if (filterUpper === 'ZENIVO' || filterUpper === 'ZENIVO-1') {
         matchesCompany = cmpUpper.includes('ZENIVO');
       } else {
         matchesCompany = cmpUpper.includes(filterUpper);
@@ -3854,12 +3856,12 @@ export default function App() {
                                   className="w-full p-2 text-xs border rounded-xl bg-slate-50 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                                 >
                                   <option value="ALL">All Companies</option>
-                                  {isCompanyAuthorized('SAKAR-I') && <option value="SAKAR-I">SAKAR-I</option>}
-                                  {isCompanyAuthorized('SAKAR-III') && <option value="SAKAR-III">SAKAR-III</option>}
-                                  {isCompanyAuthorized('SVN-I') && <option value="SVN-I">SVN-I</option>}
+                                  {isCompanyAuthorized('Sakar-I') && <option value="Sakar-I">Sakar-I</option>}
+                                  {isCompanyAuthorized('Sakar-III') && <option value="Sakar-III">Sakar-III</option>}
+                                  {isCompanyAuthorized('SVN-1') && <option value="SVN-1">SVN-1</option>}
                                   {isCompanyAuthorized('SVN-II') && <option value="SVN-II">SVN-II</option>}
-                                  {isCompanyAuthorized('FLARE') && <option value="FLARE">FLARE</option>}
-                                  {isCompanyAuthorized('ZENIVO') && <option value="ZENIVO">ZENIVO</option>}
+                                  {isCompanyAuthorized('Flare-1') && <option value="Flare-1">Flare-1</option>}
+                                  {isCompanyAuthorized('Zenivo-1') && <option value="Zenivo-1">Zenivo-1</option>}
                                 </select>
                               </div>
                             )}
@@ -3874,7 +3876,7 @@ export default function App() {
                                    className="w-full p-2 text-xs border rounded-xl bg-slate-50 text-slate-800 font-bold focus:outline-none focus:ring-1 focus:ring-pink-500 cursor-pointer"
                                  >
                                    <option value="ALL">All Units</option>
-                                   {['SVN-I', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Zenivo', 'Flare']
+                                   {['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Zenivo-1', 'Flare-1']
                                      .filter(unit => isCompanyAuthorized(unit))
                                      .map(unit => (
                                        <option key={unit} value={unit}>{unit}</option>
@@ -5045,13 +5047,15 @@ export default function App() {
                           <label className="text-[10px] font-bold text-gray-400 uppercase">Corporate Unit</label>
                           <select
                             value={manualUnit}
-                            onChange={(e) => setManualUnit(e.target.value as any)}
+                            onChange={(e) => setManualUnit(e.target.value)}
                             className="w-full text-xs p-2 border rounded-lg bg-white font-bold"
                           >
-                            <option value="SVN-1">SVN-1</option>
-                            <option value="SVN II">SVN II</option>
-                            <option value="Sakar I">Sakar I</option>
-                            <option value="Sakar III">Sakar III</option>
+                            {(companies.length > 0
+                              ? companies.map((c) => c.id)
+                              : ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1']
+                            ).map((id) => (
+                              <option key={id} value={id}>{id}</option>
+                            ))}
                           </select>
                         </div>
 

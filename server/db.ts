@@ -2129,6 +2129,7 @@ export class PayrollDatabase {
       salary_special_percent: 15,
       pf_opt_in_default: true,
       pf_employer_rate: 12,
+      pf_wage_ceiling: 15000,
       esic_opt_in_threshold: 21000,
       esic_employer_rate: 3.25,
       bonus_rate_percent: 8.33,
@@ -2160,7 +2161,9 @@ export class PayrollDatabase {
     const rate_bonus = Math.round(base * 0.0833);
 
     const gross = base + rate_hra + rate_special + rate_da + rate_edu + rate_medical + rate_conveyance;
-    const employer_pf = emp.pf_opt_in ? Math.round((base) * (sets.pf_employer_rate / 100)) : 0;
+    const pfWageCeiling = Number(sets.pf_wage_ceiling ?? 15000);
+    const pfBasis = Math.min(pfWageCeiling, base + rate_da);
+    const employer_pf = emp.pf_opt_in ? Math.round(pfBasis * (sets.pf_employer_rate / 100)) : 0;
     const employer_esic = (emp.esic_opt_in && gross <= sets.esic_opt_in_threshold) ? Math.round(gross * (sets.esic_employer_rate / 100)) : 0;
 
     return gross + employer_pf + employer_esic + rate_bonus;
@@ -2778,18 +2781,160 @@ export class PayrollDatabase {
     return app;
   }
 
+  /** Recalculate monthly attendance aggregates from present/absent/leave buckets. */
+  private recomputeAttendanceAggregates(record: Attendance): void {
+    const pres = record.present || 0;
+    const abs = record.absent || 0;
+    const woff = record.weekly_off || 0;
+    const phol = record.paid_holiday || 0;
+    const lve = record.leave || 0;
+    const lw = record.lwp || 0;
+    record.total_days = pres + abs + woff + phol + lve + lw;
+    record.lop_days = abs + lw;
+    record.working_days = pres + woff + phol + lve;
+    record.overtime_hours = record.ot_hours || record.overtime_hours || 0;
+  }
+
+  private persistAttendanceRecord(record: Attendance): void {
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO attendance (
+        id, employee_id, month, total_days, working_days, lop_days, overtime_hours,
+        present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        record.id,
+        record.employee_id,
+        record.month,
+        record.total_days || 0,
+        record.working_days || 0,
+        record.lop_days || 0,
+        record.overtime_hours || 0,
+        record.present !== undefined ? record.present : null,
+        record.absent !== undefined ? record.absent : null,
+        record.weekly_off !== undefined ? record.weekly_off : null,
+        record.paid_holiday !== undefined ? record.paid_holiday : null,
+        record.leave !== undefined ? record.leave : null,
+        record.lwp !== undefined ? record.lwp : null,
+        record.ot_hours !== undefined ? record.ot_hours : null,
+        record.is_locked ? 1 : 0
+      ]
+    );
+  }
+
+  private ensureMonthlyAttendance(employeeId: string, month: string): Attendance {
+    let record = this.data.attendance.find(a => a.employee_id === employeeId && a.month === month);
+    if (record) return record;
+
+    const [y, m] = month.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    record = {
+      id: `ATT-${employeeId}-${month}`,
+      employee_id: employeeId,
+      month,
+      total_days: daysInMonth,
+      working_days: daysInMonth,
+      lop_days: 0,
+      overtime_hours: 0,
+      present: Math.max(0, daysInMonth - 4),
+      absent: 0,
+      weekly_off: Math.min(4, daysInMonth),
+      paid_holiday: 0,
+      leave: 0,
+      lwp: 0,
+      ot_hours: 0
+    };
+    this.data.attendance.push(record);
+    return record;
+  }
+
+  /** Move one day count from one status bucket to another on a monthly attendance row. */
+  private shiftAttendanceDayStatus(record: Attendance, fromStatus: string, toStatus: string): void {
+    const normalize = (s: string) => {
+      const u = (s || '').toUpperCase().trim();
+      if (u === 'P' || u === 'PRESENT' || u === 'PR') return 'present';
+      if (u === 'A' || u === 'ABSENT' || u === 'AB') return 'absent';
+      if (u === 'LWP' || u === 'LOP' || u === 'UL' || u === 'UNPAID') return 'lwp';
+      if (u === 'WO' || u === 'WEEKLY_OFF' || u === 'WEEKLY OFF' || u === 'WOFF') return 'weekly_off';
+      if (u === 'PH' || u === 'PAID_HOLIDAY' || u === 'PAID HOLIDAY' || u === 'HOLIDAY') return 'paid_holiday';
+      if (u === 'L' || u === 'LEAVE' || u === 'PL' || u === 'CL' || u === 'SL' || u === 'CO' || u === 'COMPOFF') return 'leave';
+      return '';
+    };
+
+    const fromKey = normalize(fromStatus) as keyof Attendance | '';
+    const toKey = normalize(toStatus) as keyof Attendance | '';
+    if (!toKey) return;
+
+    if (fromKey && fromKey !== toKey) {
+      const currentFrom = Number(record[fromKey] || 0);
+      if (currentFrom > 0) {
+        (record as any)[fromKey] = currentFrom - 1;
+      } else if (Number(record.present || 0) > 0 && fromKey !== 'present') {
+        record.present = Number(record.present) - 1;
+      }
+    } else if (!fromKey && Number(record.present || 0) > 0 && toKey !== 'present') {
+      record.present = Number(record.present) - 1;
+    }
+
+    (record as any)[toKey] = Number(record[toKey] || 0) + 1;
+    this.recomputeAttendanceAggregates(record);
+  }
+
+  /** Post each calendar day of an approved leave onto monthly attendance ledgers. */
+  private postApprovedLeaveToAttendance(app: LeaveApplication): void {
+    if (!app?.employee_id || !app.start_date || !app.end_date) return;
+    if ((app as any).attendance_posted) return;
+
+    const start = new Date(app.start_date + 'T00:00:00');
+    const end = new Date(app.end_date + 'T00:00:00');
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return;
+
+    const touched = new Map<string, Attendance>();
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const month = `${yyyy}-${mm}`;
+      const record = this.ensureMonthlyAttendance(app.employee_id, month);
+      this.shiftAttendanceDayStatus(record, 'PRESENT', 'LEAVE');
+      touched.set(record.id, record);
+    }
+
+    for (const record of touched.values()) {
+      this.persistAttendanceRecord(record);
+    }
+    (app as any).attendance_posted = true;
+    this.persistData();
+  }
+
+  /** Apply an approved miss-punch / attendance correction to the monthly ledger. */
+  private postApprovedAttendanceCorrection(req: any): void {
+    if (!req?.employee_id || !req.date || req.attendance_posted) return;
+    const month = String(req.date).substring(0, 7);
+    const record = this.ensureMonthlyAttendance(req.employee_id, month);
+    this.shiftAttendanceDayStatus(record, req.original_status || 'ABSENT', req.requested_status || 'PRESENT');
+    this.persistAttendanceRecord(record);
+    req.attendance_posted = true;
+    this.persistData();
+  }
+
+  private deductLeaveBalanceOnce(app: LeaveApplication): void {
+    if ((app as any).balance_deducted) return;
+    const emp = this.getEmployeeById(app.employee_id);
+    if (!emp) return;
+    const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
+    emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
+    this.syncEmployee(emp);
+    (app as any).balance_deducted = true;
+  }
+
   public updateLeaveStatus(id: string, status: 'APPROVED' | 'REJECTED'): boolean {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
+    const wasApproved = app.status === 'APPROVED';
     app.status = status;
 
-    if (status === 'APPROVED') {
-      const emp = this.getEmployeeById(app.employee_id);
-      if (emp) {
-        const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
-        emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
-        this.syncEmployee(emp);
-      }
+    if (status === 'APPROVED' && !wasApproved) {
+      this.deductLeaveBalanceOnce(app);
+      this.postApprovedLeaveToAttendance(app);
     }
     
     this.dbSqlite.run(`UPDATE leave_applications SET status = ? WHERE id = ?`, [status, id]);
@@ -2802,6 +2947,7 @@ export class PayrollDatabase {
 
     const isSuper = actorRole === 'SUPER_HR' || override;
     const isHR = actorRole === 'COMPANY_HR' || isSuper;
+    const priorStatus = app.status;
 
     if (app.status === 'PENDING_HOD') {
       if (actorRole === 'HOD' || isSuper) {
@@ -2821,21 +2967,15 @@ export class PayrollDatabase {
           app.status = 'APPROVED';
           app.hr_approved_date = new Date().toISOString();
           app.hr_id = actorId || 'HR';
-
-          // Post leave to employee leave balance when approved by HR
-          const emp = this.getEmployeeById(app.employee_id);
-          if (emp) {
-            const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
-            emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
-            this.syncEmployee(emp);
-          }
+          this.deductLeaveBalanceOnce(app);
+          this.postApprovedLeaveToAttendance(app);
         } else {
           app.status = 'REJECTED_HR';
           app.hr_approved_date = new Date().toISOString();
           app.hr_id = actorId || 'HR';
         }
       }
-    } else if (isSuper) {
+    } else if (isSuper && priorStatus !== 'APPROVED') {
       // Super Admin Override approval from any non-final state
       if (action === 'APPROVE') {
         app.status = 'APPROVED';
@@ -2843,13 +2983,8 @@ export class PayrollDatabase {
         app.hod_id = app.hod_id || actorId || 'SuperAdmin';
         app.hr_approved_date = new Date().toISOString();
         app.hr_id = actorId || 'SuperAdmin';
-
-        const emp = this.getEmployeeById(app.employee_id);
-        if (emp) {
-          const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
-          emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
-          this.syncEmployee(emp);
-        }
+        this.deductLeaveBalanceOnce(app);
+        this.postApprovedLeaveToAttendance(app);
       } else {
         app.status = 'REJECTED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
@@ -2900,6 +3035,7 @@ export class PayrollDatabase {
 
     const isSuper = actorRole === 'SUPER_HR' || override;
     const isHR = actorRole === 'COMPANY_HR' || isSuper;
+    const priorStatus = req.status;
 
     if (req.status === 'PENDING_HOD') {
       if (actorRole === 'HOD' || isSuper) {
@@ -2919,17 +3055,19 @@ export class PayrollDatabase {
           req.status = 'APPROVED';
           req.hr_approved_date = new Date().toISOString();
           req.hr_id = actorId || 'HR';
+          this.postApprovedAttendanceCorrection(req);
         } else {
           req.status = 'REJECTED_HR';
           req.hr_approved_date = new Date().toISOString();
           req.hr_id = actorId || 'HR';
         }
       }
-    } else if (isSuper) {
+    } else if (isSuper && priorStatus !== 'APPROVED') {
       if (action === 'APPROVE') {
         req.status = 'APPROVED';
         req.hod_approved_date = req.hod_approved_date || new Date().toISOString();
         req.hr_approved_date = new Date().toISOString();
+        this.postApprovedAttendanceCorrection(req);
       } else {
         req.status = 'REJECTED_HR';
         req.hr_approved_date = new Date().toISOString();
@@ -3479,7 +3617,9 @@ export class PayrollDatabase {
     let pf_deduction = 0;
     let employer_pf = 0;
     if (emp.pf_opt_in) {
-      const pf_basis = earned_base;
+      // EPFO wage ceiling (default ₹15,000) — keep slip PF aligned with ECR export
+      const pfWageCeiling = Number(sets.pf_wage_ceiling ?? 15000);
+      const pf_basis = Math.min(pfWageCeiling, earned_base + earned_da);
       pf_deduction = Math.round(pf_basis * 0.12);
       employer_pf = Math.round(pf_basis * (sets.pf_employer_rate / 100));
     }
@@ -3522,19 +3662,30 @@ export class PayrollDatabase {
         .reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
       const totalLoanAmount = openingBal + additionalTotal;
 
-      const previousDeductions = this.data.payslips
-        .filter(p => p.employee_id === emp.id && p.month !== month)
-        .reduce((sum, p) => sum + (p.loan_deduction || 0), 0);
-      
-      const remaining = Math.max(0, totalLoanAmount - previousDeductions);
+      // Settlements reduce outstanding before EMI (prevents over-recovery)
+      const settlementTotal = (l.settlements || [])
+        .filter((s: any) => !s.month || s.month < month || (!s.month && s.date && String(s.date).substring(0, 7) < month))
+        .reduce((sum: number, s: any) => sum + (Number(s.amount) || 0), 0);
+
+      // Prefer per-loan recovery history when present; fall back to pooled payslip loan_deduction
+      const previousLoanRecoveries = (l as any).recoveries
+        ? ((l as any).recoveries as any[])
+            .filter((r: any) => r.month && r.month < month)
+            .reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0)
+        : this.data.payslips
+            .filter(p => p.employee_id === emp.id && p.month < month)
+            .reduce((sum, p) => sum + (p.loan_deduction || 0), 0) / Math.max(1, activeLoans.length);
+
+      const remaining = Math.max(0, totalLoanAmount - settlementTotal - previousLoanRecoveries);
       if (remaining > 0) {
         const deduct = Math.min(Number(l.monthly_deduction || 0), remaining);
         loan_deduction += deduct;
       }
     }
 
-    // Check if existing slip already has manual variable inputs
-    const existingSlip = (this.data.payslips || []).find(p => p.id === `SLIP-${emp.id}-${month}`);
+    // Check if existing slip already has manual variable inputs (also used via runPayroll snapshot)
+    const existingSlip = (this.data.payslips || []).find(p => p.id === `SLIP-${emp.id}-${month}`)
+      || (this as any)._payrollInputSnapshot?.get?.(`SLIP-${emp.id}-${month}`);
 
     const tdsVal = existingSlip?.tds !== undefined ? existingSlip.tds : tds;
     const customDed = existingSlip?.custom_deductions || 0;
@@ -3555,11 +3706,17 @@ export class PayrollDatabase {
     const otherEarn = existingSlip?.other_earnings || 0;
     const remarksText = existingSlip?.remarks || '';
 
+    // Preserve manually overridden statutory/loan deductions across recalculate when present
+    const pfVal = existingSlip?.pf_manual ? Number(existingSlip.pf_deduction || 0) : pf_deduction;
+    const esicVal = existingSlip?.esic_manual ? Number(existingSlip.esic_deduction || 0) : esic_deduction;
+    const ptVal = existingSlip?.pt_manual ? Number(existingSlip.professional_tax || 0) : professional_tax;
+    const loanVal = existingSlip?.loan_manual ? Number(existingSlip.loan_deduction || 0) : loan_deduction;
+
     const varEarnings = bonusInc + perfInc + attInc + prodInc + reimb + specAdd + arrearPay + otherEarn;
     const final_gross_salary = gross_salary + varEarnings;
 
     const varDeductions = customDed + advanceDed + canteenDed + uniformDed + noticeDed + mobileDed + damageDed;
-    const total_deductions = pf_deduction + esic_deduction + professional_tax + tdsVal + loan_deduction + varDeductions;
+    const total_deductions = pfVal + esicVal + ptVal + tdsVal + loanVal + varDeductions;
     const net_salary = Math.max(0, final_gross_salary - total_deductions);
     const ctc_salary = final_gross_salary + employer_pf + employer_esic + earned_bonus;
 
@@ -3591,12 +3748,12 @@ export class PayrollDatabase {
       earned_conveyance_allowance: earned_conveyance,
       overtime_pay,
       lop_deduction,
-      pf_deduction,
-      esic_deduction,
-      professional_tax,
+      pf_deduction: pfVal,
+      esic_deduction: esicVal,
+      professional_tax: ptVal,
       tds: tdsVal,
       custom_deductions: customDed,
-      loan_deduction,
+      loan_deduction: loanVal,
       salary_advance: advanceDed,
       canteen_deduction: canteenDed,
       uniform_deduction: uniformDed,
@@ -3621,22 +3778,64 @@ export class PayrollDatabase {
       earned_bonus_payable: earned_bonus,
       ctc_salary,
       hidden_salary_heads: emp.hidden_salary_heads || '',
-      salary_structure_type: emp.salary_structure_type || 'FIXED'
-    };
+      salary_structure_type: emp.salary_structure_type || 'FIXED',
+      pf_manual: existingSlip?.pf_manual || false,
+      esic_manual: existingSlip?.esic_manual || false,
+      pt_manual: existingSlip?.pt_manual || false,
+      loan_manual: existingSlip?.loan_manual || false
+    } as Payslip;
   }
 
   public updatePayslipFullVariableInputs(id: string, inputs: any): Payslip | null {
     const s = this.data.payslips.find(p => p.id === id);
     if (!s) return null;
 
-    s.tds = inputs.tds !== undefined ? Number(inputs.tds) : (s.tds || 0);
-    s.custom_deductions = inputs.custom_deductions !== undefined ? Number(inputs.custom_deductions) : (s.custom_deductions || 0);
-    s.salary_advance = inputs.salary_advance !== undefined ? Number(inputs.salary_advance) : (s.salary_advance || 0);
-    s.canteen_deduction = inputs.canteen_deduction !== undefined ? Number(inputs.canteen_deduction) : (s.canteen_deduction || 0);
-    s.uniform_deduction = inputs.uniform_deduction !== undefined ? Number(inputs.uniform_deduction) : (s.uniform_deduction || 0);
-    s.notice_deduction = inputs.notice_deduction !== undefined ? Number(inputs.notice_deduction) : (s.notice_deduction || 0);
-    s.mobile_deduction = inputs.mobile_deduction !== undefined ? Number(inputs.mobile_deduction) : (s.mobile_deduction || 0);
-    s.damage_deduction = inputs.damage_deduction !== undefined ? Number(inputs.damage_deduction) : (s.damage_deduction || 0);
+    // Accept both canonical and PayrollRegister short aliases
+    const num = (primary: any, ...aliases: any[]) => {
+      for (const v of [primary, ...aliases]) {
+        if (v !== undefined && v !== null && v !== '') return Number(v);
+      }
+      return undefined;
+    };
+
+    const tdsIn = num(inputs.tds);
+    const customIn = num(inputs.custom_deductions, inputs.custom);
+    const advanceIn = num(inputs.salary_advance, inputs.advance);
+    const canteenIn = num(inputs.canteen_deduction);
+    const uniformIn = num(inputs.uniform_deduction);
+    const noticeIn = num(inputs.notice_deduction);
+    const mobileIn = num(inputs.mobile_deduction);
+    const damageIn = num(inputs.damage_deduction);
+    const pfIn = num(inputs.pf_deduction, inputs.pf);
+    const esicIn = num(inputs.esic_deduction, inputs.esic);
+    const ptIn = num(inputs.professional_tax, inputs.pt);
+    const loanIn = num(inputs.loan_deduction, inputs.loan);
+
+    s.tds = tdsIn !== undefined ? tdsIn : (s.tds || 0);
+    s.custom_deductions = customIn !== undefined ? customIn : (s.custom_deductions || 0);
+    s.salary_advance = advanceIn !== undefined ? advanceIn : (s.salary_advance || 0);
+    s.canteen_deduction = canteenIn !== undefined ? canteenIn : (s.canteen_deduction || 0);
+    s.uniform_deduction = uniformIn !== undefined ? uniformIn : (s.uniform_deduction || 0);
+    s.notice_deduction = noticeIn !== undefined ? noticeIn : (s.notice_deduction || 0);
+    s.mobile_deduction = mobileIn !== undefined ? mobileIn : (s.mobile_deduction || 0);
+    s.damage_deduction = damageIn !== undefined ? damageIn : (s.damage_deduction || 0);
+
+    if (pfIn !== undefined) {
+      s.pf_deduction = pfIn;
+      (s as any).pf_manual = true;
+    }
+    if (esicIn !== undefined) {
+      s.esic_deduction = esicIn;
+      (s as any).esic_manual = true;
+    }
+    if (ptIn !== undefined) {
+      s.professional_tax = ptIn;
+      (s as any).pt_manual = true;
+    }
+    if (loanIn !== undefined) {
+      s.loan_deduction = loanIn;
+      (s as any).loan_manual = true;
+    }
 
     s.bonus_incentive = inputs.bonus_incentive !== undefined ? Number(inputs.bonus_incentive) : (s.bonus_incentive || 0);
     s.performance_incentive = inputs.performance_incentive !== undefined ? Number(inputs.performance_incentive) : (s.performance_incentive || 0);
@@ -3686,6 +3885,44 @@ export class PayrollDatabase {
   }
 
   public runPayroll(month: string, companyFilter?: string): PayrollRun {
+    // Snapshot variable / manual inputs BEFORE deleting slips (otherwise recalculate wipes them)
+    const snapshot = new Map<string, any>();
+    for (const p of this.data.payslips || []) {
+      if (p.month !== month) continue;
+      if (companyFilter && companyFilter !== 'ALL') {
+        const emp = this.getEmployeeById(p.employee_id);
+        if (emp?.company !== companyFilter) continue;
+      }
+      snapshot.set(p.id, {
+        tds: p.tds,
+        custom_deductions: p.custom_deductions,
+        salary_advance: p.salary_advance,
+        canteen_deduction: p.canteen_deduction,
+        uniform_deduction: p.uniform_deduction,
+        notice_deduction: p.notice_deduction,
+        mobile_deduction: p.mobile_deduction,
+        damage_deduction: p.damage_deduction,
+        bonus_incentive: p.bonus_incentive,
+        performance_incentive: p.performance_incentive,
+        attendance_incentive: p.attendance_incentive,
+        production_incentive: p.production_incentive,
+        reimbursement: p.reimbursement,
+        special_allowance_addition: p.special_allowance_addition,
+        arrear_payment: p.arrear_payment,
+        other_earnings: p.other_earnings,
+        remarks: p.remarks,
+        pf_deduction: p.pf_deduction,
+        esic_deduction: p.esic_deduction,
+        professional_tax: p.professional_tax,
+        loan_deduction: p.loan_deduction,
+        pf_manual: (p as any).pf_manual,
+        esic_manual: (p as any).esic_manual,
+        pt_manual: (p as any).pt_manual,
+        loan_manual: (p as any).loan_manual
+      });
+    }
+    (this as any)._payrollInputSnapshot = snapshot;
+
     if (companyFilter && companyFilter !== 'ALL') {
       this.data.payslips = this.data.payslips.filter(p => {
         const emp = this.getEmployeeById(p.employee_id);
@@ -3736,6 +3973,8 @@ export class PayrollDatabase {
       deduct_sum += slip.total_deductions;
       net_sum += slip.net_salary;
     }
+
+    (this as any)._payrollInputSnapshot = undefined;
 
     this.data.payslips.push(...activeSlips);
 
