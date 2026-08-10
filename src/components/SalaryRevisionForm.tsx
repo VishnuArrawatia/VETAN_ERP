@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Employee } from '../types';
-import { TrendingUp, FileText, AlertTriangle, CheckCircle, Plus, Minus, RefreshCw } from 'lucide-react';
+import { TrendingUp, FileText, AlertTriangle, CheckCircle, Plus, Minus, RefreshCw, Users } from 'lucide-react';
 
 interface SalaryRevisionFormProps {
   employees: Employee[];
@@ -10,7 +10,7 @@ interface SalaryRevisionFormProps {
 }
 
 type RevisionMode = 'INCREMENT' | 'RESTRUCTURE';
-
+type ApplyScope = 'ONE' | 'UNIT' | 'ALL';
 type HeadKey = 'basic' | 'hra' | 'conveyance' | 'childEdu' | 'medical' | 'special';
 
 interface HeadDef {
@@ -36,6 +36,58 @@ const emptyAdj = (): Record<HeadKey, number> => ({
   special: 0,
 });
 
+function buildStructure(emp: Employee, adjustments: Record<HeadKey, number>) {
+  const basic0 = emp.base_salary || 0;
+  const hra0 = emp.hra || 0;
+  const conveyance0 = emp.conveyance_allowance || 0;
+  const childEdu0 = emp.edu_allowance || 0;
+  const medical0 = emp.medical_allowance || 0;
+  const special0 = emp.special_allowance || 0;
+
+  const old = {
+    basic: basic0,
+    hra: hra0,
+    conveyance: conveyance0,
+    childEdu: childEdu0,
+    medical: medical0,
+    special: special0,
+    gross: basic0 + hra0 + conveyance0 + childEdu0 + medical0 + special0,
+  };
+
+  const basic = Math.max(0, basic0 + (Number(adjustments.basic) || 0));
+  const hra = Math.max(0, hra0 + (Number(adjustments.hra) || 0));
+  const conveyance = Math.max(0, conveyance0 + (Number(adjustments.conveyance) || 0));
+  const childEdu = Math.max(0, childEdu0 + (Number(adjustments.childEdu) || 0));
+  const medical = Math.max(0, medical0 + (Number(adjustments.medical) || 0));
+  const special = Math.max(0, special0 + (Number(adjustments.special) || 0));
+  const gross = basic + hra + conveyance + childEdu + medical + special;
+
+  const pfWageOld = Math.min(15000, basic0);
+  const pfWageNew = Math.min(15000, basic);
+  const pfOld = emp.pf_opt_in ? Math.round(pfWageOld * 0.12) : 0;
+  const pfNew = emp.pf_opt_in ? Math.round(pfWageNew * 0.12) : 0;
+  const esicOld = emp.esic_opt_in ? Math.round(old.gross * 0.0075) : 0;
+  const esicNew = emp.esic_opt_in ? Math.round(gross * 0.0075) : 0;
+  const pt = emp.professional_tax_opt_in ? 200 : 0;
+  const empPfOld = emp.pf_opt_in ? Math.round(pfWageOld * 0.12) : 0;
+  const empPfNew = emp.pf_opt_in ? Math.round(pfWageNew * 0.12) : 0;
+  const empEsicOld = emp.esic_opt_in ? Math.round(old.gross * 0.0325) : 0;
+  const empEsicNew = emp.esic_opt_in ? Math.round(gross * 0.0325) : 0;
+
+  return {
+    old: {
+      ...old,
+      takeHome: old.gross - pfOld - esicOld - pt,
+      ctc: old.gross + empPfOld + empEsicOld,
+    },
+    neu: {
+      basic, hra, conveyance, childEdu, medical, special, gross,
+      takeHome: gross - pfNew - esicNew - pt,
+      ctc: gross + empPfNew + empEsicNew,
+    },
+  };
+}
+
 export default function SalaryRevisionForm({
   employees,
   activeCompany,
@@ -45,9 +97,11 @@ export default function SalaryRevisionForm({
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
   const [mode, setMode] = useState<RevisionMode>('INCREMENT');
+  const [applyScope, setApplyScope] = useState<ApplyScope>('ONE');
   const [reason, setReason] = useState('Annual Performance Appraisal');
   const [remarks, setRemarks] = useState('');
   const [adj, setAdj] = useState<Record<HeadKey, number>>(emptyAdj());
+  const [submitting, setSubmitting] = useState(false);
 
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -57,70 +111,44 @@ export default function SalaryRevisionForm({
     [selectedEmpId, employees]
   );
 
+  const scopedEmployees = useMemo(() => {
+    const active = employees.filter(e => e.status === 'ACTIVE');
+    if (applyScope === 'ONE') {
+      return selectedEmp ? [selectedEmp] : [];
+    }
+    if (applyScope === 'UNIT') {
+      if (!activeCompany || activeCompany === 'GROUP' || activeCompany === 'ALL') return [];
+      return active.filter(e => e.company === activeCompany);
+    }
+    // ALL
+    return active;
+  }, [employees, applyScope, selectedEmp, activeCompany]);
+
   useEffect(() => {
     setAdj(emptyAdj());
     setFormError('');
     setFormSuccess('');
-  }, [selectedEmpId, mode]);
+  }, [selectedEmpId, mode, applyScope]);
 
   useEffect(() => {
     if (mode === 'RESTRUCTURE') {
       setReason('Salary Restructure / Head Redistribution');
-    } else if (reason === 'Salary Restructure / Head Redistribution') {
+    } else if (reason.startsWith('Salary Restructure') || reason.includes('Restructure')) {
       setReason('Annual Performance Appraisal');
     }
   }, [mode]);
 
-  const oldStructure = useMemo(() => {
-    if (!selectedEmp) return null;
-    const basic = selectedEmp.base_salary || 0;
-    const hra = selectedEmp.hra || 0;
-    const conveyance = selectedEmp.conveyance_allowance || 0;
-    const childEdu = selectedEmp.edu_allowance || 0;
-    const medical = selectedEmp.medical_allowance || 0;
-    const special = selectedEmp.special_allowance || 0;
-    const gross = basic + hra + conveyance + childEdu + medical + special;
+  const preview = useMemo(() => {
+    if (applyScope === 'ONE' && selectedEmp) {
+      return buildStructure(selectedEmp, adj);
+    }
+    return null;
+  }, [applyScope, selectedEmp, adj]);
 
-    // Display-only estimates — master PF/ESIC rates unchanged in payroll engine
-    const pfWage = Math.min(15000, basic);
-    const pfDeduction = selectedEmp.pf_opt_in ? Math.round(pfWage * 0.12) : 0;
-    const esicDeduction = selectedEmp.esic_opt_in ? Math.round(gross * 0.0075) : 0;
-    const pt = selectedEmp.professional_tax_opt_in ? 200 : 0;
-    const takeHome = gross - pfDeduction - esicDeduction - pt;
-    const empPf = selectedEmp.pf_opt_in ? Math.round(pfWage * 0.12) : 0;
-    const empEsic = selectedEmp.esic_opt_in ? Math.round(gross * 0.0325) : 0;
-    const ctc = gross + empPf + empEsic;
-
-    return { basic, hra, conveyance, childEdu, medical, special, gross, ctc, takeHome };
-  }, [selectedEmp]);
-
-  const newStructure = useMemo(() => {
-    if (!oldStructure || !selectedEmp) return null;
-
-    const basic = Math.max(0, oldStructure.basic + (Number(adj.basic) || 0));
-    const hra = Math.max(0, oldStructure.hra + (Number(adj.hra) || 0));
-    const conveyance = Math.max(0, oldStructure.conveyance + (Number(adj.conveyance) || 0));
-    const childEdu = Math.max(0, oldStructure.childEdu + (Number(adj.childEdu) || 0));
-    const medical = Math.max(0, oldStructure.medical + (Number(adj.medical) || 0));
-    const special = Math.max(0, oldStructure.special + (Number(adj.special) || 0));
-    const gross = basic + hra + conveyance + childEdu + medical + special;
-
-    const pfWage = Math.min(15000, basic);
-    const pfDeduction = selectedEmp.pf_opt_in ? Math.round(pfWage * 0.12) : 0;
-    const esicDeduction = selectedEmp.esic_opt_in ? Math.round(gross * 0.0075) : 0;
-    const pt = selectedEmp.professional_tax_opt_in ? 200 : 0;
-    const takeHome = gross - pfDeduction - esicDeduction - pt;
-    const empPf = selectedEmp.pf_opt_in ? Math.round(pfWage * 0.12) : 0;
-    const empEsic = selectedEmp.esic_opt_in ? Math.round(gross * 0.0325) : 0;
-    const ctc = gross + empPf + empEsic;
-
-    return { basic, hra, conveyance, childEdu, medical, special, gross, ctc, takeHome };
-  }, [oldStructure, selectedEmp, adj]);
-
-  const netChange = useMemo(() => {
-    if (!oldStructure || !newStructure) return 0;
-    return newStructure.gross - oldStructure.gross;
-  }, [oldStructure, newStructure]);
+  const netTemplateChange = useMemo(
+    () => HEADS.reduce((sum, h) => sum + (Number(adj[h.key]) || 0), 0),
+    [adj]
+  );
 
   const hasAnyChange = useMemo(
     () => HEADS.some(h => (Number(adj[h.key]) || 0) !== 0),
@@ -128,11 +156,19 @@ export default function SalaryRevisionForm({
   );
 
   const setHeadAdj = (key: HeadKey, value: number) => {
-    if (!oldStructure) return;
-    const oldVal = oldStructure[key];
-    // Do not allow new amount below 0
-    const clamped = Math.max(-oldVal, Math.round(value) || 0);
-    setAdj(prev => ({ ...prev, [key]: clamped }));
+    let next = Math.round(value) || 0;
+    if (applyScope === 'ONE' && selectedEmp) {
+      const map: Record<HeadKey, number> = {
+        basic: selectedEmp.base_salary || 0,
+        hra: selectedEmp.hra || 0,
+        conveyance: selectedEmp.conveyance_allowance || 0,
+        childEdu: selectedEmp.edu_allowance || 0,
+        medical: selectedEmp.medical_allowance || 0,
+        special: selectedEmp.special_allowance || 0,
+      };
+      next = Math.max(-map[key], next);
+    }
+    setAdj(prev => ({ ...prev, [key]: next }));
   };
 
   const bumpHead = (key: HeadKey, delta: number) => {
@@ -144,92 +180,124 @@ export default function SalaryRevisionForm({
     setFormError('');
     setFormSuccess('');
 
-    if (!selectedEmpId) {
-      setFormError('Please select a valid employee.');
-      return;
-    }
     if (!effectiveDate) {
-      setFormError('Effective Date is required.');
+      setFormError('Effective Date zaroori hai. Is date se naya structure apply hoga.');
       return;
     }
-    if (!hasAnyChange || !oldStructure || !newStructure) {
-      setFormError('At least one salary head must be changed (+ or −).');
+    if (!hasAnyChange) {
+      setFormError('Kam se kam ek salary head me + ya − change dalein.');
+      return;
+    }
+    if (mode === 'INCREMENT' && netTemplateChange <= 0) {
+      setFormError('Increment mode me net Gross badhna chahiye. Sirf heads shift ke liye Restructure mode use karein.');
       return;
     }
 
-    if (mode === 'INCREMENT' && netChange <= 0) {
-      setFormError('Increment mode me net Gross badhna chahiye. Agar sirf heads shift karne hain to Restructure mode use karein.');
-      return;
-    }
-
-    // Policy: increment cannot be only in Basic (still allow pure basic reduce in restructure)
-    if (mode === 'INCREMENT') {
-      const hasBasicInc = (Number(adj.basic) || 0) > 0;
-      const hasOtherInc = HEADS.filter(h => h.key !== 'basic').some(h => (Number(adj[h.key]) || 0) > 0);
-      if (hasBasicInc && !hasOtherInc && (Number(adj.basic) || 0) === netChange) {
-        setFormError('Strict Corporate Policy: Increment CANNOT be only in Basic Salary. Distribute across other heads (HRA / Special / Conveyance, etc.), or use Restructure.');
+    if (applyScope === 'ONE') {
+      if (!selectedEmp || !preview) {
+        setFormError('Pehle employee select karein.');
         return;
       }
-    }
-
-    for (const h of HEADS) {
-      if (newStructure[h.key] < 0) {
-        setFormError(`${h.label} cannot go below ₹0.`);
-        return;
-      }
-    }
-
-    try {
-      const payload = {
-        employee_code: selectedEmpId,
-        old_salary: oldStructure.basic,
-        new_salary: newStructure.basic,
-        effective_date: effectiveDate,
-        reason: mode === 'RESTRUCTURE'
-          ? (reason.includes('Restructure') ? reason : `Restructure: ${reason}`)
-          : reason,
-        approved_by: activeHRName,
-        hra: newStructure.hra,
-        conveyance_allowance: newStructure.conveyance,
-        edu_allowance: newStructure.childEdu,
-        medical_allowance: newStructure.medical,
-        special_allowance: newStructure.special,
-        remarks: `[${mode}] ${remarks || ''}`.trim(),
-        increment_amount: netChange,
-        old_structure: oldStructure,
-        new_structure: {
-          ...newStructure,
-          revision_mode: mode,
-          adjustments: adj
+      if (mode === 'INCREMENT') {
+        const hasBasicInc = (Number(adj.basic) || 0) > 0;
+        const hasOtherInc = HEADS.filter(h => h.key !== 'basic').some(h => (Number(adj[h.key]) || 0) > 0);
+        const net = preview.neu.gross - preview.old.gross;
+        if (hasBasicInc && !hasOtherInc && (Number(adj.basic) || 0) === net) {
+          setFormError('Policy: Increment sirf Basic me nahi ho sakta. Dusre heads me bhi distribute karein, ya Restructure use karein.');
+          return;
         }
-      };
-
-      const res = await fetch('/api/revisions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to submit salary revision');
       }
-
-      setFormSuccess(
-        mode === 'RESTRUCTURE'
-          ? `Restructure saved for ${selectedEmp?.name}. Effective ${effectiveDate}. Gross ₹${newStructure.gross.toLocaleString('en-IN')}.`
-          : `Increment saved for ${selectedEmp?.name}. Effective ${effectiveDate}. Net +₹${netChange.toLocaleString('en-IN')}.`
+    } else {
+      if (scopedEmployees.length === 0) {
+        if (applyScope === 'UNIT') {
+          setFormError('Unit-wide ke liye left side se specific company select karein (GROUP Dashboard nahi).');
+        } else {
+          setFormError('Koi active employee nahi mila.');
+        }
+        return;
+      }
+      const ok = window.confirm(
+        `Confirm Bulk ${mode}\n\n` +
+        `Employees: ${scopedEmployees.length}\n` +
+        `Scope: ${applyScope === 'UNIT' ? `Unit ${activeCompany}` : 'ALL companies'}\n` +
+        `Effective Date: ${effectiveDate}\n` +
+        `Net template Δ Gross: ₹${netTemplateChange.toLocaleString('en-IN')}\n\n` +
+        `Yeh change sab selected employees pe apply hoga. Continue?`
       );
+      if (!ok) return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (applyScope === 'ONE' && selectedEmp && preview) {
+        const payload = {
+          employee_code: selectedEmp.id,
+          old_salary: preview.old.basic,
+          new_salary: preview.neu.basic,
+          effective_date: effectiveDate,
+          reason: mode === 'RESTRUCTURE'
+            ? (reason.includes('Restructure') ? reason : `Restructure: ${reason}`)
+            : reason,
+          approved_by: activeHRName,
+          hra: preview.neu.hra,
+          conveyance_allowance: preview.neu.conveyance,
+          edu_allowance: preview.neu.childEdu,
+          medical_allowance: preview.neu.medical,
+          special_allowance: preview.neu.special,
+          remarks: `[${mode}] ${remarks || ''}`.trim(),
+          increment_amount: preview.neu.gross - preview.old.gross,
+          old_structure: preview.old,
+          new_structure: { ...preview.neu, revision_mode: mode, adjustments: adj }
+        };
+
+        const res = await fetch('/api/revisions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to save revision');
+        }
+        setFormSuccess(
+          `${mode === 'RESTRUCTURE' ? 'Restructure' : 'Increment'} save ho gaya: ${selectedEmp.name}. Effective ${effectiveDate}. New Gross ₹${preview.neu.gross.toLocaleString('en-IN')}.`
+        );
+      } else {
+        const res = await fetch('/api/revisions/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scope: applyScope === 'UNIT' ? 'UNIT' : 'ALL',
+            company: activeCompany,
+            effective_date: effectiveDate,
+            reason: mode === 'RESTRUCTURE'
+              ? (reason.includes('Restructure') ? reason : `Bulk Restructure: ${reason}`)
+              : `Bulk Increment: ${reason}`,
+            approved_by: activeHRName,
+            remarks,
+            mode,
+            adjustments: adj
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Bulk revision failed');
+
+        setFormSuccess(
+          `Bulk ${mode} complete. Applied: ${data.applied} / ${data.total_targets}. ` +
+          (data.skipped_count ? `Skipped: ${data.skipped_count} (payroll locked / no change). ` : '') +
+          `Effective date: ${effectiveDate}.`
+        );
+      }
 
       setSelectedEmpId('');
       setEffectiveDate('');
       setRemarks('');
       setAdj(emptyAdj());
-      setReason('Annual Performance Appraisal');
-      setMode('INCREMENT');
       onSuccess();
     } catch (err: any) {
-      setFormError(err.message || 'Error occurred while saving revision.');
+      setFormError(err.message || 'Save fail hua.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -240,6 +308,8 @@ export default function SalaryRevisionForm({
     if (v < 0) return `−₹${Math.abs(v).toLocaleString('en-IN')}`;
     return '₹0';
   };
+
+  const showHeadEditor = applyScope !== 'ONE' || !!selectedEmp;
 
   return (
     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 space-y-6">
@@ -252,64 +322,122 @@ export default function SalaryRevisionForm({
             Salary Revision — Increment & Restructure
           </h3>
           <p className="text-[10px] text-slate-500">
-            Har head pe + / −. Increment me net raise; Restructure me heads shift (effective date ke saath).
+            Ek employee, poori unit, ya sabhi employees. Har head pe + / −. Effective date ke saath.
           </p>
         </div>
       </div>
 
+      {/* Clear guidance box */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-950 leading-relaxed space-y-1">
+        <p className="font-bold text-amber-900">Kaise use karein (short guide)</p>
+        <p>1) Pehle mode choose karo: <strong>Increment</strong> (salary badhana) ya <strong>Restructure</strong> (heads shift).</p>
+        <p>2) Phir scope choose karo: <strong>One Employee</strong> / <strong>Current Unit</strong> / <strong>All Employees</strong>.</p>
+        <p>3) Effective Date dalo → heads me +/− karo → Commit.</p>
+        <p>Note: Unit-wide ke liye left sidebar me specific company select honi chahiye (GROUP Dashboard pe Unit option kaam nahi karega).</p>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Mode toggle */}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('INCREMENT')}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-              mode === 'INCREMENT'
-                ? 'bg-emerald-600 text-white border-emerald-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Plus size={13} />
-            Increment
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('RESTRUCTURE')}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-              mode === 'RESTRUCTURE'
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <RefreshCw size={13} />
-            Restructure
-          </button>
-          <span className="text-[10px] text-slate-500 self-center ml-1">
-            {mode === 'INCREMENT'
-              ? 'Net Gross badhega — kisi head me − bhi de sakte ho, dusre me +.'
-              : 'Heads ke beech shift — ek head −, dusra +. Gross same ya change dono allowed.'}
-          </span>
+        {/* Mode */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">1. Mode</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('INCREMENT')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                mode === 'INCREMENT'
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Plus size={13} />
+              Increment
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('RESTRUCTURE')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                mode === 'RESTRUCTURE'
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <RefreshCw size={13} />
+              Restructure
+            </button>
+          </div>
+        </div>
+
+        {/* Scope */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">2. Kispe apply karna hai?</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setApplyScope('ONE')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                applyScope === 'ONE'
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              One Employee
+            </button>
+            <button
+              type="button"
+              onClick={() => setApplyScope('UNIT')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                applyScope === 'UNIT'
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Users size={13} />
+              Current Unit ({activeCompany === 'GROUP' ? 'select company' : activeCompany})
+            </button>
+            <button
+              type="button"
+              onClick={() => setApplyScope('ALL')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                applyScope === 'ALL'
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Users size={13} />
+              All Employees (sab companies)
+            </button>
+          </div>
+          {applyScope !== 'ONE' && (
+            <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+              Bulk target: <strong>{scopedEmployees.length}</strong> active employee(s)
+              {applyScope === 'UNIT' ? ` in unit ${activeCompany}` : ' across all units'}.
+              Same +/− har employee pe apply hoga (head ₹0 se neeche nahi jayega).
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500 block">Select Employee</label>
-            <select
-              value={selectedEmpId}
-              onChange={(e) => setSelectedEmpId(e.target.value)}
-              className="w-full text-xs p-2.5 border bg-white rounded-xl focus:outline-none"
-              required
-            >
-              <option value="">-- Choose Employee --</option>
-              {employees
-                .filter(emp => emp.status === 'ACTIVE' && (activeCompany === 'GROUP' || emp.company === activeCompany))
-                .map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.id}) - {emp.company}
-                  </option>
-                ))}
-            </select>
-          </div>
+          {applyScope === 'ONE' && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 block">Select Employee</label>
+              <select
+                value={selectedEmpId}
+                onChange={(e) => setSelectedEmpId(e.target.value)}
+                className="w-full text-xs p-2.5 border bg-white rounded-xl focus:outline-none"
+                required={applyScope === 'ONE'}
+              >
+                <option value="">-- Choose Employee --</option>
+                {employees
+                  .filter(emp => emp.status === 'ACTIVE' && (activeCompany === 'GROUP' || emp.company === activeCompany))
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.id}) - {emp.company}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-500 block">Effective Date *</label>
@@ -344,6 +472,7 @@ export default function SalaryRevisionForm({
                   <option value="Statutory / Compliance Restructure">Statutory / Compliance Restructure</option>
                   <option value="Role Transition Restructure">Role Transition Restructure</option>
                   <option value="Cost Neutral Head Shift">Cost Neutral Head Shift</option>
+                  <option value="Bulk Unit Restructure">Bulk Unit Restructure</option>
                 </>
               )}
             </select>
@@ -375,15 +504,18 @@ export default function SalaryRevisionForm({
           </div>
         )}
 
-        {selectedEmp && oldStructure && newStructure && (
+        {showHeadEditor && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2">
+              <div className="bg-slate-900 px-4 py-3 flex flex-wrap justify-between items-center gap-2">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                  Salary Heads — Old / ± Adjust / New
+                  3. Salary Heads — Adjust with + / −
                 </span>
                 <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                  {selectedEmp.name} ({selectedEmp.id}) · Mode: {mode}
+                  {applyScope === 'ONE'
+                    ? `${selectedEmp?.name} (${selectedEmp?.id})`
+                    : `Bulk × ${scopedEmployees.length} employees`}
+                  {' · '}{mode}
                 </span>
               </div>
 
@@ -392,10 +524,16 @@ export default function SalaryRevisionForm({
                   <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     <tr>
                       <th className="p-3">Salary Head</th>
-                      <th className="p-3 text-right">Old (₹)</th>
+                      {applyScope === 'ONE' && preview && (
+                        <th className="p-3 text-right">Old (₹)</th>
+                      )}
                       <th className="p-3 text-center">Adjust (+ / −)</th>
-                      <th className="p-3 text-right">New (₹)</th>
-                      <th className="p-3 text-right">Δ</th>
+                      {applyScope === 'ONE' && preview && (
+                        <>
+                          <th className="p-3 text-right">New (₹)</th>
+                          <th className="p-3 text-right">Δ</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -404,15 +542,16 @@ export default function SalaryRevisionForm({
                       return (
                         <tr key={h.key}>
                           <td className="p-3 text-slate-950 font-bold">{h.label}</td>
-                          <td className="p-3 text-right font-mono text-slate-500">
-                            {fmt(oldStructure[h.key])}
-                          </td>
+                          {applyScope === 'ONE' && preview && (
+                            <td className="p-3 text-right font-mono text-slate-500">
+                              {fmt(preview.old[h.key])}
+                            </td>
+                          )}
                           <td className="p-3">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => bumpHead(h.key, -100)}
-                                title="Decrease"
                                 className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 cursor-pointer"
                               >
                                 <Minus size={12} />
@@ -440,168 +579,134 @@ export default function SalaryRevisionForm({
                               <button
                                 type="button"
                                 onClick={() => bumpHead(h.key, 100)}
-                                title="Increase"
                                 className="p-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
                               >
                                 <Plus size={12} />
                               </button>
                             </div>
                           </td>
-                          <td className="p-3 text-right font-mono text-slate-950 font-bold">
-                            {fmt(newStructure[h.key])}
-                          </td>
-                          <td className={`p-3 text-right font-mono font-bold ${
-                            delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-rose-600' : 'text-slate-400'
-                          }`}>
-                            {fmtSigned(delta)}
-                          </td>
+                          {applyScope === 'ONE' && preview && (
+                            <>
+                              <td className="p-3 text-right font-mono text-slate-950 font-bold">
+                                {fmt(preview.neu[h.key])}
+                              </td>
+                              <td className={`p-3 text-right font-mono font-bold ${
+                                delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-rose-600' : 'text-slate-400'
+                              }`}>
+                                {fmtSigned(delta)}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
                   </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-50 font-bold">
-                      <td className="p-3 text-slate-900">Gross Salary</td>
-                      <td className="p-3 text-right font-mono">{fmt(oldStructure.gross)}</td>
-                      <td className="p-3 text-center text-[10px] text-slate-400 uppercase">Breakup total</td>
-                      <td className="p-3 text-right font-mono text-slate-950 text-sm">{fmt(newStructure.gross)}</td>
-                      <td className={`p-3 text-right font-mono ${
-                        netChange > 0 ? 'text-emerald-600' : netChange < 0 ? 'text-rose-600' : 'text-slate-500'
-                      }`}>
-                        {fmtSigned(netChange)}
-                      </td>
-                    </tr>
-                  </tfoot>
+                  {applyScope === 'ONE' && preview && (
+                    <tfoot>
+                      <tr className="bg-slate-50 font-bold">
+                        <td className="p-3">Gross Salary</td>
+                        <td className="p-3 text-right font-mono">{fmt(preview.old.gross)}</td>
+                        <td className="p-3 text-center text-[10px] text-slate-400">Breakup</td>
+                        <td className="p-3 text-right font-mono text-sm">{fmt(preview.neu.gross)}</td>
+                        <td className={`p-3 text-right font-mono ${
+                          preview.neu.gross - preview.old.gross > 0 ? 'text-emerald-600'
+                            : preview.neu.gross - preview.old.gross < 0 ? 'text-rose-600' : 'text-slate-500'
+                        }`}>
+                          {fmtSigned(preview.neu.gross - preview.old.gross)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             </div>
 
-            {/* Gross breakup cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-slate-200 p-4">
-                <h4 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-3">
-                  Old Gross Breakup
-                </h4>
-                <div className="space-y-1.5 text-xs font-mono">
-                  {HEADS.map(h => (
-                    <div key={h.key} className="flex justify-between text-slate-600">
-                      <span className="font-sans text-slate-500">{h.label}</span>
-                      <span>{fmt(oldStructure[h.key])}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between border-t border-slate-100 pt-2 font-bold text-slate-900">
-                    <span className="font-sans">Gross</span>
-                    <span>{fmt(oldStructure.gross)}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-2xl border border-indigo-100 p-4">
-                <h4 className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider mb-3">
-                  New Gross Breakup (Effective {effectiveDate || '—'})
-                </h4>
-                <div className="space-y-1.5 text-xs font-mono">
-                  {HEADS.map(h => {
-                    const delta = Number(adj[h.key]) || 0;
-                    return (
-                      <div key={h.key} className="flex justify-between text-slate-700">
+            {applyScope === 'ONE' && preview && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-200 p-4">
+                  <h4 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-3">Old Gross Breakup</h4>
+                  <div className="space-y-1.5 text-xs font-mono">
+                    {HEADS.map(h => (
+                      <div key={h.key} className="flex justify-between text-slate-600">
                         <span className="font-sans text-slate-500">{h.label}</span>
-                        <span>
-                          {fmt(newStructure[h.key])}
-                          {delta !== 0 && (
-                            <span className={`ml-2 text-[10px] ${delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              ({fmtSigned(delta)})
-                            </span>
-                          )}
-                        </span>
+                        <span>{fmt(preview.old[h.key])}</span>
                       </div>
-                    );
-                  })}
-                  <div className="flex justify-between border-t border-indigo-50 pt-2 font-bold text-indigo-900">
-                    <span className="font-sans">Gross</span>
-                    <span>
-                      {fmt(newStructure.gross)}
-                      <span className={`ml-2 text-[10px] ${netChange > 0 ? 'text-emerald-600' : netChange < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                        ({fmtSigned(netChange)})
+                    ))}
+                    <div className="flex justify-between border-t border-slate-100 pt-2 font-bold text-slate-900">
+                      <span className="font-sans">Gross</span>
+                      <span>{fmt(preview.old.gross)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl border border-indigo-100 p-4">
+                  <h4 className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider mb-3">
+                    New Gross Breakup (Effective {effectiveDate || '—'})
+                  </h4>
+                  <div className="space-y-1.5 text-xs font-mono">
+                    {HEADS.map(h => {
+                      const delta = Number(adj[h.key]) || 0;
+                      return (
+                        <div key={h.key} className="flex justify-between text-slate-700">
+                          <span className="font-sans text-slate-500">{h.label}</span>
+                          <span>
+                            {fmt(preview.neu[h.key])}
+                            {delta !== 0 && (
+                              <span className={`ml-2 text-[10px] ${delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                ({fmtSigned(delta)})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    <div className="flex justify-between border-t border-indigo-50 pt-2 font-bold text-indigo-900">
+                      <span className="font-sans">Gross</span>
+                      <span>
+                        {fmt(preview.neu.gross)}
+                        <span className={`ml-2 text-[10px] ${
+                          preview.neu.gross - preview.old.gross > 0 ? 'text-emerald-600'
+                            : preview.neu.gross - preview.old.gross < 0 ? 'text-rose-600' : 'text-slate-400'
+                        }`}>
+                          ({fmtSigned(preview.neu.gross - preview.old.gross)})
+                        </span>
                       </span>
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-inner text-slate-300">
-              <h4 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4 border-b border-slate-800 pb-2 flex items-center gap-1.5">
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5 text-slate-300">
+              <h4 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-3 flex items-center gap-1.5">
                 <FileText size={13} className="text-indigo-400" />
-                Live Gross / CTC / Take-Home Impact
+                Summary before save
               </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 font-mono text-xs">
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                  <span className="text-[9px] text-slate-500 uppercase block font-sans">Monthly Gross</span>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">Old</span>
-                    <span>{fmt(oldStructure.gross)}</span>
-                  </div>
-                  <div className={`flex justify-between text-[10px] font-bold ${
-                    netChange >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}>
-                    <span>Net Δ</span>
-                    <span>{fmtSigned(netChange)}</span>
-                  </div>
-                  <div className="border-t border-slate-800 pt-1 flex justify-between items-center text-white font-extrabold text-sm">
-                    <span className="text-[10px] font-sans font-medium text-slate-400">New</span>
-                    <span>{fmt(newStructure.gross)}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                  <span className="text-[9px] text-slate-500 uppercase block font-sans">CTC (estimate)</span>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">Old</span>
-                    <span>{fmt(oldStructure.ctc)}</span>
-                  </div>
-                  <div className={`flex justify-between text-[10px] font-bold ${
-                    newStructure.ctc - oldStructure.ctc >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}>
-                    <span>Δ</span>
-                    <span>{fmtSigned(newStructure.ctc - oldStructure.ctc)}</span>
-                  </div>
-                  <div className="border-t border-slate-800 pt-1 flex justify-between items-center text-white font-extrabold text-sm">
-                    <span className="text-[10px] font-sans font-medium text-slate-400">New</span>
-                    <span>{fmt(newStructure.ctc)}</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                  <span className="text-[9px] text-slate-500 uppercase block font-sans">Take-Home (estimate)</span>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">Old</span>
-                    <span>{fmt(oldStructure.takeHome)}</span>
-                  </div>
-                  <div className={`flex justify-between text-[10px] font-bold ${
-                    newStructure.takeHome - oldStructure.takeHome >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}>
-                    <span>Δ</span>
-                    <span>{fmtSigned(newStructure.takeHome - oldStructure.takeHome)}</span>
-                  </div>
-                  <div className="border-t border-slate-800 pt-1 flex justify-between items-center text-white font-extrabold text-sm">
-                    <span className="text-[10px] font-sans font-medium text-slate-400">New</span>
-                    <span>{fmt(newStructure.takeHome)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-3 border-t border-slate-800">
-                <p className="text-[10px] text-slate-500 max-w-md">
-                  Effective date: <strong className="text-slate-300">{effectiveDate || 'not set'}</strong>.
-                  Payroll engine PF / Bonus / ESIC master formulas unchanged — yahan sirf head amounts update hote hain.
+              <div className="text-xs space-y-1 mb-4">
+                <p>Mode: <strong className="text-white">{mode}</strong></p>
+                <p>
+                  Apply to:{' '}
+                  <strong className="text-white">
+                    {applyScope === 'ONE'
+                      ? selectedEmp?.name || '—'
+                      : applyScope === 'UNIT'
+                        ? `Unit ${activeCompany} (${scopedEmployees.length} staff)`
+                        : `All employees (${scopedEmployees.length} staff)`}
+                  </strong>
                 </p>
+                <p>Effective Date: <strong className="text-white">{effectiveDate || 'not set'}</strong></p>
+                <p>Template net Δ Gross: <strong className="text-white">{fmtSigned(netTemplateChange)}</strong></p>
+              </div>
+              <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={!hasAnyChange || !effectiveDate}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-xs text-white font-extrabold rounded-xl transition cursor-pointer shadow-lg shadow-indigo-600/15"
+                  disabled={submitting || !hasAnyChange || !effectiveDate}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-xs text-white font-extrabold rounded-xl transition cursor-pointer"
                 >
-                  {mode === 'RESTRUCTURE' ? 'Commit Restructure' : 'Commit Increment'}
+                  {submitting
+                    ? 'Saving...'
+                    : applyScope === 'ONE'
+                      ? (mode === 'RESTRUCTURE' ? 'Commit Restructure' : 'Commit Increment')
+                      : `Commit Bulk ${mode} (${scopedEmployees.length})`}
                 </button>
               </div>
             </div>

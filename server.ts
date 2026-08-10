@@ -323,6 +323,155 @@ async function startServer() {
     }
   });
 
+  // Bulk salary revision / restructure for many employees at once
+  app.post('/api/revisions/bulk', (req, res) => {
+    try {
+      const {
+        scope, // 'UNIT' | 'ALL'
+        company,
+        effective_date,
+        reason,
+        approved_by,
+        remarks,
+        mode, // 'INCREMENT' | 'RESTRUCTURE'
+        adjustments // { basic, hra, conveyance, childEdu, medical, special }
+      } = req.body;
+
+      if (!effective_date) {
+        return res.status(400).json({ error: 'Effective Date is required' });
+      }
+      if (!adjustments || typeof adjustments !== 'object') {
+        return res.status(400).json({ error: 'adjustments object is required' });
+      }
+
+      const adj = {
+        basic: Number(adjustments.basic) || 0,
+        hra: Number(adjustments.hra) || 0,
+        conveyance: Number(adjustments.conveyance) || 0,
+        childEdu: Number(adjustments.childEdu) || 0,
+        medical: Number(adjustments.medical) || 0,
+        special: Number(adjustments.special) || 0
+      };
+      const hasChange = Object.values(adj).some(v => v !== 0);
+      if (!hasChange) {
+        return res.status(400).json({ error: 'At least one head adjustment (+ or −) is required' });
+      }
+
+      const netAdj = adj.basic + adj.hra + adj.conveyance + adj.childEdu + adj.medical + adj.special;
+      if (mode === 'INCREMENT' && netAdj <= 0) {
+        return res.status(400).json({ error: 'Increment mode requires net positive Gross change across heads' });
+      }
+
+      const month = String(effective_date).slice(0, 7);
+      let targets = db.getEmployees().filter((e: any) => e.status === 'ACTIVE');
+
+      if (scope === 'UNIT') {
+        if (!company || company === 'GROUP' || company === 'ALL') {
+          return res.status(400).json({ error: 'Unit scope requires a specific company (not GROUP)' });
+        }
+        targets = targets.filter((e: any) => e.company === company);
+      } else if (scope === 'ALL') {
+        // all active employees across companies
+      } else {
+        return res.status(400).json({ error: 'scope must be UNIT or ALL' });
+      }
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: 'No active employees found for this scope' });
+      }
+
+      const results: any[] = [];
+      const skipped: any[] = [];
+      let applied = 0;
+
+      for (const emp of targets) {
+        if (db.isPayrollLocked(month, emp.company)) {
+          skipped.push({ id: emp.id, name: emp.name, reason: `Payroll CLOSED for ${month} (${emp.company})` });
+          continue;
+        }
+
+        const oldBasic = Number(emp.base_salary) || 0;
+        const oldHra = Number(emp.hra) || 0;
+        const oldConv = Number(emp.conveyance_allowance) || 0;
+        const oldEdu = Number(emp.edu_allowance) || 0;
+        const oldMed = Number(emp.medical_allowance) || 0;
+        const oldSpec = Number(emp.special_allowance) || 0;
+        const oldGross = oldBasic + oldHra + oldConv + oldEdu + oldMed + oldSpec;
+
+        const newBasic = Math.max(0, oldBasic + adj.basic);
+        const newHra = Math.max(0, oldHra + adj.hra);
+        const newConv = Math.max(0, oldConv + adj.conveyance);
+        const newEdu = Math.max(0, oldEdu + adj.childEdu);
+        const newMed = Math.max(0, oldMed + adj.medical);
+        const newSpec = Math.max(0, oldSpec + adj.special);
+        const newGross = newBasic + newHra + newConv + newEdu + newMed + newSpec;
+
+        // If absolute − would wipe a head differently than intended (clamped), still apply with floor 0
+        const oldStructure = {
+          basic: oldBasic, hra: oldHra, conveyance: oldConv, childEdu: oldEdu,
+          medical: oldMed, special: oldSpec, gross: oldGross
+        };
+        const newStructure = {
+          basic: newBasic, hra: newHra, conveyance: newConv, childEdu: newEdu,
+          medical: newMed, special: newSpec, gross: newGross,
+          revision_mode: mode || 'RESTRUCTURE',
+          adjustments: adj,
+          bulk: true
+        };
+
+        if (oldGross === newGross && mode === 'INCREMENT') {
+          skipped.push({ id: emp.id, name: emp.name, reason: 'No net gross increase after clamp' });
+          continue;
+        }
+        if (
+          newBasic === oldBasic && newHra === oldHra && newConv === oldConv &&
+          newEdu === oldEdu && newMed === oldMed && newSpec === oldSpec
+        ) {
+          skipped.push({ id: emp.id, name: emp.name, reason: 'No change after applying floors' });
+          continue;
+        }
+
+        const rev = db.addSalaryRevision({
+          employee_code: emp.id,
+          old_salary: oldBasic,
+          new_salary: newBasic,
+          effective_date,
+          reason: reason || (mode === 'INCREMENT' ? 'Bulk Increment' : 'Bulk Restructure'),
+          approved_by: approved_by || 'Admin',
+          hra: newHra,
+          conveyance_allowance: newConv,
+          edu_allowance: newEdu,
+          medical_allowance: newMed,
+          special_allowance: newSpec,
+          remarks: `[BULK ${mode || 'RESTRUCTURE'}] ${remarks || ''}`.trim(),
+          increment_amount: newGross - oldGross,
+          old_structure: JSON.stringify(oldStructure),
+          new_structure: JSON.stringify(newStructure)
+        });
+
+        applied += 1;
+        results.push({ id: emp.id, name: emp.name, old_gross: oldGross, new_gross: newGross, revision_id: rev.id });
+      }
+
+      db.logAudit(
+        'Bulk Salary Revision',
+        `Bulk ${mode || 'RESTRUCTURE'} applied to ${applied} employee(s), skipped ${skipped.length}. Scope=${scope}${company ? ` company=${company}` : ''}`,
+        getOperator(req)
+      );
+
+      res.json({
+        success: true,
+        applied,
+        skipped_count: skipped.length,
+        total_targets: targets.length,
+        results,
+        skipped
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Employee management with company filter
   app.get('/api/employees', (req, res) => {
     const { company } = req.query as { company?: string };
