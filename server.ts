@@ -285,7 +285,7 @@ async function startServer() {
         new_structure
       } = req.body;
       
-      if (!employee_code || !new_salary || !effective_date) {
+      if (!employee_code || new_salary === undefined || new_salary === null || !effective_date) {
         return res.status(400).json({ error: 'Employee code, new salary, and effective date are required' });
       }
 
