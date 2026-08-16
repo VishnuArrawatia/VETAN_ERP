@@ -120,6 +120,11 @@ C. Important validations
 ## 5. Increment Letter — Template & Example
 Use company letterhead. Save as `INCREMENT_{EMP_ID}_{EFFECTIVE_DATE}.pdf` and store in `/docs/hr-letters/` and attach in employee record.
 
+**Authorised Signatory**
+- Every letter must include the Authorised Signatory name and designation.
+- Default authorised signatory: `Vishnu Arrawatia` (or HR Officer). HR can edit the name per requirement before generating the letter.
+- How to edit: replace the `{SIGNATORY_NAME}` placeholder in the template with desired authorised signatory name (e.g., the HR Officer or Managing Director). In future, this can be stored in system settings (e.g., `authorised_signatory_name`) and exposed in Admin UI.
+
 Template (copy‑paste ready):
 
 ```text
@@ -153,6 +158,10 @@ Regards,
 {HR_NAME}
 HR Officer — {COMPANY_NAME}
 
+Authorised Signatory:
+{SIGNATORY_NAME}
+{SIGNATORY_DESIGNATION}
+
 Acknowledgement: I, {Employee Name}, acknowledge receipt of the above revision.
 Employee Signature: __________ Date: __________
 ```
@@ -176,7 +185,7 @@ C. Calculation Checklist
 2. Leave encashment = EarnedLeaveBalance × PerDaySalary
 3. Gratuity (if eligible) = (Last drawn Basic + DA) × 15/26 × Years of Service (follow statutory rules)
 4. Add reimbursements and arrears
-5. Subtract outstanding loan/advance amounts, notice recovery, TDS
+5. Subtract outstanding loans/advances, notice recovery, TDS
 6. Net payable amount = Sum(payments) − Sum(deductions)
 
 D. Approvals
@@ -187,6 +196,10 @@ E. Communication & Payment
 1. Generate F&F Letter (template below) + Calculation Summary.
 2. Employee signs acknowledgement on receipt.
 3. Accounts disburse via bank transfer and store payment proof.
+
+**Authorised Signatory**
+- F&F letters must explicitly include the Authorised Signatory name and designation.
+- Default signatory: `Vishnu Arrawatia` (can be edited as required by HR).
 
 Template (F&F letter):
 
@@ -222,11 +235,15 @@ Net Payable (A − B): ₹ {NET_PAYABLE}
 
 The above amount will be paid to your bank account ending with {BANK_LAST4} on or before {PAYMENT_DATE}.
 
-Please sign the acknowledgement below to confirm acceptance of settlement and receipt of payment.
-
 Regards,
 {HR_NAME}
 HR — {COMPANY_NAME}
+
+Authorised Signatory:
+{SIGNATORY_NAME}
+{SIGNATORY_DESIGNATION}
+
+Please sign the acknowledgement below to confirm acceptance of settlement and receipt of payment.
 
 Acknowledgement:
 I, {EMPLOYEE_NAME}, accept the Full & Final Settlement and confirm receipt of ₹ {NET_PAYABLE}.
@@ -288,7 +305,7 @@ C. (Optional) Automation idea (future): implement an endpoint `/api/hr/generate-
 ---
 
 ## Next steps I will perform (if you confirm)
-- Create this file `/docs/HR_User_Guide.md` in repository (I will add it now).
+- Create this file `/docs/HR_User_Guide.md` in repository (done).
 - Optionally add `/docs/hr-templates/INCREMENT_TEMPLATE.txt` and `FFS_TEMPLATE.txt` as separate files.
 
 ---
