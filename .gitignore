@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local database and persisted data (must not be committed)
+Payroll.db
+Payroll.db-journal
+payroll_persisted_store.json
+
+# Codebuff internal
+.freebuff/

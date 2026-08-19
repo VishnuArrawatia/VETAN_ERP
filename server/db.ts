@@ -467,12 +467,46 @@ export class PayrollDatabase {
 
   private dbSqlite!: any;
   public inMemoryOnly: boolean = false;
+  private supabaseAdmin: any;
 
-  constructor() {
+  /**
+   * @param supabaseAdmin  Optional Supabase client (service_role key).
+   *                       When provided, init() loads from Supabase and
+   *                       persistData() pushes to Supabase.
+   */
+  constructor(supabaseAdmin?: any) {
+    this.supabaseAdmin = supabaseAdmin || null;
     // constructor runs synchronously; we call init() from server.ts and await it
   }
 
   public async init(): Promise<void> {
+    // 0. If Supabase client provided, load from cloud first (Vercel path)
+    if (this.supabaseAdmin) {
+      try {
+        const { data: row, error } = await this.supabaseAdmin
+          .from('vetan_erp_store')
+          .select('payload')
+          .eq('id', 'live')
+          .maybeSingle();
+
+        if (!error && row?.payload && typeof row.payload === 'object') {
+          const payload = row.payload;
+          if (Array.isArray(payload.employees) && payload.employees.length > 0) {
+            this.data = { ...this.data, ...payload };
+            // Use MockDatabase so sync calls are no-ops
+            this.dbSqlite = new MockDatabase();
+            this.inMemoryOnly = true;
+            this.enforceCompanyCorrections();
+            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
+            return;
+          }
+        }
+        console.warn('Supabase store empty or unavailable, falling back to local storage.');
+      } catch (e: any) {
+        console.error('Supabase init failed, falling back to local storage:', e.message || e);
+      }
+    }
+
     // 1. Try to load from persistent JSON backup first
     const backupPath = path.join(process.cwd(), 'payroll_persisted_store.json');
     let loadedFromBackup = false;
@@ -4287,11 +4321,26 @@ Sakar & SVN Group`;
   }
 
   private persistData() {
+    // 1. Local JSON file (existing behavior for local dev)
     try {
       const dbPath = path.join(process.cwd(), 'payroll_persisted_store.json');
       fs.writeFileSync(dbPath, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (e) {
       console.error('Failed to persist data to JSON:', e);
+    }
+
+    // 2. Supabase push (fire-and-forget for Vercel persistence)
+    if (this.supabaseAdmin) {
+      this.supabaseAdmin
+        .from('vetan_erp_store')
+        .upsert(
+          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        )
+        .then(({ error }: any) => {
+          if (error) console.error('[Supabase] persistData push failed:', error.message || error);
+        })
+        .catch((e: any) => console.error('[Supabase] persistData exception:', e?.message || e));
     }
   }
 

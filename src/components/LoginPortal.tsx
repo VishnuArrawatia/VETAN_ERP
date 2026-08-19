@@ -26,12 +26,7 @@ interface LoginPortalProps {
   onHRAdminSuccess: (hrUser: any, forcePinChange?: boolean) => void;
 }
 
-const DEMO_EMPLOYEES = [
-  { id: 'EMP001', name: 'Rahul Sharma', title: 'Senior Production Head (SVN-1)' },
-  { id: 'EMP002', name: 'Priya Patel', title: 'HR Manager (SVN II)' },
-  { id: 'EMP003', name: 'Amit Verma', title: 'Electrical Supervisor (Sakar I)' },
-  { id: 'EMP005', name: 'Sunil Mehta', title: 'Senior Operator (Sakar III)' }
-];
+
 
 const SIMULATED_HR_USERS = [
   {
@@ -197,40 +192,9 @@ export default function LoginPortal({ onLoginSuccess, onHRAdminSuccess }: LoginP
       });
       const parsed = await readApiJson(res);
       if (!parsed.ok) {
-        // Offline/demo fallback for Vercel (no Express API)
-        const demo = DEMO_EMPLOYEES.find(d => d.id.toLowerCase() === employeeId.trim().toLowerCase());
-        if (demo && password === '123456') {
-          onLoginSuccess({
-            id: demo.id,
-            name: demo.name,
-            designation: demo.title,
-            company: 'SVN-1',
-            department: 'Production',
-            email: `${demo.id.toLowerCase()}@sakarelectricals.com`,
-            phone: '',
-            joining_date: '2020-01-01',
-            status: 'ACTIVE',
-            bank_name: '',
-            bank_account: '',
-            ifsc: '',
-            pan: '',
-            uan: '',
-            base_salary: 0,
-            hra: 0,
-            special_allowance: 0,
-            da: 0,
-            pf_opt_in: true,
-            esic_opt_in: true,
-            professional_tax_opt_in: true,
-            leave_balance_pl: 0,
-            leave_balance_cl: 0,
-            leave_balance_sl: 0
-          });
-          return;
-        }
         setErrorMsg(
           'missingApi' in parsed && parsed.missingApi
-            ? 'Server API missing on Vercel. For demo employee login use ID EMP001 and password 123456.'
+            ? 'Authentication service unavailable. Please try again later or contact your HR administrator.'
             : ('message' in parsed ? parsed.message : 'Login failed')
         );
         return;
