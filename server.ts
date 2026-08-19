@@ -285,7 +285,7 @@ async function startServer() {
         new_structure
       } = req.body;
       
-      if (!employee_code || !new_salary || !effective_date) {
+      if (!employee_code || new_salary === undefined || new_salary === null || !effective_date) {
         return res.status(400).json({ error: 'Employee code, new salary, and effective date are required' });
       }
 
@@ -318,6 +318,155 @@ async function startServer() {
 
       db.logAudit('Salary Changed', `Salary structures changed for ${emp?.name || employee_code} to ₹${Number(new_salary).toLocaleString('en-IN')}`, getOperator(req));
       res.json({ success: true, revision: rev });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Bulk salary revision / restructure for many employees at once
+  app.post('/api/revisions/bulk', (req, res) => {
+    try {
+      const {
+        scope, // 'UNIT' | 'ALL'
+        company,
+        effective_date,
+        reason,
+        approved_by,
+        remarks,
+        mode, // 'INCREMENT' | 'RESTRUCTURE'
+        adjustments // { basic, hra, conveyance, childEdu, medical, special }
+      } = req.body;
+
+      if (!effective_date) {
+        return res.status(400).json({ error: 'Effective Date is required' });
+      }
+      if (!adjustments || typeof adjustments !== 'object') {
+        return res.status(400).json({ error: 'adjustments object is required' });
+      }
+
+      const adj = {
+        basic: Number(adjustments.basic) || 0,
+        hra: Number(adjustments.hra) || 0,
+        conveyance: Number(adjustments.conveyance) || 0,
+        childEdu: Number(adjustments.childEdu) || 0,
+        medical: Number(adjustments.medical) || 0,
+        special: Number(adjustments.special) || 0
+      };
+      const hasChange = Object.values(adj).some(v => v !== 0);
+      if (!hasChange) {
+        return res.status(400).json({ error: 'At least one head adjustment (+ or −) is required' });
+      }
+
+      const netAdj = adj.basic + adj.hra + adj.conveyance + adj.childEdu + adj.medical + adj.special;
+      if (mode === 'INCREMENT' && netAdj <= 0) {
+        return res.status(400).json({ error: 'Increment mode requires net positive Gross change across heads' });
+      }
+
+      const month = String(effective_date).slice(0, 7);
+      let targets = db.getEmployees().filter((e: any) => e.status === 'ACTIVE');
+
+      if (scope === 'UNIT') {
+        if (!company || company === 'GROUP' || company === 'ALL') {
+          return res.status(400).json({ error: 'Unit scope requires a specific company (not GROUP)' });
+        }
+        targets = targets.filter((e: any) => e.company === company);
+      } else if (scope === 'ALL') {
+        // all active employees across companies
+      } else {
+        return res.status(400).json({ error: 'scope must be UNIT or ALL' });
+      }
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: 'No active employees found for this scope' });
+      }
+
+      const results: any[] = [];
+      const skipped: any[] = [];
+      let applied = 0;
+
+      for (const emp of targets) {
+        if (db.isPayrollLocked(month, emp.company)) {
+          skipped.push({ id: emp.id, name: emp.name, reason: `Payroll CLOSED for ${month} (${emp.company})` });
+          continue;
+        }
+
+        const oldBasic = Number(emp.base_salary) || 0;
+        const oldHra = Number(emp.hra) || 0;
+        const oldConv = Number(emp.conveyance_allowance) || 0;
+        const oldEdu = Number(emp.edu_allowance) || 0;
+        const oldMed = Number(emp.medical_allowance) || 0;
+        const oldSpec = Number(emp.special_allowance) || 0;
+        const oldGross = oldBasic + oldHra + oldConv + oldEdu + oldMed + oldSpec;
+
+        const newBasic = Math.max(0, oldBasic + adj.basic);
+        const newHra = Math.max(0, oldHra + adj.hra);
+        const newConv = Math.max(0, oldConv + adj.conveyance);
+        const newEdu = Math.max(0, oldEdu + adj.childEdu);
+        const newMed = Math.max(0, oldMed + adj.medical);
+        const newSpec = Math.max(0, oldSpec + adj.special);
+        const newGross = newBasic + newHra + newConv + newEdu + newMed + newSpec;
+
+        // If absolute − would wipe a head differently than intended (clamped), still apply with floor 0
+        const oldStructure = {
+          basic: oldBasic, hra: oldHra, conveyance: oldConv, childEdu: oldEdu,
+          medical: oldMed, special: oldSpec, gross: oldGross
+        };
+        const newStructure = {
+          basic: newBasic, hra: newHra, conveyance: newConv, childEdu: newEdu,
+          medical: newMed, special: newSpec, gross: newGross,
+          revision_mode: mode || 'RESTRUCTURE',
+          adjustments: adj,
+          bulk: true
+        };
+
+        if (oldGross === newGross && mode === 'INCREMENT') {
+          skipped.push({ id: emp.id, name: emp.name, reason: 'No net gross increase after clamp' });
+          continue;
+        }
+        if (
+          newBasic === oldBasic && newHra === oldHra && newConv === oldConv &&
+          newEdu === oldEdu && newMed === oldMed && newSpec === oldSpec
+        ) {
+          skipped.push({ id: emp.id, name: emp.name, reason: 'No change after applying floors' });
+          continue;
+        }
+
+        const rev = db.addSalaryRevision({
+          employee_code: emp.id,
+          old_salary: oldBasic,
+          new_salary: newBasic,
+          effective_date,
+          reason: reason || (mode === 'INCREMENT' ? 'Bulk Increment' : 'Bulk Restructure'),
+          approved_by: approved_by || 'Admin',
+          hra: newHra,
+          conveyance_allowance: newConv,
+          edu_allowance: newEdu,
+          medical_allowance: newMed,
+          special_allowance: newSpec,
+          remarks: `[BULK ${mode || 'RESTRUCTURE'}] ${remarks || ''}`.trim(),
+          increment_amount: newGross - oldGross,
+          old_structure: JSON.stringify(oldStructure),
+          new_structure: JSON.stringify(newStructure)
+        });
+
+        applied += 1;
+        results.push({ id: emp.id, name: emp.name, old_gross: oldGross, new_gross: newGross, revision_id: rev.id });
+      }
+
+      db.logAudit(
+        'Bulk Salary Revision',
+        `Bulk ${mode || 'RESTRUCTURE'} applied to ${applied} employee(s), skipped ${skipped.length}. Scope=${scope}${company ? ` company=${company}` : ''}`,
+        getOperator(req)
+      );
+
+      res.json({
+        success: true,
+        applied,
+        skipped_count: skipped.length,
+        total_targets: targets.length,
+        results,
+        skipped
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1125,7 +1274,9 @@ async function startServer() {
       }
       res.json({ success: true, loan: updated });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      const msg = e?.message || 'Failed to update EMI skip';
+      const status = /CLOSED|frozen|locked/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
     }
   });
 
@@ -1208,6 +1359,11 @@ async function startServer() {
       const month = date.substring(0, 7); // YYYY-MM
       if (db.isPayrollLocked(month, emp.company)) {
         return res.status(400).json({ error: 'Payroll month is locked. Manual adjustments are disabled.' });
+      }
+
+      const existingAtt = db.getEmployeeAttendance(employee_id).find(r => r.month === month);
+      if (existingAtt?.is_locked) {
+        return res.status(400).json({ error: 'Attendance month is locked. Unlock attendance before manual day edits.' });
       }
 
       // Retrieve or provision matching attendance coordinates for that month
@@ -1315,37 +1471,8 @@ async function startServer() {
       }
     }
     
-    // Ensure every single employee in that company has an attendance row registered
-    const employees = db.getEmployees(targetCompany);
-    const existing = db.getAttendance(month, targetCompany);
-    
-    const missing: Attendance[] = [];
-    const yearMonth = month;
-    const daysInMonth = new Date(
-      parseInt(yearMonth.split('-')[0]),
-      parseInt(yearMonth.split('-')[1]),
-      0
-    ).getDate();
-
-    for (const emp of employees) {
-      const entry = existing.find(a => a.employee_id === emp.id);
-      if (!entry) {
-        missing.push({
-          id: `ATT-${emp.id}-${month}`,
-          employee_id: emp.id,
-          month: month,
-          total_days: daysInMonth,
-          working_days: daysInMonth,
-          lop_days: 0,
-          overtime_hours: 0
-        });
-      }
-    }
-
-    if (missing.length > 0) {
-      db.saveAttendance(missing);
-    }
-
+    // Return existing attendance only — do NOT auto-create full-pay stubs
+    // (missing attendance must block salary until HR commits real figures)
     res.json(db.getAttendance(month, targetCompany));
   });
 
@@ -1368,7 +1495,9 @@ async function startServer() {
       db.logAudit('Attendance Modified', `Adjusted attendance coordinates for ${records.length} staff members for month ${first.month} (${company || 'ALL'})`, getOperator(req));
       res.json({ success: true, count: records.length });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      const msg = e?.message || 'Failed to save attendance';
+      const status = /locked/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
     }
   });
 
@@ -1423,12 +1552,18 @@ async function startServer() {
   });
 
   app.post('/api/leaves/status', (req, res) => {
-    const { id, status } = req.body;
-    const success = db.updateLeaveStatus(id, status);
-    if (!success) {
-      return res.status(404).json({ error: 'Leave request not found' });
+    try {
+      const { id, status } = req.body;
+      const success = db.updateLeaveStatus(id, status);
+      if (!success) {
+        return res.status(404).json({ error: 'Leave request not found' });
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to update leave status';
+      const statusCode = /locked|CLOSED/i.test(msg) ? 400 : 500;
+      res.status(statusCode).json({ error: msg });
     }
-    res.json({ success: true });
   });
 
   // Leave approval workflow endpoint
@@ -1441,7 +1576,9 @@ async function startServer() {
       }
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      const msg = e?.message || 'Failed to update leave workflow';
+      const statusCode = /locked|CLOSED/i.test(msg) ? 400 : 500;
+      res.status(statusCode).json({ error: msg });
     }
   });
 
@@ -1491,7 +1628,9 @@ async function startServer() {
       }
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      const msg = e?.message || 'Failed to update correction workflow';
+      const statusCode = /locked|CLOSED/i.test(msg) ? 400 : 500;
+      res.status(statusCode).json({ error: msg });
     }
   });
 
@@ -1923,11 +2062,22 @@ HR Department`;
         return res.status(400).json({ error: 'Payroll month is locked. No recalculation is allowed.' });
       }
 
+      const readiness = db.validateAttendanceReadyForPayroll(month, company);
+      if (!readiness.ok) {
+        return res.status(400).json({
+          error: readiness.message,
+          missing: readiness.missing,
+          unlocked: readiness.unlocked
+        });
+      }
+
       const newRun = db.runPayroll(month, company);
       db.logAudit('Payroll Processed', `Calculated and generated draft payroll wages for month ${month} (${company || 'ALL'})`, getOperator(req));
       res.json({ success: true, run: newRun, slips: db.getPayslipsByMonth(month, company) });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      const msg = e?.message || 'Payroll calculation failed';
+      const status = /Attendance|locked|missing|ready/i.test(msg) ? 400 : 500;
+      res.status(status).json({ error: msg });
     }
   });
 

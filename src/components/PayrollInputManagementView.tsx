@@ -45,6 +45,8 @@ interface PayrollInputManagementViewProps {
   onRefresh?: () => void;
   onCalculatePayroll?: (month: string, company: string) => Promise<boolean>;
   onClosePayroll?: (month: string, company: string) => Promise<boolean>;
+  initialSubTab?: 'INPUTS' | 'EXCEL_IMPORT' | 'PREVIEW_FREEZE' | 'MASTERS' | 'SUMMARY';
+  onInitialSubTabConsumed?: () => void;
 }
 
 export default function PayrollInputManagementView({
@@ -55,9 +57,11 @@ export default function PayrollInputManagementView({
   activeHR,
   onRefresh,
   onCalculatePayroll,
-  onClosePayroll
+  onClosePayroll,
+  initialSubTab,
+  onInitialSubTabConsumed
 }: PayrollInputManagementViewProps) {
-  const [subTab, setSubTab] = useState<'INPUTS' | 'EXCEL_IMPORT' | 'PREVIEW_FREEZE' | 'MASTERS' | 'SUMMARY'>('INPUTS');
+  const [subTab, setSubTab] = useState<'INPUTS' | 'EXCEL_IMPORT' | 'PREVIEW_FREEZE' | 'MASTERS' | 'SUMMARY'>(initialSubTab || 'INPUTS');
   const [selectedUnit, setSelectedUnit] = useState<string>(activeCompany || 'ALL');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,6 +99,13 @@ export default function PayrollInputManagementView({
   useEffect(() => {
     fetchMasters();
   }, []);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setSubTab(initialSubTab);
+      onInitialSubTabConsumed?.();
+    }
+  }, [initialSubTab]);
 
   const fetchMasters = async () => {
     try {
@@ -630,6 +641,14 @@ export default function PayrollInputManagementView({
       </div>
 
       {/* Navigation Sub-Tabs */}
+      <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 text-[11px] text-sky-950 leading-relaxed space-y-1.5">
+        <p className="font-bold text-sky-900">Loan / Advance / Other / Naya Head — yahan kaise check karein</p>
+        <p><strong>Advance, Other, Canteen, Uniform…</strong> → tab <em>Monthly Variable Inputs Sheet</em> me columns. Draft salary ke baad values edit/save karo.</p>
+        <p><strong>Loan EMI</strong> → salary calculate pe Loan Master se auto aata hai. Yahan sheet me Loan column dikhega. Skip/Settlement ke liye left menu <em>Loan Management</em>.</p>
+        <p><strong>Naya Head add</strong> → tab <em>Earning & Deduction Masters</em> → <em>Add Head</em> (Earning ya Deduction).</p>
+        <p>Pehle Attendance lock → Draft salary calculate → phir yahan Advance/Other fill → Freeze.</p>
+      </div>
+
       <div className="flex flex-wrap items-center border-b border-slate-200 gap-2">
         <button
           onClick={() => setSubTab('INPUTS')}

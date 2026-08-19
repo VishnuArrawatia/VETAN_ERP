@@ -957,7 +957,7 @@ Sakar & SVN Group`;
                   >
                     <option value="ALL">ALL Companies Combined</option>
                     <option value="SVN-1">SVN Opto Electronics Pvt Ltd</option>
-                    <option value="SVN II">Sakar Electricals (Unit II)</option>
+                    <option value="SVN-II">SVN Opto Electronics Pvt Ltd (Unit II)</option>
                   </select>
                 </div>
 

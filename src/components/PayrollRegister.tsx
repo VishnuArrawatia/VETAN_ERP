@@ -42,6 +42,8 @@ interface PayrollRegisterProps {
   setActiveMonth?: (month: string) => void;
   onRefresh?: () => void;
   activeHR?: any;
+  landingInputsSubTab?: 'INPUTS' | 'MASTERS' | 'SUMMARY' | 'EXCEL_IMPORT' | 'PREVIEW_FREEZE';
+  onLandingConsumed?: () => void;
 }
 
 export default function PayrollRegister({ 
@@ -55,11 +57,19 @@ export default function PayrollRegister({
   onNavigate,
   setActiveMonth,
   onRefresh,
-  activeHR
+  activeHR,
+  landingInputsSubTab,
+  onLandingConsumed
 }: PayrollRegisterProps) {
   const [topTab, setTopTab] = useState<'REGISTER' | 'INPUTS'>('INPUTS');
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (landingInputsSubTab) {
+      setTopTab('INPUTS');
+    }
+  }, [landingInputsSubTab]);
   const [paying, setPaying] = useState(false);
   const [activeSlip, setActiveSlip] = useState<Payslip | null>(null);
   const [successLogs, setSuccessLogs] = useState('');
@@ -442,6 +452,8 @@ export default function PayrollRegister({
           onRefresh={onRefresh}
           onCalculatePayroll={onCalculatePayroll}
           onClosePayroll={onClosePayroll}
+          initialSubTab={landingInputsSubTab}
+          onInitialSubTabConsumed={onLandingConsumed}
         />
       ) : (
         <>

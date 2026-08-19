@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { BookOpen, Printer, UserCheck, Shield, Users, ArrowRight, CheckCircle, HelpCircle, FileText, Smartphone, Laptop, Key, Clock, Calendar, FileSpreadsheet, Upload, Download, AlertTriangle } from 'lucide-react';
+import HrErpProcessSystem from './HrErpProcessSystem';
 
-export default function UserGuideView() {
+export default function UserGuideView({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const [lang, setLang] = useState<'en' | 'hi'>('hi'); // Default to Hindi as requested by Hindi query
-  const [activeRole, setActiveRole] = useState<'employee' | 'hod' | 'hr'>('employee');
+  const [activeRole, setActiveRole] = useState<'process' | 'employee' | 'hod' | 'hr'>('process');
 
   const [uploadedHandbook, setUploadedHandbook] = useState<{
     name: string;
@@ -175,31 +176,47 @@ Verified on: ${dateStr}
       </div>
 
       {/* ROLE CONTROLLER (TABS) */}
-      <div className="flex bg-gray-100 p-1.5 rounded-2xl border print:hidden select-none max-w-lg">
+      <div className="flex flex-wrap bg-gray-100 p-1.5 rounded-2xl border print:hidden select-none gap-1">
+        <button
+          onClick={() => setActiveRole('process')}
+          className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'process' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          <BookOpen size={14} />
+          {lang === 'en' ? '0. ERP Process System' : '0. ERP Process System (मुख्य)'}
+        </button>
         <button
           onClick={() => setActiveRole('employee')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'employee' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'employee' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <UserCheck size={14} />
-          {lang === 'en' ? '1. Employee Self Service' : '1. कर्मचारी स्व-सेवा'}
+          {lang === 'en' ? '1. Employee' : '1. कर्मचारी'}
         </button>
         <button
           onClick={() => setActiveRole('hod')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'hod' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'hod' ? 'bg-amber-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <Users size={14} />
-          {lang === 'en' ? '2. HOD Approvals' : '2. विभागाध्यक्ष (HOD)'}
+          {lang === 'en' ? '2. HOD' : '2. HOD'}
         </button>
         <button
           onClick={() => setActiveRole('hr')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'hr' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition ${activeRole === 'hr' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <Shield size={14} />
-          {lang === 'en' ? '3. HR & Admin' : '3. एचआर और एडमिन'}
+          {lang === 'en' ? '3. HR Notes' : '3. HR Notes'}
         </button>
       </div>
 
+      {activeRole === 'process' && (
+        <HrErpProcessSystem
+          lang={lang}
+          onLangChange={setLang}
+          onNavigate={onNavigate}
+        />
+      )}
+
       {/* MAIN GUIDE CONTAINER */}
+      {activeRole !== 'process' && (
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4 md:p-8 space-y-12">
         
         {/* ==================================== */}
@@ -764,6 +781,7 @@ Verified on: ${dateStr}
         </div>
 
       </div>
+      )}
     </div>
   );
 }
