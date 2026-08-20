@@ -18,6 +18,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 let app: any;
+let supabaseAdmin: any = null;
 let initLog: string[] = [];
 let initDone = false;
 
@@ -37,8 +38,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = matchedPath;
   }
 
-  // Diagnostic endpoint — check env var availability without exposing values
   const reqPath = (req.url || '').split('?')[0];
+
+  // Diagnostic endpoint — check env var availability without exposing values
   if (reqPath === '/api/__debug/env') {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,6 +53,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       initDone,
       initLog,
     });
+  }
+
+  // Diagnostic: test Supabase query directly (bypasses Express/db.ts)
+  if (reqPath === '/api/__debug/supabase') {
+    if (!supabaseAdmin) {
+      return res.status(200).json({ connected: false, reason: 'supabaseAdmin not initialized' });
+    }
+    try {
+      // Test 1: Can we reach the table at all?
+      const { data: listData, error: listError } = await supabaseAdmin
+        .from('vetan_erp_store')
+        .select('id')
+        .limit(5);
+
+      if (listError) {
+        return res.status(200).json({
+          connected: true,
+          tableAccessible: false,
+          queryError: { code: listError.code, message: listError.message, details: listError.details },
+        });
+      }
+
+      // Test 2: Query the live record
+      const { data: row, error: rowError } = await supabaseAdmin
+        .from('vetan_erp_store')
+        .select('id, payload')
+        .eq('id', 'live')
+        .maybeSingle();
+
+      if (rowError) {
+        return res.status(200).json({
+          connected: true,
+          tableAccessible: true,
+          rowsFound: listData?.length || 0,
+          liveQueryError: { code: rowError.code, message: rowError.message, details: rowError.details },
+        });
+      }
+
+      const payloadType = row?.payload ? typeof row.payload : 'null';
+      const hasEmployees = row?.payload?.employees
+        ? (Array.isArray(row.payload.employees) ? row.payload.employees.length : 'not-array')
+        : 0;
+
+      return res.status(200).json({
+        connected: true,
+        tableAccessible: true,
+        rowsFound: listData?.length || 0,
+        rowIds: listData?.map((r: any) => r.id) || [],
+        liveRowFound: !!row,
+        payloadType,
+        employeeCount: hasEmployees,
+        hasPayloadKeys: row?.payload ? Object.keys(row.payload).slice(0, 10) : [],
+      });
+    } catch (e: any) {
+      return res.status(200).json({
+        connected: true,
+        exception: e.message || String(e),
+      });
+    }
   }
 
   // Initialize Express app once (cold start), reuse across warm invocations
@@ -74,7 +135,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(keyMsg);
       initLog.push(keyMsg);
 
-      let supabaseAdmin: any = null;
       if (supabaseUrl && supabaseKey) {
         const { createClient } = await import('@supabase/supabase-js');
         supabaseAdmin = createClient(supabaseUrl, supabaseKey);
