@@ -141,21 +141,6 @@ export async function createApp(supabaseAdmin?: any) {
     });
   });
 
-  // Diagnostic endpoint — verify db internal state
-  app.get('/api/__debug/dbstate', (req, res) => {
-    res.json({
-      supabaseAdminPresent: !!(db as any).supabaseAdmin,
-      inMemoryOnly: db.inMemoryOnly,
-      employeeCount: (db as any).data?.employees?.length || 0,
-      attendanceCount: (db as any).data?.attendance?.length || 0,
-      payrollCount: (db as any).data?.payroll_runs?.length || 0,
-      companyCount: (db as any).data?.companies?.length || 0,
-      userCount: (db as any).data?.users?.length || 0,
-      firstEmployeeIds: ((db as any).data?.employees || []).slice(0, 5).map((e: any) => e.id),
-      startupException: startupException ? startupException.message : null,
-    });
-  });
-
   // API ROUTES
 
   // Get active dashboard metrics, including multi-company statistics

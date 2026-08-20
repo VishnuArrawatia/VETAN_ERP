@@ -18,51 +18,30 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 let app: any;
-let supabaseAdmin: any = null;
-let initLog: string[] = [];
-let initDone = false;
 
 /** Ensure the Express app and Supabase client are initialized. */
 async function ensureInit() {
   if (app) return;
 
-  try {      const { createApp } = await import('./_app.cjs');
-    const msg1 = '[Vercel] Loaded bundled Express app module.';
-    console.log(msg1);
-    initLog.push(msg1);
+  try {
+    const { createApp } = await import('./_app.cjs');
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    const envMsg = `[Vercel] SUPABASE_URL: ${supabaseUrl ? 'SET (' + supabaseUrl.length + ' chars)' : 'MISSING'}`;
-    console.log(envMsg);
-    initLog.push(envMsg);
-
-    const keyMsg = `[Vercel] SUPABASE_SERVICE_ROLE_KEY: ${supabaseKey ? 'SET (' + supabaseKey.length + ' chars)' : 'MISSING'}`;
-    console.log(keyMsg);
-    initLog.push(keyMsg);
-
+    let supabaseAdmin: any = null;
     if (supabaseUrl && supabaseKey) {
       const { createClient } = await import('@supabase/supabase-js');
       supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-      const msg2 = '[Vercel] Supabase service_role client initialized.';
-      console.log(msg2);
-      initLog.push(msg2);
+      console.log('[Vercel] Supabase service_role client initialized.');
     } else {
-      const msg3 = '[Vercel] WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing.';
-      console.warn(msg3);
-      initLog.push(msg3);
+      console.warn('[Vercel] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — running without cloud persistence.');
     }
 
     app = await createApp(supabaseAdmin);
-    initDone = true;
-    const msg4 = '[Vercel] Express app initialized with all ERP routes.';
-    console.log(msg4);
-    initLog.push(msg4);
+    console.log('[Vercel] Express app initialized with all ERP routes.');
   } catch (err: any) {
-    const errMsg = `[Vercel] FATAL: Failed to initialize Express app: ${err?.message || String(err)}`;
-    console.error(errMsg);
-    initLog.push(errMsg);
+    console.error('[Vercel] FATAL: Failed to initialize Express app:', err?.message || String(err));
     throw err;
   }
 }
@@ -83,89 +62,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = matchedPath;
   }
 
-  // Initialize FIRST — before any diagnostic or Express routing
+  // Initialize Express app once (cold start), reuse across warm invocations
   try {
     await ensureInit();
   } catch (err: any) {
     return res.status(500).json({
       error: 'Server initialization failed',
       message: err?.message || String(err),
-      initLog,
     });
-  }
-
-  const reqPath = (req.url || '').split('?')[0];
-
-  // Diagnostic endpoint — env var availability
-  if (reqPath === '/api/__debug/env') {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    return res.status(200).json({
-      supabaseUrlPresent: !!supabaseUrl,
-      supabaseUrlLength: supabaseUrl ? supabaseUrl.length : 0,
-      supabaseUrlStartsWith: supabaseUrl ? supabaseUrl.substring(0, 12) + '...' : 'MISSING',
-      serviceKeyPresent: !!supabaseKey,
-      serviceKeyLength: supabaseKey ? supabaseKey.length : 0,
-      initDone,
-      initLog,
-    });
-  }
-
-  // Diagnostic: test Supabase query directly
-  if (reqPath === '/api/__debug/supabase') {
-    if (!supabaseAdmin) {
-      return res.status(200).json({ connected: false, reason: 'supabaseAdmin not initialized' });
-    }
-    try {
-      const { data: listData, error: listError } = await supabaseAdmin
-        .from('vetan_erp_store')
-        .select('id')
-        .limit(5);
-
-      if (listError) {
-        return res.status(200).json({
-          connected: true,
-          tableAccessible: false,
-          queryError: { code: listError.code, message: listError.message, details: listError.details },
-        });
-      }
-
-      const { data: row, error: rowError } = await supabaseAdmin
-        .from('vetan_erp_store')
-        .select('id, payload')
-        .eq('id', 'live')
-        .maybeSingle();
-
-      if (rowError) {
-        return res.status(200).json({
-          connected: true,
-          tableAccessible: true,
-          rowsFound: listData?.length || 0,
-          liveQueryError: { code: rowError.code, message: rowError.message, details: rowError.details },
-        });
-      }
-
-      const payloadType = row?.payload ? typeof row.payload : 'null';
-      const hasEmployees = row?.payload?.employees
-        ? (Array.isArray(row.payload.employees) ? row.payload.employees.length : 'not-array')
-        : 0;
-
-      return res.status(200).json({
-        connected: true,
-        tableAccessible: true,
-        rowsFound: listData?.length || 0,
-        rowIds: listData?.map((r: any) => r.id) || [],
-        liveRowFound: !!row,
-        payloadType,
-        employeeCount: hasEmployees,
-        hasPayloadKeys: row?.payload ? Object.keys(row.payload).slice(0, 10) : [],
-      });
-    } catch (e: any) {
-      return res.status(200).json({
-        connected: true,
-        exception: e.message || String(e),
-      });
-    }
   }
 
   // Set CORS response headers
