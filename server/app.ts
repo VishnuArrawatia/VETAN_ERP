@@ -544,7 +544,8 @@ export async function createApp(supabaseAdmin?: any) {
 
       const isDefaultPin = user.role === 'SUPER_HR' && (await db.getSystemSetting('pin_changed_from_default', '0')) === '0';
 
-      res.json({ success: true, user, forcePinChange: isDefaultPin });
+      const { password: _pw, ...safeUser } = user as any;
+      res.json({ success: true, user: safeUser, forcePinChange: isDefaultPin });
     } catch (e: any) {
       console.error('[Login API Error]', e);
       res.status(500).json({ success: false, error: 'Database Error' });
@@ -706,7 +707,8 @@ export async function createApp(supabaseAdmin?: any) {
         db.logAudit('User Updated', `Updated user account settings for ${user.name} (${user.username})`, getOperator(req));
       }
 
-      res.json({ success: true, user });
+      const { password: _pw3, ...safeUserResp } = user as any;
+      res.json({ success: true, user: safeUserResp });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
