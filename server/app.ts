@@ -122,15 +122,34 @@ export async function createApp(supabaseAdmin?: any) {
   // Database and server status API
   app.get('/api/db-status', (req, res) => {
     const isMock = db.inMemoryOnly;
+    const employeeCount = (db as any).data?.employees?.length || 0;
+    const hasSupabase = !!(db as any).supabaseAdmin;
     res.json({
       status: startupException ? 'ERROR' : 'OK',
       currentDatabaseMode: isMock ? 'InMemoryFallback' : 'SQLite3-File',
       sqliteFilePath: path.join(process.cwd(), 'Payroll.db'),
       isPayrollDbActive: !isMock && !startupException,
       isInMemoryMode: isMock,
+      employeeCount,
+      hasSupabaseClient: hasSupabase,
       initializationWarnings: startupException 
         ? [startupException.message || String(startupException)]
         : (isMock ? ['sqlite3 package failed to load or open file. Falling back to Pure JS In-Memory Mode.'] : [])
+    });
+  });
+
+  // Diagnostic endpoint — verify db internal state
+  app.get('/api/__debug/dbstate', (req, res) => {
+    res.json({
+      supabaseAdminPresent: !!(db as any).supabaseAdmin,
+      inMemoryOnly: db.inMemoryOnly,
+      employeeCount: (db as any).data?.employees?.length || 0,
+      attendanceCount: (db as any).data?.attendance?.length || 0,
+      payrollCount: (db as any).data?.payroll_runs?.length || 0,
+      companyCount: (db as any).data?.companies?.length || 0,
+      userCount: (db as any).data?.users?.length || 0,
+      firstEmployeeIds: ((db as any).data?.employees || []).slice(0, 5).map((e: any) => e.id),
+      startupException: startupException ? startupException.message : null,
     });
   });
 
