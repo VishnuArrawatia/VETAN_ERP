@@ -480,6 +480,7 @@ export class PayrollDatabase {
   }
 
   public async init(): Promise<void> {
+    console.log(`[DB INIT] supabaseAdmin present: ${!!this.supabaseAdmin}`);
     // 0. If Supabase client provided, load from cloud first (Vercel path)
     if (this.supabaseAdmin) {
       try {
@@ -488,6 +489,7 @@ export class PayrollDatabase {
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Supabase query timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
+        console.log('[DB INIT] Querying Supabase vetan_erp_store WHERE id=live ...');
         const queryPromise = this.supabaseAdmin
           .from('vetan_erp_store')
           .select('payload')
@@ -496,7 +498,15 @@ export class PayrollDatabase {
 
         const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-        if (!error && row?.payload && typeof row.payload === 'object') {
+        if (error) {
+          console.error('[DB INIT] Supabase query returned error:', JSON.stringify(error));
+        } else if (!row) {
+          console.warn('[DB INIT] Supabase query returned null row (no matching record).');
+        } else if (!row.payload) {
+          console.warn('[DB INIT] Supabase row found but payload is empty/null.');
+        } else if (typeof row.payload !== 'object') {
+          console.warn('[DB INIT] Supabase payload is not an object:', typeof row.payload);
+        } else {
           const payload = row.payload;
           if (Array.isArray(payload.employees) && payload.employees.length > 0) {
             this.data = { ...this.data, ...payload };
@@ -504,14 +514,18 @@ export class PayrollDatabase {
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.enforceCompanyCorrections();
-            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
+            console.log(`[DB INIT] ✅ Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
             return;
+          } else {
+            console.warn('[DB INIT] Supabase payload has no employees or empty array.');
           }
         }
-        console.warn('Supabase store empty or unavailable, falling back to local storage.');
+        console.warn('[DB INIT] Supabase path complete but no data loaded. Falling through to local.');
       } catch (e: any) {
-        console.error('Supabase init failed, falling back to local storage:', e.message || e);
+        console.error('[DB INIT] Supabase init exception:', e.message || e);
       }
+    } else {
+      console.warn('[DB INIT] No supabaseAdmin — skipping Supabase path entirely.');
     }
 
     // 1. Try to load from persistent JSON backup first
