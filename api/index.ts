@@ -72,6 +72,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // Temporary diagnostic: test Supabase connection directly
+  if (req.url === '/api/__debug/supabase-prod') {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const urlLen = supabaseUrl?.length || 0;
+    const keyLen = supabaseKey?.length || 0;
+    const keyPrefix = supabaseKey ? supabaseKey.substring(0, 4) : 'NONE';
+    
+    let queryResult: any = null;
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const testClient = createClient(supabaseUrl, supabaseKey);
+        const { data, error, count } = await testClient
+          .from('vetan_erp_store')
+          .select('id, payload', { count: 'exact' })
+          .limit(5);
+        queryResult = {
+          error: error ? { message: error.message, code: error.code } : null,
+          rowCount: data?.length || 0,
+          ids: data?.map((r: any) => r.id) || [],
+          hasPayload: data?.some((r: any) => !!r.payload) || false,
+          employeesInPayload: data?.map((r: any) => ({
+            id: r.id,
+            employeeCount: Array.isArray(r.payload?.employees) ? r.payload.employees.length : 0
+          })) || [],
+        };
+      } catch (e: any) {
+        queryResult = { exception: e.message };
+      }
+    }
+    
+    return res.status(200).json({
+      envVarsPresent: { url: urlLen > 0, key: keyLen > 0 },
+      urlLength: urlLen,
+      keyPrefix,
+      keyLength: keyLen,
+      queryResult,
+    });
+  }
+
   // Set CORS response headers
   res.setHeader('Access-Control-Allow-Origin', '*');
 
