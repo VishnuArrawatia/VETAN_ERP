@@ -124,17 +124,20 @@ export async function createApp(supabaseAdmin?: any) {
     const isMock = db.inMemoryOnly;
     const employeeCount = (db as any).data?.employees?.length || 0;
     const hasSupabase = !!(db as any).supabaseAdmin;
+    let dbMode = 'SQLite3-File';
+    if (hasSupabase && employeeCount > 0) dbMode = 'Supabase-Cloud';
+    else if (isMock) dbMode = 'InMemoryFallback';
+    const warnings: string[] = [];
+    if (startupException) warnings.push(startupException.message || String(startupException));
+    else if (isMock && !hasSupabase) warnings.push('sqlite3 package failed to load or open file. Falling back to Pure JS In-Memory Mode.');
     res.json({
       status: startupException ? 'ERROR' : 'OK',
-      currentDatabaseMode: isMock ? 'InMemoryFallback' : 'SQLite3-File',
-      sqliteFilePath: path.join(process.cwd(), 'Payroll.db'),
-      isPayrollDbActive: !isMock && !startupException,
+      currentDatabaseMode: dbMode,
+      isPayrollDbActive: !startupException && employeeCount > 0,
       isInMemoryMode: isMock,
       employeeCount,
       hasSupabaseClient: hasSupabase,
-      initializationWarnings: startupException 
-        ? [startupException.message || String(startupException)]
-        : (isMock ? ['sqlite3 package failed to load or open file. Falling back to Pure JS In-Memory Mode.'] : [])
+      initializationWarnings: warnings
     });
   });
 
@@ -863,7 +866,8 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       const needsChange = !!employee.needs_password_change || isFirstTime;
-      res.json({ success: true, employee, needsPasswordChange: needsChange });
+      const { password: _pw, ...safeEmployee } = employee as any;
+      res.json({ success: true, employee: safeEmployee, needsPasswordChange: needsChange });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -900,7 +904,8 @@ export async function createApp(supabaseAdmin?: any) {
         password: newPassword,
         needs_password_change: false
       });
-      res.json({ success: true, employee: updated });
+      const { password: _pw2, ...safeUpdated } = updated as any;
+      res.json({ success: true, employee: safeUpdated });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
