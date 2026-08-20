@@ -483,11 +483,18 @@ export class PayrollDatabase {
     // 0. If Supabase client provided, load from cloud first (Vercel path)
     if (this.supabaseAdmin) {
       try {
-        const { data: row, error } = await this.supabaseAdmin
+        // Wrap Supabase query with a timeout to prevent Vercel function hangs
+        const TIMEOUT_MS = 10_000;
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Supabase query timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
+        );
+        const queryPromise = this.supabaseAdmin
           .from('vetan_erp_store')
           .select('payload')
           .eq('id', 'live')
           .maybeSingle();
+
+        const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
 
         if (!error && row?.payload && typeof row.payload === 'object') {
           const payload = row.payload;
