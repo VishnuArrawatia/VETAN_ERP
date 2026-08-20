@@ -72,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Temporary diagnostic: test Supabase connection directly
+  // Temporary diagnostic: test Supabase + network connectivity
   if (req.url === '/api/__debug/supabase-prod') {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -81,26 +81,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const keyPrefix = supabaseKey ? supabaseKey.substring(0, 4) : 'NONE';
     
     let queryResult: any = null;
+    let fetchTestResult: any = null;
+    
+    // Test 1: raw fetch to Supabase REST endpoint
+    if (supabaseUrl) {
+      try {
+        const testUrl = `${supabaseUrl}/rest/v1/?apikey=${supabaseKey || ''}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const fetchRes = await fetch(testUrl, {
+          method: 'GET',
+          headers: { 'apikey': supabaseKey || '' },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        fetchTestResult = { status: fetchRes.status, ok: fetchRes.ok };
+      } catch (e: any) {
+        fetchTestResult = { error: e.message, name: e.name, cause: e.cause?.message };
+      }
+    }
+    
+    // Test 2: Supabase client query
     if (supabaseUrl && supabaseKey) {
       try {
         const { createClient } = await import('@supabase/supabase-js');
         const testClient = createClient(supabaseUrl, supabaseKey);
-        const { data, error, count } = await testClient
+        const { data, error } = await testClient
           .from('vetan_erp_store')
-          .select('id, payload', { count: 'exact' })
+          .select('id')
           .limit(5);
         queryResult = {
           error: error ? { message: error.message, code: error.code } : null,
           rowCount: data?.length || 0,
           ids: data?.map((r: any) => r.id) || [],
-          hasPayload: data?.some((r: any) => !!r.payload) || false,
-          employeesInPayload: data?.map((r: any) => ({
-            id: r.id,
-            employeeCount: Array.isArray(r.payload?.employees) ? r.payload.employees.length : 0
-          })) || [],
         };
       } catch (e: any) {
-        queryResult = { exception: e.message };
+        queryResult = { exception: e.message, cause: e.cause?.message };
       }
     }
     
@@ -109,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       urlLength: urlLen,
       keyPrefix,
       keyLength: keyLen,
+      fetchTest: fetchTestResult,
       queryResult,
     });
   }
