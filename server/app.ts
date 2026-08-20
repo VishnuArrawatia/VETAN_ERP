@@ -358,7 +358,8 @@ export async function createApp(supabaseAdmin?: any) {
   // Get all HR/Admin Users API
   app.get('/api/hr/users', (req, res) => {
     try {
-      res.json(db.getUsers());
+      const users = db.getUsers().map(({ password: _pw, ...safe }: any) => safe);
+      res.json(users);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
