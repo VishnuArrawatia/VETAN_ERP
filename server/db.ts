@@ -468,6 +468,8 @@ export class PayrollDatabase {
   private dbSqlite!: any;
   public inMemoryOnly: boolean = false;
   private supabaseAdmin: any;
+  /** When true, persistData() will NOT push to Supabase (seed data protection). */
+  private loadedFromSeed: boolean = false;
 
   /**
    * @param supabaseAdmin  Optional Supabase client (service_role key).
@@ -503,6 +505,7 @@ export class PayrollDatabase {
             // Use MockDatabase so sync calls are no-ops
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
+            this.loadedFromSeed = false; // Real data loaded — allow persistData()
             this.enforceCompanyCorrections();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
             return;
@@ -512,6 +515,9 @@ export class PayrollDatabase {
       } catch (e: any) {
         console.error('Supabase init failed, falling back to local storage:', e.message || e);
       }
+      // Mark that we fell back to seed data — NEVER allow persistData() to push this to Supabase
+      this.loadedFromSeed = true;
+      console.warn('[SAFETY] loadedFromSeed = true — persistData() will NOT push to Supabase until real data is loaded.');
     }
 
     // 1. Try to load from persistent JSON backup first
@@ -4432,7 +4438,8 @@ Sakar & SVN Group`;
     }
 
     // 2. Supabase push (fire-and-forget for Vercel persistence)
-    if (this.supabaseAdmin) {
+    // SAFETY: Never push seed/fallback data to Supabase — it would overwrite real ERP data!
+    if (this.supabaseAdmin && !this.loadedFromSeed) {
       this.supabaseAdmin
         .from('vetan_erp_store')
         .upsert(
@@ -4443,6 +4450,8 @@ Sakar & SVN Group`;
           if (error) console.error('[Supabase] persistData push failed:', error.message || error);
         })
         .catch((e: any) => console.error('[Supabase] persistData exception:', e?.message || e));
+    } else if (this.loadedFromSeed && this.supabaseAdmin) {
+      console.warn('[Supabase] persistData BLOCKED — data was loaded from seed, not pushing to prevent data loss.');
     }
   }
 
@@ -4452,6 +4461,10 @@ Sakar & SVN Group`;
    */
   public async persistDataSync(): Promise<void> {
     if (!this.supabaseAdmin) return;
+    if (this.loadedFromSeed) {
+      console.warn('[Supabase] persistDataSync BLOCKED — data was loaded from seed, not pushing.');
+      return;
+    }
     try {
       await this.supabaseAdmin
         .from('vetan_erp_store')
@@ -4488,6 +4501,10 @@ Sakar & SVN Group`;
   /** Force an awaited upsert to Supabase (for critical writes). */
   public async forcePersistToSupabase(): Promise<void> {
     if (!this.supabaseAdmin) return;
+    if (this.loadedFromSeed) {
+      console.warn('[Supabase] forcePersist BLOCKED — loadedFromSeed is true.');
+      return;
+    }
     try {
       await this.supabaseAdmin
         .from('vetan_erp_store')
