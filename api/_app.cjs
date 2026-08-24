@@ -25979,6 +25979,7 @@ var PayrollDatabase = class {
     } else {
       this.data.users.push(user);
     }
+    this.persistData();
   }
   deleteUser(id) {
     this.dbSqlite.run(`DELETE FROM users WHERE id = ?`, [id], (err) => {
@@ -25987,6 +25988,7 @@ var PayrollDatabase = class {
     if (this.data.users) {
       this.data.users = this.data.users.filter((u) => u.id !== id);
     }
+    this.persistData();
   }
   getHods() {
     return this.data.hods || [];
@@ -26012,6 +26014,7 @@ var PayrollDatabase = class {
     } else {
       this.data.hods.push(hod);
     }
+    this.persistData();
   }
   deleteHod(id) {
     this.dbSqlite.run(`DELETE FROM hods WHERE id = ?`, [id], (err) => {
@@ -26020,6 +26023,7 @@ var PayrollDatabase = class {
     if (this.data.hods) {
       this.data.hods = this.data.hods.filter((h) => h.id !== id);
     }
+    this.persistData();
   }
   getShifts() {
     if (!this.data.shifts) this.data.shifts = [];
@@ -26055,11 +26059,13 @@ var PayrollDatabase = class {
     } else {
       this.data.shifts.push(cleanShift);
     }
+    this.persistData();
   }
   deleteShift(code) {
     this.dbSqlite.run(`DELETE FROM shifts WHERE code = ?`, [code.toUpperCase()]);
     if (this.data.shifts) {
       this.data.shifts = this.data.shifts.filter((s) => s.code.toUpperCase() !== code.toUpperCase());
+      this.persistData();
       return true;
     }
     return false;
@@ -26659,6 +26665,7 @@ var PayrollDatabase = class {
         ]
       );
     }
+    this.persistData();
   }
   resolveReportingHodForEmployee(employeeId) {
     const emp = this.getEmployeeById(employeeId);
@@ -26702,6 +26709,7 @@ var PayrollDatabase = class {
     app.applied_date = (/* @__PURE__ */ new Date()).toISOString();
     if (!this.data.leave_applications) this.data.leave_applications = [];
     this.data.leave_applications.push(app);
+    this.persistData();
     this.dbSqlite.run(
       `INSERT INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, status, applied_date, reporting_hod, reporting_hod_name, escalated_reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [app.id, app.employee_id, app.employee_name, app.company, app.leave_type, app.start_date, app.end_date, app.days, app.reason, app.status, app.applied_date, app.reporting_hod || null, app.reporting_hod_name || null]
@@ -26721,6 +26729,7 @@ var PayrollDatabase = class {
       }
     }
     this.dbSqlite.run(`UPDATE leave_applications SET status = ? WHERE id = ?`, [status, id]);
+    this.persistData();
     return true;
   }
   updateLeaveWorkflowStatus(id, actorRole, action, actorId, override) {
@@ -26781,6 +26790,7 @@ var PayrollDatabase = class {
       `UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
       [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, id]
     );
+    this.persistData();
     return true;
   }
   // Attendance Correction operations
@@ -27840,6 +27850,7 @@ Sakar & SVN Group`;
       created_at: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.data.salary_revisions.push(newRev);
+    this.persistData();
     this.dbSqlite.run(
       `INSERT INTO salary_revisions (id, employee_code, old_salary, new_salary, effective_date, reason, approved_by, created_at, remarks, increment_amount, old_structure, new_structure) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [

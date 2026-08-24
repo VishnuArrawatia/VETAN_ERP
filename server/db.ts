@@ -2031,6 +2031,7 @@ export class PayrollDatabase {
     } else {
       this.data.users.push(user);
     }
+    this.persistData();
   }
 
   public deleteUser(id: string) {
@@ -2040,6 +2041,7 @@ export class PayrollDatabase {
     if (this.data.users) {
       this.data.users = this.data.users.filter(u => u.id !== id);
     }
+    this.persistData();
   }
 
   public getHods(): HODMaster[] {
@@ -2065,6 +2067,7 @@ export class PayrollDatabase {
     } else {
       this.data.hods.push(hod);
     }
+    this.persistData();
   }
 
   public deleteHod(id: string) {
@@ -2074,6 +2077,7 @@ export class PayrollDatabase {
     if (this.data.hods) {
       this.data.hods = this.data.hods.filter(h => h.id !== id);
     }
+    this.persistData();
   }
 
   public getShifts(): Shift[] {
@@ -2109,12 +2113,14 @@ export class PayrollDatabase {
     } else {
       this.data.shifts.push(cleanShift);
     }
+    this.persistData();
   }
 
   public deleteShift(code: string): boolean {
     this.dbSqlite.run(`DELETE FROM shifts WHERE code = ?`, [code.toUpperCase()]);
     if (this.data.shifts) {
       this.data.shifts = this.data.shifts.filter(s => s.code.toUpperCase() !== code.toUpperCase());
+      this.persistData();
       return true;
     }
     return false;
@@ -2758,6 +2764,7 @@ export class PayrollDatabase {
         ]
       );
     }
+    this.persistData();
   }
 
   public resolveReportingHodForEmployee(employeeId: string): { id: string; name: string } | null {
@@ -2816,6 +2823,7 @@ export class PayrollDatabase {
     
     if (!this.data.leave_applications) this.data.leave_applications = [];
     this.data.leave_applications.push(app);
+    this.persistData();
     
     this.dbSqlite.run(`INSERT INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, status, applied_date, reporting_hod, reporting_hod_name, escalated_reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [app.id, app.employee_id, app.employee_name, app.company, app.leave_type, app.start_date, app.end_date, app.days, app.reason, app.status, app.applied_date, app.reporting_hod || null, app.reporting_hod_name || null]
@@ -2838,6 +2846,7 @@ export class PayrollDatabase {
     }
     
     this.dbSqlite.run(`UPDATE leave_applications SET status = ? WHERE id = ?`, [status, id]);
+    this.persistData();
     return true;
   }
 
@@ -2905,6 +2914,7 @@ export class PayrollDatabase {
     this.dbSqlite.run(`UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
       [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, id]
     );
+    this.persistData();
     return true;
   }
 
@@ -3988,6 +3998,7 @@ Sakar & SVN Group`;
       created_at: new Date().toISOString()
     };
     this.data.salary_revisions.push(newRev);
+    this.persistData();
 
     this.dbSqlite.run(
       `INSERT INTO salary_revisions (id, employee_code, old_salary, new_salary, effective_date, reason, approved_by, created_at, remarks, increment_amount, old_structure, new_structure) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
