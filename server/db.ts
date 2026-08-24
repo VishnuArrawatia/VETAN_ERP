@@ -4447,6 +4447,24 @@ Sakar & SVN Group`;
   }
 
   /**
+   * Synchronous Supabase persist — awaits the write so callers can be sure
+   * data is saved before returning the HTTP response.
+   */
+  public async persistDataSync(): Promise<void> {
+    if (!this.supabaseAdmin) return;
+    try {
+      await this.supabaseAdmin
+        .from('vetan_erp_store')
+        .upsert(
+          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+    } catch (e: any) {
+      console.error('[Supabase] persistDataSync failed:', e?.message || e);
+    }
+  }
+
+  /**
    * Vercel: Refresh in-memory data from Supabase so warm-started instances
    * see mutations made by other serverless invocations.
    */

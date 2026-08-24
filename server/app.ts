@@ -1430,32 +1430,35 @@ export async function createApp(supabaseAdmin?: any) {
     res.json(db.getLeaveApplications(company));
   });
 
-  app.post('/api/leaves', (req, res) => {
+  app.post('/api/leaves', async (req, res) => {
     try {
       const appReg = db.addLeaveApplication(req.body);
+      await db.persistDataSync();
       res.json({ success: true, application: appReg });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.post('/api/leaves/status', (req, res) => {
+  app.post('/api/leaves/status', async (req, res) => {
     const { id, status } = req.body;
     const success = db.updateLeaveStatus(id, status);
     if (!success) {
       return res.status(404).json({ error: 'Leave request not found' });
     }
+    await db.persistDataSync();
     res.json({ success: true });
   });
 
   // Leave approval workflow endpoint
-  app.post('/api/leaves/workflow', (req, res) => {
+  app.post('/api/leaves/workflow', async (req, res) => {
     try {
       const { id, actorRole, action, actorId, override } = req.body;
       const success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
         return res.status(400).json({ error: 'Failed to update leave workflow status or request not found.' });
       }
+      await db.persistDataSync();
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1493,19 +1496,21 @@ export async function createApp(supabaseAdmin?: any) {
   app.post('/api/attendance/corrections', (req, res) => {
     try {
       const correction = db.addAttendanceCorrection(req.body);
+      await db.persistDataSync();
       res.json({ success: true, correction });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.post('/api/attendance/corrections/workflow', (req, res) => {
+  app.post('/api/attendance/corrections/workflow', async (req, res) => {
     try {
       const { id, actorRole, action, actorId, override } = req.body;
       const success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
         return res.status(400).json({ error: 'Failed to update attendance correction workflow status.' });
       }
+      await db.persistDataSync();
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
