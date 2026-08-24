@@ -28160,6 +28160,28 @@ Sakar & SVN Group`;
       }).catch((e) => console.error("[Supabase] persistData exception:", e?.message || e));
     }
   }
+  async reloadFromSupabase() {
+    if (!this.supabaseAdmin || !this.inMemoryOnly) return;
+    try {
+      const { data: row, error } = await this.supabaseAdmin.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
+      if (!error && row?.payload && typeof row.payload === "object") {
+        this.data = { ...this.data, ...row.payload };
+      }
+    } catch (e) {
+      console.error("[Supabase] reloadFromSupabase failed:", e?.message || e);
+    }
+  }
+  async forcePersistToSupabase() {
+    if (!this.supabaseAdmin) return;
+    try {
+      await this.supabaseAdmin.from("vetan_erp_store").upsert(
+        { id: "live", payload: this.data, updated_at: (/* @__PURE__ */ new Date()).toISOString() },
+        { onConflict: "id" }
+      );
+    } catch (e) {
+      console.error("[Supabase] forcePersist failed:", e?.message || e);
+    }
+  }
   async restoreFullBackupJSON(backupData) {
     this.data = { ...this.data, ...backupData };
     const runSql = (sql, params = []) => {
@@ -29826,13 +29848,14 @@ async function createApp(supabaseAdmin) {
     }
     res.json(enrichedLoans);
   });
-  app.post("/api/loans", (req, res) => {
+  app.post("/api/loans", async (req, res) => {
     try {
       const loan = req.body;
       if (!loan.employee_id || loan.amount === void 0 || !loan.monthly_deduction || !loan.month) {
         return res.status(400).json({ error: "Employee ID, amount, monthly deduction, and month are required" });
       }
       const saved = db.addLoan(loan);
+      await db.forcePersistToSupabase();
       res.json({ success: true, loan: saved });
     } catch (e) {
       res.status(500).json({ error: e.message });
