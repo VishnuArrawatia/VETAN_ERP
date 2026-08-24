@@ -1101,13 +1101,14 @@ export async function createApp(supabaseAdmin?: any) {
     res.json(enrichedLoans);
   });
 
-  app.post('/api/loans', (req, res) => {
+  app.post('/api/loans', async (req, res) => {
     try {
       const loan = req.body;
       if (!loan.employee_id || loan.amount === undefined || !loan.monthly_deduction || !loan.month) {
         return res.status(400).json({ error: 'Employee ID, amount, monthly deduction, and month are required' });
       }
       const saved = db.addLoan(loan);
+      await db.forcePersistToSupabase();
       res.json({ success: true, loan: saved });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

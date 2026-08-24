@@ -4386,6 +4386,21 @@ Sakar & SVN Group`;
     }
   }
 
+  /** Force an awaited upsert to Supabase (for critical writes). */
+  public async forcePersistToSupabase(): Promise<void> {
+    if (!this.supabaseAdmin) return;
+    try {
+      await this.supabaseAdmin
+        .from('vetan_erp_store')
+        .upsert(
+          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
+          { onConflict: 'id' }
+        );
+    } catch (e: any) {
+      console.error('[Supabase] forcePersist failed:', e?.message || e);
+    }
+  }
+
   public async restoreFullBackupJSON(backupData: any): Promise<void> {
     // 1. Update in-memory data
     this.data = { ...this.data, ...backupData };
