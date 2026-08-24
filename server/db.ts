@@ -2850,6 +2850,85 @@ export class PayrollDatabase {
     return true;
   }
 
+  private autoUpdateAttendanceForLeave(employeeId: string, leaveDays: number, startDate?: string, endDate?: string): void {
+    if (!employeeId || !startDate) return;
+    const emp = this.getEmployeeById(employeeId);
+    if (!emp) return;
+    const startDateObj = new Date(startDate);
+    const month = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth() + 1).padStart(2, '0')}`;
+    let att = this.data.attendance.find(a => a.employee_id === employeeId && a.month === month);
+    if (!att) {
+      att = {
+        id: `ATT-${employeeId}-${month}`,
+        employee_id: employeeId,
+        month: month,
+        total_days: 30,
+        present: 0,
+        absent: 0,
+        weekly_off: 0,
+        paid_holiday: 0,
+        leave: 0,
+        lwp: 0,
+        working_days: 0,
+        lop_days: 0,
+        overtime_hours: 0
+      };
+      this.data.attendance.push(att);
+    }
+    att.leave = (att.leave || 0) + leaveDays;
+    att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave;
+    att.lop_days = (att.absent || 0) + (att.lwp || 0);
+    att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave + (att.lwp || 0);
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0]
+    );
+  }
+
+  private autoUpdateAttendanceForMissPunch(employeeId: string, date: string, requestedStatus: string): void {
+    if (!employeeId || !date) return;
+    const emp = this.getEmployeeById(employeeId);
+    if (!emp) return;
+    const dateObj = new Date(date);
+    const month = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+    let att = this.data.attendance.find(a => a.employee_id === employeeId && a.month === month);
+    if (!att) {
+      att = {
+        id: `ATT-${employeeId}-${month}`,
+        employee_id: employeeId,
+        month: month,
+        total_days: 30,
+        present: 0,
+        absent: 0,
+        weekly_off: 0,
+        paid_holiday: 0,
+        leave: 0,
+        lwp: 0,
+        working_days: 0,
+        lop_days: 0,
+        overtime_hours: 0
+      };
+      this.data.attendance.push(att);
+    }
+    if (requestedStatus === 'PRESENT') {
+      att.present = (att.present || 0) + 1;
+      att.absent = Math.max(0, (att.absent || 0) - 1);
+    } else if (requestedStatus === 'WEEKLY_OFF') {
+      att.weekly_off = (att.weekly_off || 0) + 1;
+      att.absent = Math.max(0, (att.absent || 0) - 1);
+    } else if (requestedStatus === 'LEAVE') {
+      att.leave = (att.leave || 0) + 1;
+      att.absent = Math.max(0, (att.absent || 0) - 1);
+    }
+    att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0);
+    att.lop_days = (att.absent || 0) + (att.lwp || 0);
+    att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0) + (att.lwp || 0);
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0]
+    );
+  }
+
   public updateLeaveWorkflowStatus(id: string, actorRole: string, action: 'APPROVE' | 'REJECT', actorId?: string, override?: boolean): boolean {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
@@ -2875,14 +2954,13 @@ export class PayrollDatabase {
           app.status = 'APPROVED';
           app.hr_approved_date = new Date().toISOString();
           app.hr_id = actorId || 'HR';
-
-          // Post leave to employee leave balance when approved by HR
           const emp = this.getEmployeeById(app.employee_id);
           if (emp) {
             const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
             emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
             this.syncEmployee(emp);
           }
+          this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date);
         } else {
           app.status = 'REJECTED_HR';
           app.hr_approved_date = new Date().toISOString();
@@ -2890,20 +2968,19 @@ export class PayrollDatabase {
         }
       }
     } else if (isSuper) {
-      // Super Admin Override approval from any non-final state
       if (action === 'APPROVE') {
         app.status = 'APPROVED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
         app.hod_id = app.hod_id || actorId || 'SuperAdmin';
         app.hr_approved_date = new Date().toISOString();
         app.hr_id = actorId || 'SuperAdmin';
-
         const emp = this.getEmployeeById(app.employee_id);
         if (emp) {
           const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
           emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
           this.syncEmployee(emp);
         }
+        this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date);
       } else {
         app.status = 'REJECTED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
@@ -2974,6 +3051,7 @@ export class PayrollDatabase {
           req.status = 'APPROVED';
           req.hr_approved_date = new Date().toISOString();
           req.hr_id = actorId || 'HR';
+          this.autoUpdateAttendanceForMissPunch(req.employee_id, req.date, req.requested_status);
         } else {
           req.status = 'REJECTED_HR';
           req.hr_approved_date = new Date().toISOString();
@@ -2985,6 +3063,7 @@ export class PayrollDatabase {
         req.status = 'APPROVED';
         req.hod_approved_date = req.hod_approved_date || new Date().toISOString();
         req.hr_approved_date = new Date().toISOString();
+        this.autoUpdateAttendanceForMissPunch(req.employee_id, req.date, req.requested_status);
       } else {
         req.status = 'REJECTED_HR';
         req.hr_approved_date = new Date().toISOString();
@@ -2994,6 +3073,7 @@ export class PayrollDatabase {
     this.dbSqlite.run(`UPDATE attendance_corrections SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
       [req.status, req.hod_approved_date || null, req.hr_approved_date || null, req.hod_id || null, req.hr_id || null, id]
     );
+    this.persistData();
     return true;
   }
 
