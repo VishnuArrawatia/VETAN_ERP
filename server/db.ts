@@ -4366,6 +4366,26 @@ Sakar & SVN Group`;
     }
   }
 
+  /**
+   * Vercel: Refresh in-memory data from Supabase so warm-started instances
+   * see mutations made by other serverless invocations.
+   */
+  public async reloadFromSupabase(): Promise<void> {
+    if (!this.supabaseAdmin || !this.inMemoryOnly) return;
+    try {
+      const { data: row, error } = await this.supabaseAdmin
+        .from('vetan_erp_store')
+        .select('payload')
+        .eq('id', 'live')
+        .maybeSingle();
+      if (!error && row?.payload && typeof row.payload === 'object') {
+        this.data = { ...this.data, ...row.payload };
+      }
+    } catch (e: any) {
+      console.error('[Supabase] reloadFromSupabase failed:', e?.message || e);
+    }
+  }
+
   public async restoreFullBackupJSON(backupData: any): Promise<void> {
     // 1. Update in-memory data
     this.data = { ...this.data, ...backupData };

@@ -2772,6 +2772,10 @@ HR Department`;
     }
   });
 
+  // Expose db instance for Vercel handler to call reloadFromSupabase()
+  (app as any).locals = (app as any).locals || {};
+  (app as any).locals.db = db;
+
   return app;
 }
 

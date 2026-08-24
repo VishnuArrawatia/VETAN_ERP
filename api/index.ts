@@ -72,6 +72,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // Vercel warm-start: refresh in-memory data from Supabase so mutations
+  // (loans, leave, attendance, etc.) made by other instances are visible.
+  try {
+    const db = (app as any)?.locals?.db;
+    if (db && typeof db.reloadFromSupabase === 'function') {
+      await db.reloadFromSupabase();
+    }
+  } catch (_) { /* non-fatal */ }
+
   // Temporary diagnostic: test Supabase + network connectivity
   if (req.url === '/api/__debug/supabase-prod') {
     const supabaseUrl = process.env.SUPABASE_URL;
