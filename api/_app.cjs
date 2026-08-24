@@ -30257,9 +30257,16 @@ async function createApp(supabaseAdmin) {
   app.post("/api/leaves/workflow", async (req, res) => {
     try {
       const { id, actorRole, action, actorId, override } = req.body;
-      const success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
+      let success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
-        return res.status(400).json({ error: "Failed to update leave workflow status or request not found." });
+        // Leave not found in memory — reload from Supabase and retry
+        if (db.supabaseAdmin) {
+          try { await db.reloadFromSupabase(); } catch (_) {}
+          success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
+        }
+        if (!success) {
+          return res.status(400).json({ error: "Failed to update leave workflow status or request not found." });
+        }
       }
       await db.persistDataSync();
       res.json({ success: true });
@@ -30303,9 +30310,15 @@ async function createApp(supabaseAdmin) {
   app.post("/api/attendance/corrections/workflow", async (req, res) => {
     try {
       const { id, actorRole, action, actorId, override } = req.body;
-      const success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
+      let success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
-        return res.status(400).json({ error: "Failed to update attendance correction workflow status." });
+        if (db.supabaseAdmin) {
+          try { await db.reloadFromSupabase(); } catch (_) {}
+          success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
+        }
+        if (!success) {
+          return res.status(400).json({ error: "Failed to update attendance correction workflow status." });
+        }
       }
       await db.persistDataSync();
       res.json({ success: true });

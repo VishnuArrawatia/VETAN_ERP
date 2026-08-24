@@ -25,10 +25,12 @@ let dbRef: any = null; // persistent reference to PayrollDatabase
  */
 async function ensureInit() {
   if (app) {
-    // Warm start: reload data from Supabase so mutations from other
-    // serverless invocations are visible.
+    // Warm start: reuse persistent app.
+    // Only reload from Supabase if there is NO active db with data.
+    // This avoids the stale-data race where reloadFromSupabase overwrites
+    // fresh in-memory mutations from a previous request on the same instance.
     try {
-      if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+      if (dbRef && typeof dbRef.reloadFromSupabase === 'function' && dbRef.inMemoryOnly && (!dbRef.data || !dbRef.data.employees || dbRef.data.employees.length === 0)) {
         await dbRef.reloadFromSupabase();
       }
     } catch (e: any) {
