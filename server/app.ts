@@ -1502,7 +1502,7 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.post('/api/attendance/corrections', (req, res) => {
+  app.post('/api/attendance/corrections', async (req, res) => {
     try {
       const correction = db.addAttendanceCorrection(req.body);
       await db.persistDataSync();

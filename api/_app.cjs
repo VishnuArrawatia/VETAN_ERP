@@ -23933,8 +23933,8 @@ var require_express2 = __commonJS({
 var app_exports = {};
 __export(app_exports, {
   createApp: () => createApp,
-  getAppDb: () => getAppDb,
-  default: () => app_default
+  default: () => app_default,
+  getAppDb: () => getAppDb
 });
 module.exports = __toCommonJS(app_exports);
 var import_express = __toESM(require_express2(), 1);
@@ -24357,43 +24357,29 @@ var PayrollDatabase = class {
     this.supabaseAdmin = supabaseAdmin || null;
   }
   async init() {
-    console.log(`[DB INIT] supabaseAdmin present: ${!!this.supabaseAdmin}`);
     if (this.supabaseAdmin) {
       try {
         const TIMEOUT_MS = 1e4;
         const timeoutPromise = new Promise(
           (_, reject) => setTimeout(() => reject(new Error(`Supabase query timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
-        console.log("[DB INIT] Querying Supabase vetan_erp_store WHERE id=live ...");
         const queryPromise = this.supabaseAdmin.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
         const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
-        if (error) {
-          console.error("[DB INIT] Supabase query returned error:", JSON.stringify(error));
-        } else if (!row) {
-          console.warn("[DB INIT] Supabase query returned null row (no matching record).");
-        } else if (!row.payload) {
-          console.warn("[DB INIT] Supabase row found but payload is empty/null.");
-        } else if (typeof row.payload !== "object") {
-          console.warn("[DB INIT] Supabase payload is not an object:", typeof row.payload);
-        } else {
+        if (!error && row?.payload && typeof row.payload === "object") {
           const payload = row.payload;
           if (Array.isArray(payload.employees) && payload.employees.length > 0) {
             this.data = { ...this.data, ...payload };
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.enforceCompanyCorrections();
-            console.log(`[DB INIT] \u2705 Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
+            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
             return;
-          } else {
-            console.warn("[DB INIT] Supabase payload has no employees or empty array.");
           }
         }
-        console.warn("[DB INIT] Supabase path complete but no data loaded. Falling through to local.");
+        console.warn("Supabase store empty or unavailable, falling back to local storage.");
       } catch (e) {
-        console.error("[DB INIT] Supabase init exception:", e.message || e);
+        console.error("Supabase init failed, falling back to local storage:", e.message || e);
       }
-    } else {
-      console.warn("[DB INIT] No supabaseAdmin \u2014 skipping Supabase path entirely.");
     }
     const backupPath = import_path.default.join(process.cwd(), "payroll_persisted_store.json");
     let loadedFromBackup = false;
@@ -26738,13 +26724,13 @@ var PayrollDatabase = class {
     const emp = this.getEmployeeById(employeeId);
     if (!emp) return;
     const startDateObj = new Date(startDate);
-    const month = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth() + 1).padStart(2, '0')}`;
+    const month = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth() + 1).padStart(2, "0")}`;
     let att = this.data.attendance.find((a) => a.employee_id === employeeId && a.month === month);
     if (!att) {
       att = {
         id: `ATT-${employeeId}-${month}`,
         employee_id: employeeId,
-        month: month,
+        month,
         total_days: 30,
         present: 0,
         absent: 0,
@@ -26772,13 +26758,13 @@ var PayrollDatabase = class {
     const emp = this.getEmployeeById(employeeId);
     if (!emp) return;
     const dateObj = new Date(date);
-    const month = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+    const month = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
     let att = this.data.attendance.find((a) => a.employee_id === employeeId && a.month === month);
     if (!att) {
       att = {
         id: `ATT-${employeeId}-${month}`,
         employee_id: employeeId,
-        month: month,
+        month,
         total_days: 30,
         present: 0,
         absent: 0,
@@ -26792,13 +26778,13 @@ var PayrollDatabase = class {
       };
       this.data.attendance.push(att);
     }
-    if (requestedStatus === 'PRESENT') {
+    if (requestedStatus === "PRESENT") {
       att.present = (att.present || 0) + 1;
       att.absent = Math.max(0, (att.absent || 0) - 1);
-    } else if (requestedStatus === 'WEEKLY_OFF') {
+    } else if (requestedStatus === "WEEKLY_OFF") {
       att.weekly_off = (att.weekly_off || 0) + 1;
       att.absent = Math.max(0, (att.absent || 0) - 1);
-    } else if (requestedStatus === 'LEAVE') {
+    } else if (requestedStatus === "LEAVE") {
       att.leave = (att.leave || 0) + 1;
       att.absent = Math.max(0, (att.absent || 0) - 1);
     }
@@ -28243,6 +28229,10 @@ Sakar & SVN Group`;
       }).catch((e) => console.error("[Supabase] persistData exception:", e?.message || e));
     }
   }
+  /**
+   * Synchronous Supabase persist — awaits the write so callers can be sure
+   * data is saved before returning the HTTP response.
+   */
   async persistDataSync() {
     if (!this.supabaseAdmin) return;
     try {
@@ -28254,6 +28244,10 @@ Sakar & SVN Group`;
       console.error("[Supabase] persistDataSync failed:", e?.message || e);
     }
   }
+  /**
+   * Vercel: Refresh in-memory data from Supabase so warm-started instances
+   * see mutations made by other serverless invocations.
+   */
   async reloadFromSupabase() {
     if (!this.supabaseAdmin) return;
     try {
@@ -28266,6 +28260,7 @@ Sakar & SVN Group`;
       console.error("[Supabase] reloadFromSupabase failed:", e?.message || e);
     }
   }
+  /** Force an awaited upsert to Supabase (for critical writes). */
   async forcePersistToSupabase() {
     if (!this.supabaseAdmin) return;
     try {
@@ -29032,7 +29027,9 @@ Sakar & SVN Group`;
 // server/app.ts
 var import_crypto2 = __toESM(require("crypto"), 1);
 var _dbRef = null;
-function getAppDb() { return _dbRef; }
+function getAppDb() {
+  return _dbRef;
+}
 async function createApp(supabaseAdmin) {
   const app = (0, import_express.default)();
   const db = new PayrollDatabase(supabaseAdmin);
@@ -29120,13 +29117,22 @@ async function createApp(supabaseAdmin) {
   }
   app.get("/api/db-status", (req, res) => {
     const isMock = db.inMemoryOnly;
+    const employeeCount = db.data?.employees?.length || 0;
+    const hasSupabase = !!db.supabaseAdmin;
+    let dbMode = "SQLite3-File";
+    if (hasSupabase && employeeCount > 0) dbMode = "Supabase-Cloud";
+    else if (isMock) dbMode = "InMemoryFallback";
+    const warnings = [];
+    if (startupException) warnings.push(startupException.message || String(startupException));
+    else if (isMock && !hasSupabase) warnings.push("sqlite3 package failed to load or open file. Falling back to Pure JS In-Memory Mode.");
     res.json({
       status: startupException ? "ERROR" : "OK",
-      currentDatabaseMode: isMock ? "InMemoryFallback" : "SQLite3-File",
-      sqliteFilePath: import_path2.default.join(process.cwd(), "Payroll.db"),
-      isPayrollDbActive: !isMock && !startupException,
+      currentDatabaseMode: dbMode,
+      isPayrollDbActive: !startupException && employeeCount > 0,
       isInMemoryMode: isMock,
-      initializationWarnings: startupException ? [startupException.message || String(startupException)] : isMock ? ["sqlite3 package failed to load or open file. Falling back to Pure JS In-Memory Mode."] : []
+      employeeCount,
+      hasSupabaseClient: hasSupabase,
+      initializationWarnings: warnings
     });
   });
   app.get("/api/dashboard/summary", (req, res) => {
@@ -29304,7 +29310,8 @@ async function createApp(supabaseAdmin) {
   });
   app.get("/api/hr/users", (req, res) => {
     try {
-      res.json(db.getUsers());
+      const users = db.getUsers().map(({ password: _pw, ...safe }) => safe);
+      res.json(users);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -29459,7 +29466,8 @@ async function createApp(supabaseAdmin) {
       }
       db.logAudit("User Login", `User ${user.name} (${user.username}) successfully logged in`, user.name);
       const isDefaultPin = user.role === "SUPER_HR" && await db.getSystemSetting("pin_changed_from_default", "0") === "0";
-      res.json({ success: true, user, forcePinChange: isDefaultPin });
+      const { password: _pw, ...safeUser } = user;
+      res.json({ success: true, user: safeUser, forcePinChange: isDefaultPin });
     } catch (e) {
       console.error("[Login API Error]", e);
       res.status(500).json({ success: false, error: "Database Error" });
@@ -29589,7 +29597,8 @@ async function createApp(supabaseAdmin) {
         db.syncUser(user);
         db.logAudit("User Updated", `Updated user account settings for ${user.name} (${user.username})`, getOperator(req));
       }
-      res.json({ success: true, user });
+      const { password: _pw3, ...safeUserResp } = user;
+      res.json({ success: true, user: safeUserResp });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -29719,7 +29728,8 @@ async function createApp(supabaseAdmin) {
         return res.status(401).json({ success: false, error: "Incorrect Password. Note: First-time password is your Employee Code (e.g. EMP001)." });
       }
       const needsChange = !!employee.needs_password_change || isFirstTime;
-      res.json({ success: true, employee, needsPasswordChange: needsChange });
+      const { password: _pw, ...safeEmployee } = employee;
+      res.json({ success: true, employee: safeEmployee, needsPasswordChange: needsChange });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -29750,7 +29760,8 @@ async function createApp(supabaseAdmin) {
         password: newPassword,
         needs_password_change: false
       });
-      res.json({ success: true, employee: updated });
+      const { password: _pw2, ...safeUpdated } = updated;
+      res.json({ success: true, employee: safeUpdated });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -29945,13 +29956,6 @@ async function createApp(supabaseAdmin) {
       return res.json(enrichedLoans.filter((l) => allowedLoanIds.has(l.employee_id)));
     }
     res.json(enrichedLoans);
-  });
-  // TEMP DEBUG: check data state
-  app.get("/api/__debug/data-state", (req, res) => {
-    const loanCount = (db.data?.loans || []).length;
-    const empCount = (db.data?.employees || []).length;
-    const loanIds = (db.data?.loans || []).map(l => l.employee_id + ':' + l.status);
-    res.json({ loanCount, empCount, inMemoryOnly: db.inMemoryOnly, hasSupabase: !!db.supabaseAdmin, loanIds });
   });
   app.post("/api/loans", async (req, res) => {
     try {
@@ -30260,14 +30264,11 @@ async function createApp(supabaseAdmin) {
       const { id, actorRole, action, actorId, override } = req.body;
       let success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
-        // Leave not found in memory — reload from Supabase and retry
-        if (db.supabaseAdmin) {
-          try { await db.reloadFromSupabase(); } catch (_) {}
-          success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
-        }
-        if (!success) {
-          return res.status(400).json({ error: "Failed to update leave workflow status or request not found." });
-        }
+        await db.reloadFromSupabase();
+        success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
+      }
+      if (!success) {
+        return res.status(400).json({ error: "Failed to update leave workflow status or request not found." });
       }
       await db.persistDataSync();
       res.json({ success: true });
@@ -30313,13 +30314,11 @@ async function createApp(supabaseAdmin) {
       const { id, actorRole, action, actorId, override } = req.body;
       let success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
-        if (db.supabaseAdmin) {
-          try { await db.reloadFromSupabase(); } catch (_) {}
-          success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
-        }
-        if (!success) {
-          return res.status(400).json({ error: "Failed to update attendance correction workflow status." });
-        }
+        await db.reloadFromSupabase();
+        success = db.updateAttendanceCorrectionWorkflowStatus(id, actorRole, action, actorId, override);
+      }
+      if (!success) {
+        return res.status(400).json({ error: "Failed to update attendance correction workflow status." });
       }
       await db.persistDataSync();
       res.json({ success: true });
@@ -31401,12 +31400,15 @@ HR Department`;
       res.status(500).json({ error: "Database restore failed: " + e.message });
     }
   });
+  app.locals = app.locals || {};
+  app.locals.db = db;
   return app;
 }
 var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  createApp
+  createApp,
+  getAppDb
 });
 /**
  * @license
