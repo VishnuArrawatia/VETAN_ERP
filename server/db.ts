@@ -2234,6 +2234,7 @@ export class PayrollDatabase {
 
     this.data.employees.push(employee);
     this.syncEmployee(employee);
+    this.persistData();
     return employee;
   }
 
@@ -2331,6 +2332,7 @@ export class PayrollDatabase {
     this.data.employees[idx].ctc_salary = this.computeCtcForEmployee(this.data.employees[idx]);
 
     this.syncEmployee(this.data.employees[idx]);
+    this.persistData();
     
     // If the ID was updated, we need to clean up the old SQLite entry if INSERT OR REPLACE left it behind
     if (idChanged) {
@@ -2350,6 +2352,7 @@ export class PayrollDatabase {
     if (hasPayrollHistory && !force) {
       emp.status = 'SEPARATED';
       this.syncEmployee(emp);
+      this.persistData();
       return 'INACTIVATED';
     } else {
       this.data.employees.splice(idx, 1);
@@ -2359,6 +2362,7 @@ export class PayrollDatabase {
       this.data.ff_settlements = this.data.ff_settlements.filter(f => f.employee_id !== id);
       this.data.loans = (this.data.loans || []).filter(l => l.employee_id !== id);
       this.deleteEmployeeSQLite(id);
+      this.persistData();
       return 'PURGED';
     }
   }

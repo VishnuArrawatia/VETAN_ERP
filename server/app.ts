@@ -303,12 +303,10 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       const emp = db.getEmployeeById(employee_code);
-      const company = emp ? emp.company : undefined;
-      const month = effective_date.slice(0, 7);
 
-      if (db.isPayrollLocked(month, company)) {
-        return res.status(400).json({ error: 'Payroll month is locked. No salary structure changes are allowed.' });
-      }
+      // Note: Salary revisions are NOT blocked by payroll lock.
+      // Payroll lock only prevents changes to attendance/payslips for that month.
+      // Salary/increment changes take effect from the effective date onward.
 
       const rev = db.addSalaryRevision({
         employee_code,
