@@ -19,7 +19,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 let app: any;
 
-/** Ensure the Express app and Supabase client are initialized. */
+/**
+ * Create the Express app. On Vercel, we re-create on every request to ensure
+ * fresh data from Supabase (no stale cached state across warm starts).
+ */
 async function ensureInit() {
   if (app) return;
 
@@ -62,7 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = matchedPath;
   }
 
-  // Initialize Express app once (cold start), reuse across warm invocations
+  // Vercel warm-start: always re-init to load fresh data from Supabase.
+  // This ensures mutations (loans, leaves, etc.) from other instances are visible.
+  app = undefined;
   try {
     await ensureInit();
   } catch (err: any) {
@@ -71,15 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       message: err?.message || String(err),
     });
   }
-
-  // Vercel warm-start: refresh in-memory data from Supabase so mutations
-  // (loans, leave, attendance, etc.) made by other instances are visible.
-  try {
-    const db = (app as any)?.locals?.db;
-    if (db && typeof db.reloadFromSupabase === 'function') {
-      await db.reloadFromSupabase();
-    }
-  } catch (_) { /* non-fatal */ }
 
   // Temporary diagnostic: test Supabase + network connectivity
   if (req.url === '/api/__debug/supabase-prod') {
