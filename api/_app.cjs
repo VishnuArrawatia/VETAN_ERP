@@ -29849,7 +29849,7 @@ async function createApp(supabaseAdmin) {
     res.json(enrichedLoans);
   });
   // TEMP DEBUG: check data state
-  app.get("/__debug/data-state", (req, res) => {
+  app.get("/api/__debug/data-state", (req, res) => {
     const loanCount = (db.data?.loans || []).length;
     const empCount = (db.data?.employees || []).length;
     const loanIds = (db.data?.loans || []).map(l => l.employee_id + ':' + l.status);
