@@ -29848,6 +29848,13 @@ async function createApp(supabaseAdmin) {
     }
     res.json(enrichedLoans);
   });
+  // TEMP DEBUG: check data state
+  app.get("/__debug/data-state", (req, res) => {
+    const loanCount = (db.data?.loans || []).length;
+    const empCount = (db.data?.employees || []).length;
+    const loanIds = (db.data?.loans || []).map(l => l.employee_id + ':' + l.status);
+    res.json({ loanCount, empCount, inMemoryOnly: db.inMemoryOnly, hasSupabase: !!db.supabaseAdmin, loanIds });
+  });
   app.post("/api/loans", async (req, res) => {
     try {
       const loan = req.body;
