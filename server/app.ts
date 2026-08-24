@@ -18,9 +18,13 @@ import crypto from 'crypto';
  * @param supabaseAdmin  Optional Supabase client (service_role) for cloud persistence.
  *                       When provided, PayrollDatabase uses Supabase instead of SQLite.
  */
+let _dbRef: PayrollDatabase | null = null;
+export function getAppDb(): PayrollDatabase | null { return _dbRef; }
+
 export async function createApp(supabaseAdmin?: any) {
   const app = express();
   const db = new PayrollDatabase(supabaseAdmin);
+  _dbRef = db;
   
   let startupException: any = null;
   try {

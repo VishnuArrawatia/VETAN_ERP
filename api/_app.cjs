@@ -23933,6 +23933,7 @@ var require_express2 = __commonJS({
 var app_exports = {};
 __export(app_exports, {
   createApp: () => createApp,
+  getAppDb: () => getAppDb,
   default: () => app_default
 });
 module.exports = __toCommonJS(app_exports);
@@ -29029,9 +29030,12 @@ Sakar & SVN Group`;
 
 // server/app.ts
 var import_crypto2 = __toESM(require("crypto"), 1);
+var _dbRef = null;
+function getAppDb() { return _dbRef; }
 async function createApp(supabaseAdmin) {
   const app = (0, import_express.default)();
   const db = new PayrollDatabase(supabaseAdmin);
+  _dbRef = db;
   let startupException = null;
   try {
     console.log("Starting payroll database initialization...");

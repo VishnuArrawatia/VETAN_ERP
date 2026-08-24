@@ -18,16 +18,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 let app: any;
+let dbRef: any = null; // persistent reference to PayrollDatabase
 
 /**
- * Create the Express app. On Vercel, we re-create on every request to ensure
- * fresh data from Supabase (no stale cached state across warm starts).
+ * Create the Express app ONCE. On warm starts, reuse it but reload data.
  */
 async function ensureInit() {
-  if (app) return;
+  if (app) {
+    // Warm start: reload data from Supabase so mutations from other
+    // serverless invocations are visible.
+    try {
+      if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+        await dbRef.reloadFromSupabase();
+      }
+    } catch (e: any) {
+      console.error('[Vercel] reloadFromSupabase failed:', e?.message);
+    }
+    return;
+  }
 
   try {
-    const { createApp } = await import('./_app.cjs');
+    const { createApp, getAppDb } = await import('./_app.cjs');
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,6 +53,7 @@ async function ensureInit() {
     }
 
     app = await createApp(supabaseAdmin);
+    dbRef = typeof getAppDb === 'function' ? getAppDb() : null;
     console.log('[Vercel] Express app initialized with all ERP routes.');
   } catch (err: any) {
     console.error('[Vercel] FATAL: Failed to initialize Express app:', err?.message || String(err));
@@ -65,9 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = matchedPath;
   }
 
-  // Vercel warm-start: always re-init to load fresh data from Supabase.
-  // This ensures mutations (loans, leaves, etc.) from other instances are visible.
-  app = undefined;
+  // Vercel warm-start: reuse persistent app but reload fresh data from Supabase.
   try {
     await ensureInit();
   } catch (err: any) {
