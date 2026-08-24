@@ -4469,7 +4469,7 @@ Sakar & SVN Group`;
    * see mutations made by other serverless invocations.
    */
   public async reloadFromSupabase(): Promise<void> {
-    if (!this.supabaseAdmin || !this.inMemoryOnly) return;
+    if (!this.supabaseAdmin) return;
     try {
       const { data: row, error } = await this.supabaseAdmin
         .from('vetan_erp_store')
@@ -4478,6 +4478,7 @@ Sakar & SVN Group`;
         .maybeSingle();
       if (!error && row?.payload && typeof row.payload === 'object') {
         this.data = { ...this.data, ...row.payload };
+        this.inMemoryOnly = true;
       }
     } catch (e: any) {
       console.error('[Supabase] reloadFromSupabase failed:', e?.message || e);

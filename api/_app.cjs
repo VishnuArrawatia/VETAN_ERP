@@ -28255,11 +28255,12 @@ Sakar & SVN Group`;
     }
   }
   async reloadFromSupabase() {
-    if (!this.supabaseAdmin || !this.inMemoryOnly) return;
+    if (!this.supabaseAdmin) return;
     try {
       const { data: row, error } = await this.supabaseAdmin.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
       if (!error && row?.payload && typeof row.payload === "object") {
         this.data = { ...this.data, ...row.payload };
+        this.inMemoryOnly = true;
       }
     } catch (e) {
       console.error("[Supabase] reloadFromSupabase failed:", e?.message || e);
