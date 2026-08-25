@@ -2424,26 +2424,25 @@ export default function App() {
           {/* Logo brand */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 border-r pr-4 border-slate-200">
-              {/* Premium Logo Icon */}
+              {/* Circle Icon with Pink Background */}
               <div className="relative">
-                <div className="w-[42px] h-[42px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-[12px] flex items-center justify-center shadow-lg shadow-slate-900/20">
+                <div className="w-[46px] h-[46px] bg-gradient-to-br from-pink-500 via-pink-400 to-rose-400 rounded-full flex items-center justify-center shadow-lg shadow-pink-400/30 border-3 border-white">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 21H21" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round"/>
-                    <path d="M5 21V7L12 3L19 7V21" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M9 21V15H15V21" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M10 9H14" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round"/>
-                    <path d="M10 12H14" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M3 21H21" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M5 21V7L12 3L19 7V21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M9 21V15H15V21" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M10 9H14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M10 12H14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-gradient-to-br from-emerald-400 to-emerald-500 rounded-full border-2 border-white"></div>
               </div>
-              {/* Brand Text */}
+              {/* Brand Text — VETAN Dark Blue + ERP Orange */}
               <div className="flex flex-col">
                 <div className="flex items-baseline leading-none">
-                  <span className="text-[22px] font-black tracking-tight text-slate-900 font-display">VETAN</span>
-                  <span className="text-[11px] font-extrabold tracking-[0.15em] ml-1 relative -top-[5px] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">ERP</span>
+                  <span className="text-[24px] font-black tracking-tight text-slate-800 font-display" style={{color: '#1e3a5f'}}>VETAN</span>
+                  <span className="text-[12px] font-extrabold tracking-[0.12em] ml-1.5 relative -top-[6px]" style={{color: '#ea580c'}}>ERP</span>
                 </div>
-                <p className="text-[8px] font-bold tracking-[0.12em] text-emerald-600 uppercase leading-none mt-1">Powered by Vishnu Intelligence</p>
+                <p className="text-[8px] font-bold tracking-[0.12em] text-pink-500 uppercase leading-none mt-1">Powered by Vishnu Intelligence</p>
                 <p className="text-[7px] font-medium text-gray-400 tracking-wider uppercase mt-0.5">Multi-Unit Statutory Suite</p>
               </div>
             </div>
