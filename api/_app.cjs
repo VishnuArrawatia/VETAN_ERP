@@ -29288,6 +29288,21 @@ async function createApp(supabaseAdmin) {
   });
   app.post("/api/revisions", (req, res) => {
     try {
+      const { action } = req.body;
+      if (action === "delete_revision") {
+        const { id } = req.body;
+        if (!id) return res.status(400).json({ error: "Revision ID required" });
+        db.deleteSalaryRevision(id);
+        db.logAudit("Revision Deleted", `Salary revision ${id} deleted`, getOperator(req));
+        return res.json({ success: true });
+      }
+      if (action === "update_revision") {
+        const { id, old_salary: old_salary2, new_salary: new_salary2, effective_date: effective_date2, reason: reason2, remarks: remarks2 } = req.body;
+        if (!id) return res.status(400).json({ error: "Revision ID required" });
+        db.updateSalaryRevision(id, { old_salary: old_salary2, new_salary: new_salary2, effective_date: effective_date2, reason: reason2, remarks: remarks2 });
+        db.logAudit("Revision Updated", `Salary revision ${id} updated`, getOperator(req));
+        return res.json({ success: true });
+      }
       const {
         employee_code,
         old_salary,
@@ -29330,26 +29345,6 @@ async function createApp(supabaseAdmin) {
       });
       db.logAudit("Salary Changed", `Salary structures changed for ${emp?.name || employee_code} to \u20B9${Number(new_salary).toLocaleString("en-IN")}`, getOperator(req));
       res.json({ success: true, revision: rev });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.post("/api/revisions/delete", (req, res) => {
-    try {
-      const { id } = req.body;
-      db.deleteSalaryRevision(id);
-      db.logAudit("Revision Deleted", `Salary revision ${id} deleted`, getOperator(req));
-      res.json({ success: true });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-  app.post("/api/revisions/update", (req, res) => {
-    try {
-      const { id, old_salary, new_salary, effective_date, reason, remarks } = req.body;
-      db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
-      db.logAudit("Revision Updated", `Salary revision ${id} updated`, getOperator(req));
-      res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

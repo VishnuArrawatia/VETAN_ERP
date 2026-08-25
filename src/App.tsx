@@ -6841,19 +6841,19 @@ export default function App() {
                                         if (newNew === null) return;
                                         const newDate = prompt('Effective Date:', rev.effective_date);
                                         if (newDate === null) return;
-                                        await fetch('/api/revisions/update', {
+                                        await fetch('/api/revisions', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: rev.id, old_salary: Number(newOld), new_salary: Number(newNew), effective_date: newDate })
+                                          body: JSON.stringify({ action: 'update_revision', id: rev.id, old_salary: Number(newOld), new_salary: Number(newNew), effective_date: newDate })
                                         });
                                         fetchEmployeeProfileData(selectedEmployeeProfile);
                                       }} className="px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-bold rounded hover:bg-blue-100">Edit</button>
                                       <button onClick={async () => {
                                         if (!confirm('Delete this salary revision?')) return;
-                                        await fetch('/api/revisions/delete', {
+                                        await fetch('/api/revisions', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ id: rev.id })
+                                          body: JSON.stringify({ action: 'delete_revision', id: rev.id })
                                         });
                                         fetchEmployeeProfileData(selectedEmployeeProfile);
                                       }} className="px-2 py-1 bg-red-50 text-red-700 text-[9px] font-bold rounded hover:bg-red-100">Delete</button>

@@ -283,6 +283,21 @@ export async function createApp(supabaseAdmin?: any) {
 
   app.post('/api/revisions', (req, res) => {
     try {
+      const { action } = req.body;
+      if (action === 'delete_revision') {
+        const { id } = req.body;
+        if (!id) return res.status(400).json({ error: 'Revision ID required' });
+        db.deleteSalaryRevision(id);
+        db.logAudit('Revision Deleted', `Salary revision ${id} deleted`, getOperator(req));
+        return res.json({ success: true });
+      }
+      if (action === 'update_revision') {
+        const { id, old_salary, new_salary, effective_date, reason, remarks } = req.body;
+        if (!id) return res.status(400).json({ error: 'Revision ID required' });
+        db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
+        db.logAudit('Revision Updated', `Salary revision ${id} updated`, getOperator(req));
+        return res.json({ success: true });
+      }
       const { 
         employee_code, 
         old_salary, 
@@ -338,27 +353,7 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.post('/api/revisions/delete', (req, res) => {
-    try {
-      const { id } = req.body;
-      db.deleteSalaryRevision(id);
-      db.logAudit('Revision Deleted', `Salary revision ${id} deleted`, getOperator(req));
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
 
-  app.post('/api/revisions/update', (req, res) => {
-    try {
-      const { id, old_salary, new_salary, effective_date, reason, remarks } = req.body;
-      db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
-      db.logAudit('Revision Updated', `Salary revision ${id} updated`, getOperator(req));
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
 
   // Employee management with company filter
   app.get('/api/employees', (req, res) => {
