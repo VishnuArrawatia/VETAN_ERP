@@ -4569,6 +4569,32 @@ export default function App() {
                     </span>
                   </div>
 
+                  {(() => {
+                    const currentRun = payrollRuns.find(r => r.month === activeMonth && r.company === activeCompany);
+                    const isPayrollLocked = currentRun && currentRun.status === 'CLOSED';
+                    const isSuperAdmin = activeHR?.role === 'SUPER_HR' || activeHR?.role === 'MANAGEMENT';
+                    return isPayrollLocked ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                        <Lock size={18} className="text-amber-600" />
+                        <div>
+                          <p className="text-xs font-bold text-amber-800">Payroll LOCKED for {activeMonth} — {activeCompany}</p>
+                          <p className="text-[10px] text-amber-600">Attendance editing is locked because salary has been processed. {isSuperAdmin ? 'You can unlock as Super Admin.' : 'Contact Super Admin to unlock.'}</p>
+                        </div>
+                        {isSuperAdmin && (
+                          <button onClick={async () => {
+                            if (!confirm(`Unlock attendance for ${activeMonth} — ${activeCompany}? This will reopen the payroll run.`)) return;
+                            await fetch('/api/payroll-runs/close', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ month: activeMonth, company: activeCompany, action: 'unlock' })
+                            });
+                            fetchPayrollRuns();
+                          }} className="ml-auto px-3 py-1.5 bg-amber-600 text-white text-[10px] font-bold rounded-lg hover:bg-amber-700">Unlock</button>
+                        )}
+                      </div>
+                    ) : null;
+                  })()}
+
                   {attendanceSubTab === 'monthly' ? (
                     <AttendanceSheet 
                       employees={employees}
@@ -6786,12 +6812,14 @@ export default function App() {
                             <th className="p-3">Increment Amount</th>
                             <th className="p-3">Reason / Remarks</th>
                             <th className="p-3">Approved By</th>
+                            {(activeHR?.role === 'SUPER_HR' || activeHR?.role === 'MANAGEMENT') && <th className="p-3">Actions</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {profileRevisions.map(rev => {
                             const hike = rev.new_salary - rev.old_salary;
                             const percentage = rev.old_salary > 0 ? Math.round((hike / rev.old_salary) * 100) : 0;
+                            const isSuperAdmin = activeHR?.role === 'SUPER_HR' || activeHR?.role === 'MANAGEMENT';
                             return (
                               <tr key={rev.id} className="hover:bg-slate-50">
                                 <td className="p-3 font-mono text-[10px] text-gray-400">{rev.id.substring(0, 16)}...</td>
@@ -6803,6 +6831,31 @@ export default function App() {
                                 </td>
                                 <td className="p-3 text-slate-700">{rev.reason}</td>
                                 <td className="p-3 font-medium text-slate-700">{rev.approved_by}</td>
+                                {isSuperAdmin && (
+                                  <td className="p-3">
+                                    <div className="flex gap-1">
+                                      <button onClick={async () => {
+                                        const newOld = prompt('Old Salary:', rev.old_salary);
+                                        if (newOld === null) return;
+                                        const newNew = prompt('New Salary:', rev.new_salary);
+                                        if (newNew === null) return;
+                                        const newDate = prompt('Effective Date:', rev.effective_date);
+                                        if (newDate === null) return;
+                                        await fetch(`/api/revisions/${rev.id}`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ old_salary: Number(newOld), new_salary: Number(newNew), effective_date: newDate })
+                                        });
+                                        fetchEmployeeProfileData(selectedEmployeeProfile);
+                                      }} className="px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-bold rounded hover:bg-blue-100">Edit</button>
+                                      <button onClick={async () => {
+                                        if (!confirm('Delete this salary revision?')) return;
+                                        await fetch(`/api/revisions/${rev.id}`, { method: 'DELETE' });
+                                        fetchEmployeeProfileData(selectedEmployeeProfile);
+                                      }} className="px-2 py-1 bg-red-50 text-red-700 text-[9px] font-bold rounded hover:bg-red-100">Delete</button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}

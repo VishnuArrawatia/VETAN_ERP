@@ -338,6 +338,29 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  app.delete('/api/revisions/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      db.deleteSalaryRevision(id);
+      db.logAudit('Revision Deleted', `Salary revision ${id} deleted`, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.patch('/api/revisions/:id', (req, res) => {
+    try {
+      const { id } = req.params;
+      const { old_salary, new_salary, effective_date, reason, remarks } = req.body;
+      db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
+      db.logAudit('Revision Updated', `Salary revision ${id} updated`, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Employee management with company filter
   app.get('/api/employees', (req, res) => {
     const { company } = req.query as { company?: string };
@@ -1969,8 +1992,19 @@ HR Department`;
 
   app.post('/api/payroll-runs/close', (req, res) => {
     try {
-      const { month, company } = req.body;
+      const { month, company, action } = req.body;
       if (!month) return res.status(400).json({ error: 'Month is required' });
+
+      if (action === 'unlock') {
+        const suffix = company && company !== 'ALL' ? `-${company}` : '';
+        const run = (db as any).data.payroll_runs.find((r: any) => r.month === month && r.id === `RUN-${month}${suffix}`);
+        if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+        run.status = 'DRAFT';
+        (db as any).dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+        (db as any).persistData();
+        db.logAudit('Payroll Unlocked', `Unlocked payroll for ${month} (${company || 'ALL'})`, getOperator(req));
+        return res.json({ success: true });
+      }
 
       const success = db.closePayroll(month, company);
       if (!success) {

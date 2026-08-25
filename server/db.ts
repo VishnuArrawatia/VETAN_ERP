@@ -4126,6 +4126,33 @@ Sakar & SVN Group`;
     return newRev;
   }
 
+  public deleteSalaryRevision(id: string): void {
+    if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    this.data.salary_revisions = this.data.salary_revisions.filter(r => r.id !== id);
+    this.persistData();
+    this.dbSqlite.run(`DELETE FROM salary_revisions WHERE id = ?`, [id], (err: any) => {
+      if (err) console.error('SQLite Sync Error on Salary Revision Delete:', err);
+    });
+  }
+
+  public updateSalaryRevision(id: string, updates: { old_salary?: number; new_salary?: number; effective_date?: string; reason?: string; remarks?: string }): void {
+    if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    const rev = this.data.salary_revisions.find(r => r.id === id);
+    if (!rev) throw new Error('Revision not found');
+    if (updates.old_salary !== undefined) rev.old_salary = Number(updates.old_salary);
+    if (updates.new_salary !== undefined) rev.new_salary = Number(updates.new_salary);
+    if (updates.effective_date !== undefined) rev.effective_date = updates.effective_date;
+    if (updates.reason !== undefined) rev.reason = updates.reason;
+    if (updates.remarks !== undefined) rev.remarks = updates.remarks;
+    rev.increment_amount = Number(rev.new_salary) - Number(rev.old_salary);
+    this.persistData();
+    this.dbSqlite.run(
+      `UPDATE salary_revisions SET old_salary=?, new_salary=?, effective_date=?, reason=?, remarks=?, increment_amount=? WHERE id=?`,
+      [rev.old_salary, rev.new_salary, rev.effective_date, rev.reason, rev.remarks, rev.increment_amount, id],
+      (err: any) => { if (err) console.error('SQLite Sync Error on Salary Revision Update:', err); }
+    );
+  }
+
   // Simple SQL analyzer 
   public querySQL(sql: string): SQLResult {
     const startTime = Date.now();

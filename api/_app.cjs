@@ -4056,6 +4056,33 @@ Sakar & SVN Group`;
     }
     return newRev;
   }
+  deleteSalaryRevision(id) {
+    if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    this.data.salary_revisions = this.data.salary_revisions.filter((r) => r.id !== id);
+    this.persistData();
+    this.dbSqlite.run(`DELETE FROM salary_revisions WHERE id = ?`, [id], (err) => {
+      if (err) console.error("SQLite Sync Error on Salary Revision Delete:", err);
+    });
+  }
+  updateSalaryRevision(id, updates) {
+    if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    const rev = this.data.salary_revisions.find((r) => r.id === id);
+    if (!rev) throw new Error("Revision not found");
+    if (updates.old_salary !== void 0) rev.old_salary = Number(updates.old_salary);
+    if (updates.new_salary !== void 0) rev.new_salary = Number(updates.new_salary);
+    if (updates.effective_date !== void 0) rev.effective_date = updates.effective_date;
+    if (updates.reason !== void 0) rev.reason = updates.reason;
+    if (updates.remarks !== void 0) rev.remarks = updates.remarks;
+    rev.increment_amount = Number(rev.new_salary) - Number(rev.old_salary);
+    this.persistData();
+    this.dbSqlite.run(
+      `UPDATE salary_revisions SET old_salary=?, new_salary=?, effective_date=?, reason=?, remarks=?, increment_amount=? WHERE id=?`,
+      [rev.old_salary, rev.new_salary, rev.effective_date, rev.reason, rev.remarks, rev.increment_amount, id],
+      (err) => {
+        if (err) console.error("SQLite Sync Error on Salary Revision Update:", err);
+      }
+    );
+  }
   // Simple SQL analyzer 
   querySQL(sql) {
     const startTime = Date.now();
@@ -5400,6 +5427,27 @@ async function createApp(supabaseAdmin) {
       });
       db.logAudit("Salary Changed", `Salary structures changed for ${emp?.name || employee_code} to \u20B9${Number(new_salary).toLocaleString("en-IN")}`, getOperator(req));
       res.json({ success: true, revision: rev });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/revisions/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      db.deleteSalaryRevision(id);
+      db.logAudit("Revision Deleted", `Salary revision ${id} deleted`, getOperator(req));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.patch("/api/revisions/:id", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { old_salary, new_salary, effective_date, reason, remarks } = req.body;
+      db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
+      db.logAudit("Revision Updated", `Salary revision ${id} updated`, getOperator(req));
+      res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -6812,8 +6860,18 @@ HR Department`;
   });
   app.post("/api/payroll-runs/close", (req, res) => {
     try {
-      const { month, company } = req.body;
+      const { month, company, action } = req.body;
       if (!month) return res.status(400).json({ error: "Month is required" });
+      if (action === "unlock") {
+        const suffix = company && company !== "ALL" ? `-${company}` : "";
+        const run = db.data.payroll_runs.find((r) => r.month === month && r.id === `RUN-${month}${suffix}`);
+        if (!run) return res.status(404).json({ error: "Payroll run not found" });
+        run.status = "DRAFT";
+        db.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+        db.persistData();
+        db.logAudit("Payroll Unlocked", `Unlocked payroll for ${month} (${company || "ALL"})`, getOperator(req));
+        return res.json({ success: true });
+      }
       const success = db.closePayroll(month, company);
       if (!success) {
         return res.status(404).json({ error: "Payroll run draft not found" });
