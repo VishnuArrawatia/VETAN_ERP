@@ -73,6 +73,86 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // Parse body manually since bodyParser: false
+  let body: any = req.body;
+  if (!body && (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT')) {
+    try {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const raw = Buffer.concat(chunks).toString('utf-8');
+      if (raw) body = JSON.parse(raw);
+      req.body = body;
+    } catch (_) {}
+  }
+
+  // Handle salary revision actions before Express routing
+  if (req.url === '/api/revisions' && req.method === 'POST' && body) {
+    const { action } = body;
+    if (action === 'delete_revision' && body.id) {
+      try {
+        if (dbRef && typeof dbRef.deleteSalaryRevision === 'function') {
+          dbRef.deleteSalaryRevision(body.id);
+          return res.json({ success: true });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+    if (action === 'update_revision' && body.id) {
+      try {
+        if (dbRef && typeof dbRef.updateSalaryRevision === 'function') {
+          dbRef.updateSalaryRevision(body.id, {
+            old_salary: body.old_salary,
+            new_salary: body.new_salary,
+            effective_date: body.effective_date,
+            reason: body.reason,
+            remarks: body.remarks
+          });
+          return res.json({ success: true });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+    // Handle payroll unlock
+    if (body.action === 'unlock') {
+      try {
+        if (dbRef && dbRef.data && dbRef.data.payroll_runs) {
+          const { month, company } = body;
+          const suffix = company && company !== 'ALL' ? `-${company}` : '';
+          const run = dbRef.data.payroll_runs.find((r: any) => r.month === month && r.id === `RUN-${month}${suffix}`);
+          if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+          run.status = 'DRAFT';
+          if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+          if (typeof dbRef.persistData === 'function') dbRef.persistData();
+          return res.json({ success: true });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+  }
+
+  // Also handle payroll unlock for /api/payroll-runs/close
+  if (req.url === '/api/payroll-runs/close' && req.method === 'POST' && body) {
+    const { action, month, company } = body;
+    if (action === 'unlock') {
+      try {
+        if (dbRef && dbRef.data && dbRef.data.payroll_runs) {
+          const suffix = company && company !== 'ALL' ? `-${company}` : '';
+          const run = dbRef.data.payroll_runs.find((r: any) => r.month === month && r.id === `RUN-${month}${suffix}`);
+          if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+          run.status = 'DRAFT';
+          if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+          if (typeof dbRef.persistData === 'function') dbRef.persistData();
+          return res.json({ success: true });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+  }
+
   return app(req, res);
 }
 
