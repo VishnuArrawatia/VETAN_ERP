@@ -71,11 +71,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // ── Action interceptors (before Express) ──
+  // Vercel may cache api/index.ts with old code. These interceptors
+  // handle critical actions before Express routing.
+  const body: any = req.body;
+  if (req.method === 'POST' && body && typeof body.action === 'string') {
+
+    if (body.action === 'delete_revision' && body.id) {
+      try {
+        if (dbRef && typeof dbRef.deleteSalaryRevision === 'function') {
+          dbRef.deleteSalaryRevision(body.id);
+          return res.json({ success: true, action: 'deleted' });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    if (body.action === 'update_revision' && body.id) {
+      try {
+        if (dbRef && typeof dbRef.updateSalaryRevision === 'function') {
+          dbRef.updateSalaryRevision(body.id, {
+            old_salary: body.old_salary,
+            new_salary: body.new_salary,
+            effective_date: body.effective_date,
+            reason: body.reason,
+            remarks: body.remarks,
+          });
+          return res.json({ success: true, action: 'updated' });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    if (body.action === 'unlock_payroll' && body.month) {
+      try {
+        if (dbRef && dbRef.data && dbRef.data.payroll_runs) {
+          const { month, company } = body;
+          const suffix = company && company !== 'ALL' ? `-${company}` : '';
+          const run = dbRef.data.payroll_runs.find(
+            (r: any) => r.month === month && r.id === `RUN-${month}${suffix}`
+          );
+          if (!run) return res.status(404).json({ error: 'Payroll run not found' });
+          run.status = 'DRAFT';
+          if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+          if (typeof dbRef.persistData === 'function') dbRef.persistData();
+          return res.json({ success: true, action: 'unlocked' });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+  }
+
   return app(req, res);
 }
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: true,
   },
 };
