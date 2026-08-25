@@ -284,6 +284,7 @@ export async function createApp(supabaseAdmin?: any) {
   app.post('/api/revisions', (req, res) => {
     try {
       const { action } = req.body;
+      console.log('[REVISIONS] action=', action, 'body_keys=', Object.keys(req.body || {}));
       if (action === 'delete_revision') {
         const { id } = req.body;
         if (!id) return res.status(400).json({ error: 'Revision ID required' });
