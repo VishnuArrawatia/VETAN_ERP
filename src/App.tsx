@@ -139,7 +139,8 @@ const SIMULATED_HR_USERS = [
     name: 'Indraprakash',
     title: 'HR Officer (Sakar Unit III)',
     role: 'COMPANY_HR',
-    company_rights: ['Sakar-III']
+    company_rights: ['Sakar-III'],
+    photo: '/indraprakash-photo.png'
   },
   {
     id: 'USR007',
