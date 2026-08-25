@@ -4583,10 +4583,10 @@ export default function App() {
                         {isSuperAdmin && (
                           <button onClick={async () => {
                             if (!confirm(`Unlock attendance for ${activeMonth} — ${activeCompany}? This will reopen the payroll run.`)) return;
-                            await fetch('/api/payroll-runs/close', {
+                            await fetch('/api/action', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ month: activeMonth, company: activeCompany, action: 'unlock' })
+                              body: JSON.stringify({ action: 'unlock_payroll', month: activeMonth, company: activeCompany })
                             });
                             fetchPayrollRuns();
                           }} className="ml-auto px-3 py-1.5 bg-amber-600 text-white text-[10px] font-bold rounded-lg hover:bg-amber-700">Unlock</button>
@@ -6841,7 +6841,7 @@ export default function App() {
                                         if (newNew === null) return;
                                         const newDate = prompt('Effective Date:', rev.effective_date);
                                         if (newDate === null) return;
-                                        await fetch('/api/revisions', {
+                                        await fetch('/api/action', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ action: 'update_revision', id: rev.id, old_salary: Number(newOld), new_salary: Number(newNew), effective_date: newDate })
@@ -6850,7 +6850,7 @@ export default function App() {
                                       }} className="px-2 py-1 bg-blue-50 text-blue-700 text-[9px] font-bold rounded hover:bg-blue-100">Edit</button>
                                       <button onClick={async () => {
                                         if (!confirm('Delete this salary revision?')) return;
-                                        await fetch('/api/revisions', {
+                                        await fetch('/api/action', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ action: 'delete_revision', id: rev.id })
