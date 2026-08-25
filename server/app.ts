@@ -338,9 +338,9 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.delete('/api/revisions/:id', (req, res) => {
+  app.post('/api/revisions/delete', (req, res) => {
     try {
-      const { id } = req.params;
+      const { id } = req.body;
       db.deleteSalaryRevision(id);
       db.logAudit('Revision Deleted', `Salary revision ${id} deleted`, getOperator(req));
       res.json({ success: true });
@@ -349,10 +349,9 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.patch('/api/revisions/:id', (req, res) => {
+  app.post('/api/revisions/update', (req, res) => {
     try {
-      const { id } = req.params;
-      const { old_salary, new_salary, effective_date, reason, remarks } = req.body;
+      const { id, old_salary, new_salary, effective_date, reason, remarks } = req.body;
       db.updateSalaryRevision(id, { old_salary, new_salary, effective_date, reason, remarks });
       db.logAudit('Revision Updated', `Salary revision ${id} updated`, getOperator(req));
       res.json({ success: true });
