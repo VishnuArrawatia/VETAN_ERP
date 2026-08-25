@@ -3252,11 +3252,11 @@ export default function App() {
                                         <span className="text-[10px] text-slate-400 font-mono">{rev.employee_code}</span>
                                       </td>
                                       <td className="p-3 font-mono font-bold text-slate-700">{rev.effective_date}</td>
-                                      <td className="p-3 font-mono">₹{rev.old_salary.toLocaleString('en-IN')}</td>
-                                      <td className="p-3 font-mono font-bold text-slate-900">₹{rev.new_salary.toLocaleString('en-IN')}</td>
+                                      <td className="p-3 font-mono">₹{(rev.old_salary || 0).toLocaleString('en-IN')}</td>
+                                      <td className="p-3 font-mono font-bold text-slate-900">₹{(rev.new_salary || 0).toLocaleString('en-IN')}</td>
                                       <td className="p-3">
                                         <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full font-mono font-black text-[10px]">
-                                          +{pct}% (₹{diff.toLocaleString('en-IN')})
+                                          +{pct}% (₹{(diff || 0).toLocaleString('en-IN')})
                                         </span>
                                       </td>
                                       <td className="p-3 text-slate-500 italic max-w-xs truncate">{rev.reason}</td>
@@ -4478,8 +4478,8 @@ export default function App() {
 
                                 <td className="p-4 font-mono font-bold text-slate-700">
                                   <div>
-                                    <span>₹{emp.base_salary.toLocaleString('en-IN')}/mo</span>
-                                    <p className="text-[9px] text-gray-400 block mt-0.5">Gross rates: ₹{emp.base_salary + emp.hra + emp.special_allowance + (emp.conveyance_allowance || 0) + (emp.medical_allowance || 0) + (emp.edu_allowance || 0)}</p>
+                                    <span>₹{(emp.base_salary || 0).toLocaleString('en-IN')}/mo</span>
+                                    <p className="text-[9px] text-gray-400 block mt-0.5">Gross rates: ₹{(emp.base_salary || 0) + (emp.hra || 0) + (emp.special_allowance || 0) + (emp.conveyance_allowance || 0) + (emp.medical_allowance || 0) + (emp.edu_allowance || 0)}</p>
                                   </div>
                                 </td>
 
@@ -6824,10 +6824,10 @@ export default function App() {
                               <tr key={rev.id} className="hover:bg-slate-50">
                                 <td className="p-3 font-mono text-[10px] text-gray-400">{rev.id.substring(0, 16)}...</td>
                                 <td className="p-3 font-medium text-slate-800">{rev.effective_date}</td>
-                                <td className="p-3 font-mono text-slate-500">₹{rev.old_salary.toLocaleString('en-IN')}</td>
-                                <td className="p-3 font-mono text-slate-800 font-bold">₹{rev.new_salary.toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono text-slate-500">₹{(rev.old_salary || 0).toLocaleString('en-IN')}</td>
+                                <td className="p-3 font-mono text-slate-800 font-bold">₹{(rev.new_salary || 0).toLocaleString('en-IN')}</td>
                                 <td className="p-3 font-mono text-emerald-650 font-bold text-emerald-600">
-                                  +₹{hike.toLocaleString('en-IN')} ({percentage}%)
+                                  +₹{(hike || 0).toLocaleString('en-IN')} ({percentage}%)
                                 </td>
                                 <td className="p-3 text-slate-700">{rev.reason}</td>
                                 <td className="p-3 font-medium text-slate-700">{rev.approved_by}</td>
