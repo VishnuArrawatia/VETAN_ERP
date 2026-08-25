@@ -12,8 +12,6 @@ let dbRef: any = null;
 
 async function ensureInit() {
   if (app) {
-    // Warm start: reload data from Supabase to ensure mutations from other
-    // serverless invocations are visible.
     try {
       if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
         await dbRef.reloadFromSupabase();
@@ -48,7 +46,21 @@ async function ensureInit() {
   }
 }
 
+/** Read the request body as a parsed JSON object. */
+async function readBody(req: VercelRequest): Promise<any> {
+  // If Vercel already parsed the body, return it directly.
+  if (req.body && typeof req.body === 'object') return req.body;
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req as any) chunks.push(chunk);
+    const raw = Buffer.concat(chunks).toString('utf-8');
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return {};
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
@@ -57,11 +69,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end();
   }
 
+  // Resolve the original URL from the x-matched-path header (Vercel rewrites).
   const matchedPath = req.headers['x-matched-path'] as string | undefined;
   if (matchedPath && matchedPath !== req.url) {
     req.url = matchedPath;
   }
 
+  // Ensure the Express app + database are initialised.
   try {
     await ensureInit();
   } catch (err: any) {
@@ -73,29 +87,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // Parse body manually since bodyParser: false
-  let body: any = req.body;
-  if (!body && (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT')) {
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const raw = Buffer.concat(chunks).toString('utf-8');
-      if (raw) body = JSON.parse(raw);
-      req.body = body;
-    } catch (_) {}
-  }
+  // ── Action interceptors ──────────────────────────────────────────────
+  // Some actions are handled *before* Express routing so they work even
+  // when the bundled _app.cjs is stale from a Vercel function cache hit.
 
-  // Debug endpoint to verify deployment
-  const reqUrl = (req as any).originalUrl || req.url || '';
-  if (reqUrl.includes('__debug/version') || req.url?.includes('__debug/version')) {
-    return res.json({ version: '4.0-action-handlers', timestamp: new Date().toISOString() });
-  }
+  const body = await readBody(req);
+  if (body) req.body = body;            // ensure Express can also read it
 
-  // Handle salary revision actions before Express routing
-  // Check both req.url and body for action
-  if (body && body.action && body.action === 'delete_revision' && body.id) {
-    const { action } = body;
-    if (action === 'delete_revision' && body.id) {
+  if (req.method === 'POST' && body && typeof body.action === 'string') {
+
+    // Delete salary revision
+    if (body.action === 'delete_revision' && body.id) {
       try {
         if (dbRef && typeof dbRef.deleteSalaryRevision === 'function') {
           dbRef.deleteSalaryRevision(body.id);
@@ -105,7 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: e.message });
       }
     }
-    if (action === 'update_revision' && body.id) {
+
+    // Update salary revision
+    if (body.action === 'update_revision' && body.id) {
       try {
         if (dbRef && typeof dbRef.updateSalaryRevision === 'function') {
           dbRef.updateSalaryRevision(body.id, {
@@ -113,7 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             new_salary: body.new_salary,
             effective_date: body.effective_date,
             reason: body.reason,
-            remarks: body.remarks
+            remarks: body.remarks,
           });
           return res.json({ success: true });
         }
@@ -121,16 +125,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: e.message });
       }
     }
-    // Handle payroll unlock (from revisions endpoint)
-    if (body.action === 'unlock') {
+
+    // Unlock a closed payroll run
+    if (body.action === 'unlock' && body.month) {
       try {
         if (dbRef && dbRef.data && dbRef.data.payroll_runs) {
           const { month, company } = body;
           const suffix = company && company !== 'ALL' ? `-${company}` : '';
-          const run = dbRef.data.payroll_runs.find((r: any) => r.month === month && r.id === `RUN-${month}${suffix}`);
+          const run = dbRef.data.payroll_runs.find(
+            (r: any) => r.month === month && r.id === `RUN-${month}${suffix}`
+          );
           if (!run) return res.status(404).json({ error: 'Payroll run not found' });
           run.status = 'DRAFT';
-          if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
+          if (dbRef.dbSqlite)
+            dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
           if (typeof dbRef.persistData === 'function') dbRef.persistData();
           return res.json({ success: true });
         }
@@ -140,24 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Also handle payroll unlock for /api/payroll-runs/close
-  if (body && body.action === 'unlock' && body.month) {
-    try {
-      if (dbRef && dbRef.data && dbRef.data.payroll_runs) {
-        const { month, company } = body;
-        const suffix = company && company !== 'ALL' ? `-${company}` : '';
-        const run = dbRef.data.payroll_runs.find((r: any) => r.month === month && r.id === `RUN-${month}${suffix}`);
-        if (!run) return res.status(404).json({ error: 'Payroll run not found' });
-        run.status = 'DRAFT';
-        if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
-        if (typeof dbRef.persistData === 'function') dbRef.persistData();
-        return res.json({ success: true });
-      }
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  }
-
+  // ── Fall through to Express ──────────────────────────────────────────
   return app(req, res);
 }
 
@@ -166,4 +157,3 @@ export const config = {
     bodyParser: false,
   },
 };
-// force redeploy Tue Aug 25 19:41:33 IST 2026
