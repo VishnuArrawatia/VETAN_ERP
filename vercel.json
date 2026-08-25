@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx esbuild server/app.ts --bundle --platform=node --format=cjs --outfile=api/_app.cjs --external:sqlite3 --external:xlsx --external:nodemailer --external:@google/genai && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
