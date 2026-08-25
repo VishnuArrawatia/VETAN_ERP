@@ -106,7 +106,8 @@ const SIMULATED_HR_USERS = [
     name: 'Mr. V. K. Saraf (MD)',
     title: 'Managing Director',
     role: 'MANAGEMENT',
-    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1']
+    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'],
+    photo: '/md-photo.png'
   },
   {
     id: 'USR003',
@@ -2477,6 +2478,9 @@ export default function App() {
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer select-none flex items-center gap-1.5 ${isActive ? 'bg-slate-900 text-white shadow-xs' : 'bg-gray-100 hover:bg-gray-200 text-slate-700'}`}
                       >
+                        {(usr as any).photo ? (
+                          <img src={(usr as any).photo} alt={usr.name} className="w-5 h-5 rounded-full object-cover ring-1 ring-white/20" />
+                        ) : null}
                         <span>{usr.name}</span>
                         <span className="text-[9px] opacity-75 font-mono">({usr.role === 'SUPER_HR' ? 'Super' : 'Unit'})</span>
                       </button>
@@ -2486,6 +2490,9 @@ export default function App() {
               </>
             ) : (
               <div className="flex items-center gap-2">
+                {(activeHR as any).photo && (
+                  <img src={(activeHR as any).photo} alt={activeHR.name} className="w-7 h-7 rounded-full object-cover ring-2 ring-emerald-400 shadow-sm" />
+                )}
                 <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold border border-emerald-100 flex items-center gap-1.5">
                   <ShieldCheck size={13} />
                   Logged in as: <strong className="font-extrabold">{activeHR.name}</strong> ({activeHR.title})
@@ -2519,10 +2526,33 @@ export default function App() {
           
           {/* Active simulated credentials badge */}
           <div className="bg-white border rounded-2xl p-4 space-y-3.5 shadow-xs">
+            {/* Profile Photo + Info */}
             <div className="border-b pb-3">
-              <span className="text-[9px] uppercase font-mono font-bold text-gray-400 tracking-wider">Active HR Specialist Profile</span>
-              <h4 className="font-bold text-xs text-slate-900 font-display block mt-1">{activeHR.name}</h4>
-              <p className="text-[10px] text-gray-400">{activeHR.title} • {activeHR.role}</p>
+              {(activeHR as any).photo ? (
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="relative">
+                    <div className="w-[60px] h-[60px] rounded-full overflow-hidden border-3 border-white shadow-lg shadow-pink-400/20 ring-2 ring-pink-400">
+                      <img 
+                        src={(activeHR as any).photo} 
+                        alt={activeHR.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-white"></div>
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[8px] uppercase font-mono font-bold text-pink-500 tracking-wider">Management Profile</span>
+                    <h4 className="font-bold text-[11px] text-slate-900 font-display block leading-tight">{activeHR.name}</h4>
+                    <p className="text-[9px] text-gray-400">{activeHR.title}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <span className="text-[9px] uppercase font-mono font-bold text-gray-400 tracking-wider">Active HR Specialist Profile</span>
+                  <h4 className="font-bold text-xs text-slate-900 font-display block mt-1">{activeHR.name}</h4>
+                  <p className="text-[10px] text-gray-400">{activeHR.title} • {activeHR.role}</p>
+                </>
+              )}
             </div>
 
             <div className="space-y-2">

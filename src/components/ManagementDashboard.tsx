@@ -354,9 +354,24 @@ export default function ManagementDashboard({
         <aside className="w-full lg:w-64 flex flex-col gap-4 select-none shrink-0">
           
           <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <span className="text-[9px] uppercase font-mono font-bold text-slate-500 tracking-wider block">Logged in Director</span>
-            <strong className="text-xs text-slate-100 block mt-1 font-display">Mr. V. K. Saraf</strong>
-            <p className="text-[9px] text-indigo-400 font-semibold uppercase tracking-wider mt-0.5 font-mono">Managing Director</p>
+            {/* Director Photo + Info */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative">
+                <div className="w-[52px] h-[52px] rounded-full overflow-hidden ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-500/20">
+                  <img 
+                    src="/md-photo.png" 
+                    alt="Mr. V. K. Saraf"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-950"></div>
+              </div>
+              <div className="flex-1">
+                <span className="text-[8px] uppercase font-mono font-bold text-indigo-400 tracking-wider block">Logged in Director</span>
+                <strong className="text-[11px] text-slate-100 block mt-0.5 font-display">Mr. V. K. Saraf</strong>
+                <p className="text-[8px] text-indigo-400 font-semibold uppercase tracking-wider mt-0.5 font-mono">Managing Director</p>
+              </div>
+            </div>
           </div>
 
           {/* Core Tab Navigation */}
