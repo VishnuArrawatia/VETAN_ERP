@@ -17927,7 +17927,7 @@ var require_finalhandler = __commonJS({
     module2.exports = finalhandler;
     function finalhandler(req, res, options) {
       var opts = options || {};
-      var env = opts.env || process.env.NODE_ENV || "development";
+      var env = opts.env || "production";
       var onerror = opts.onerror;
       return function(err) {
         var headers;
@@ -21958,7 +21958,7 @@ var require_application = __commonJS({
       this.defaultConfiguration();
     };
     app.defaultConfiguration = function defaultConfiguration() {
-      var env = process.env.NODE_ENV || "development";
+      var env = "production";
       this.enable("x-powered-by");
       this.set("etag", "weak");
       this.set("env", env);

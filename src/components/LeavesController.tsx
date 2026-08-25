@@ -14,7 +14,8 @@ import {
   Plus, 
   Share2, 
   Mail, 
-  MessageSquare, 
+  MessageSquare,
+  Info, 
   Check,
   Building,
   User,
@@ -78,7 +79,11 @@ export default function LeavesController({ employees, applications, attendance, 
   }, [startDate, endDate, isHalfDay]);
 
   const activeEmployees = employees.filter(e => activeCompany === 'ALL' || e.company === activeCompany);
-  const filteredApps = applications.filter(a => activeCompany === 'ALL' || a.company === activeCompany);
+  // HR sees PENDING, PENDING_HR, APPROVED, REJECTED — NOT PENDING_HOD (HOD handles those via Employee ESS)
+  const filteredApps = applications.filter(a => {
+    if (activeCompany !== 'ALL' && a.company !== activeCompany) return false;
+    return a.status !== 'PENDING_HOD';
+  });
 
   const handleCreateLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,6 +233,15 @@ export default function LeavesController({ employees, applications, attendance, 
             <Plus size={14} />
             File Leave Entry
           </button>
+        </div>
+
+        {/* Workflow info banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-start gap-2.5">
+          <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-blue-700 leading-relaxed">
+            <strong>Leave Workflow:</strong> Employee applies &rarr; <strong>HOD approves</strong> (via Employee ESS) &rarr; <strong>HR final approval</strong> (here). 
+            Leaves pending HOD approval are handled by the reporting HOD through the Employee ESS portal. Only leaves approved by HOD appear here for your final approval.
+          </p>
         </div>
 
         {/* Persistent Leave Policy rules overview */}

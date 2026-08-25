@@ -87,6 +87,7 @@ import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
+import WorkforceModule from './components/WorkforceModule';
 import { fetchJsonWithOfflineFallback, filterEmployeesByCompany } from './lib/offlineStore';
 
 // Define simulated HR Users & Powers
@@ -242,7 +243,7 @@ export default function App() {
     }
   }, [loggedInEmployee]);
   const [activeMonth, setActiveMonth] = useState('2026-05');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
@@ -1518,8 +1519,8 @@ export default function App() {
         id,
         actorRole: 'COMPANY_HR',
         action: status,
-        actorId: 'HR',
-        override: req?.status === 'PENDING_HOD' // Allow HR override if HOD status is pending
+        actorId: 'HR'
+        // No override: HOD step cannot be skipped by HR. PENDING_HOD corrections handled by HOD via Employee ESS.
       };
 
       const res = await fetch('/api/attendance/corrections/workflow', {
@@ -2096,15 +2097,16 @@ export default function App() {
   const handleUpdateLeaveStatus = async (id: string, status: 'APPROVED' | 'REJECTED'): Promise<boolean> => {
     try {
       const app = leaveApps.find(a => a.id === id);
-      const isWorkflow = app && (app.status === 'PENDING_HR' || app.status === 'PENDING_HOD');
+      // HR workflow: only PENDING_HR leaves are visible to HR. PENDING_HOD leaves are handled by HOD via Employee ESS.
+      const isWorkflow = app && app.status === 'PENDING_HR';
       
       const endpoint = isWorkflow ? '/api/leaves/workflow' : '/api/leaves/status';
       const body = isWorkflow ? {
         id,
         actorRole: 'COMPANY_HR',
         action: status === 'APPROVED' ? 'APPROVE' : 'REJECT',
-        actorId: 'HR',
-        override: app.status === 'PENDING_HOD' // HR override if approved/rejected directly when pending HOD
+        actorId: 'HR'
+        // No override: HR only approves PENDING_HR. HOD step cannot be skipped.
       } : { id, status };
 
       const res = await fetch(endpoint, {
@@ -2616,6 +2618,15 @@ export default function App() {
             >
               <span>Factory Gate Pass</span>
               <ArrowRightLeft size={14} />
+            </button>
+
+            <button
+              id="sidebar-tab-workforce"
+              onClick={() => setActiveTab('workforce')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='workforce' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
+            >
+              <span>Workforce Module</span>
+              <Users size={14} />
             </button>
 
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-3 pt-2.5 pb-1 block">Comp & Benefits</span>
@@ -4835,6 +4846,23 @@ export default function App() {
               {/* BUSINESS LOGIC COMPLIANCE VAULT */}
               {activeTab === 'vault' && (
                 <BusinessLogicVault activeOperator={activeHR} />
+              )}
+
+              {/* WORKFORCE MODULE */}
+              {activeTab === 'workforce' && (
+                <WorkforceModule
+                  employees={employees}
+                  attendance={attendance}
+                  activeCompany={activeCompany}
+                  activeHR={activeHR}
+                  activeMonth={activeMonth}
+                  setActiveMonth={setActiveMonth}
+                  successBanner={successBanner}
+                  setSuccessBanner={setSuccessBanner}
+                  errorBanner={errorBanner}
+                  setErrorBanner={setErrorBanner}
+                  onRefresh={() => { fetchEmployees(); }}
+                />
               )}
 
             </motion.div>
