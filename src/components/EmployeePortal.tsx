@@ -985,7 +985,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                     </div>
                     <div className="text-left">
                       <span className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">WORK SCHEDULE</span>
-                      <strong className="text-xs text-slate-100 block font-mono">{employee.shift_timing || '9:30 AM to 6:30 PM'}</strong>
+                      <strong className="text-xs text-slate-100 block font-mono">{employee.shift_timing || '9:00 AM to 6:30 PM'}</strong>
                     </div>
                   </div>
                 </div>
@@ -1521,7 +1521,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                   <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest block">ACTIVE COMPANY WORK SCHEDULE</span>
                   <div className="flex items-center gap-2 text-slate-900 font-extrabold text-sm">
                     <Clock size={16} className="text-emerald-600 animate-pulse" />
-                    <span>{employee.shift_timing || '9:30 AM to 6:30 PM'}</span>
+                    <span>{employee.shift_timing || '9:00 AM to 6:30 PM'}</span>
                   </div>
                   <p className="text-[10px] text-emerald-700/80 font-semibold leading-relaxed">Please ensure you verify your bio-attendance against this timetable to ensure correct salary calculations.</p>
                 </div>
@@ -3024,7 +3024,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                   </div>
                   <div>
                     <span className="text-gray-400 font-semibold block text-[9px] uppercase">Work Shift Timing</span>
-                    <strong className="text-slate-950 font-sans">{employee.shift_timing || '9:30 AM to 6:30 PM'}</strong>
+                    <strong className="text-slate-950 font-sans">{employee.shift_timing || '9:00 AM to 6:30 PM'}</strong>
                   </div>
                   <div>
                     <span className="text-gray-400 font-semibold block text-[9px] uppercase">Disbursement Status</span>

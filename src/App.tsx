@@ -5437,7 +5437,7 @@ export default function App() {
                               <span className="text-[10px] text-amber-800 font-bold uppercase mr-1 sm:ml-2">Quick Presets:</span>
                               {[
                                 '8:00 AM to 5:30 PM',
-                                '9:30 AM to 6:30 PM',
+                                '9:00 AM to 6:30 PM',
                                 '8:00 AM to 8:00 PM'
                               ].map((preset) => (
                                 <button
@@ -6498,7 +6498,7 @@ export default function App() {
                               <span className="text-[10px] text-amber-800 font-bold uppercase mr-1 sm:ml-2">Quick Presets:</span>
                               {[
                                 '8:00 AM to 5:30 PM',
-                                '9:30 AM to 6:30 PM',
+                                '9:00 AM to 6:30 PM',
                                 '8:00 AM to 8:00 PM'
                               ].map((preset) => (
                                 <button

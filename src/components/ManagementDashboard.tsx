@@ -1182,7 +1182,7 @@ export default function ManagementDashboard({
                           <td className="p-3">{emp.designation}</td>
                           <td className="p-3">{emp.department}</td>
                           <td className="p-3 font-mono font-bold text-slate-400">{emp.company}</td>
-                          <td className="p-3 text-slate-400 font-mono text-[10px]">{emp.shift_timing || '9:30 AM to 6:30 PM'}</td>
+                          <td className="p-3 text-slate-400 font-mono text-[10px]">{emp.shift_timing || '9:00 AM to 6:30 PM'}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
                               emp.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
