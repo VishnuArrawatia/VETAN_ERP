@@ -98,7 +98,8 @@ const SIMULATED_HR_USERS = [
     name: 'Vishnu Arrawatia',
     title: 'Company Management',
     role: 'SUPER_HR',
-    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1']
+    company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'],
+    photo: '/vishnu-photo.png'
   },
   {
     id: 'USR002',
