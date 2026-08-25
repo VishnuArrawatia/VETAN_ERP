@@ -87,7 +87,7 @@ import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
-import WorkforceModule from './components/WorkforceModule';
+// import WorkforceModule from './components/WorkforceModule'; // TODO: Commit WorkforceModule.tsx first
 import { fetchJsonWithOfflineFallback, filterEmployeesByCompany } from './lib/offlineStore';
 
 // Define simulated HR Users & Powers
@@ -4917,8 +4917,8 @@ export default function App() {
                 <BusinessLogicVault activeOperator={activeHR} />
               )}
 
-              {/* WORKFORCE MODULE */}
-              {activeTab === 'workforce' && (
+              {/* WORKFORCE MODULE - commented out until WorkforceModule.tsx is committed to git */}
+              {/* activeTab === 'workforce' && (
                 <WorkforceModule
                   employees={employees}
                   attendance={attendance}
@@ -4932,7 +4932,7 @@ export default function App() {
                   setErrorBanner={setErrorBanner}
                   onRefresh={() => { fetchEmployees(); }}
                 />
-              )}
+              ) */}
 
             </motion.div>
           </AnimatePresence>
