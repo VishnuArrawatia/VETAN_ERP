@@ -3937,6 +3937,7 @@ export class PayrollDatabase {
       }
     });
 
+    this.persistData();
     return newRun;
   }
 

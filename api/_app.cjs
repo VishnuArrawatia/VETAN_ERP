@@ -3894,6 +3894,7 @@ var PayrollDatabase = class {
         );
       }
     });
+    this.persistData();
     return newRun;
   }
   closePayroll(month, companyFilter) {
