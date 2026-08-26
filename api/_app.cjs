@@ -27862,6 +27862,15 @@ Sakar & SVN Group`;
       notifications
     };
   }
+  // Mark individual payslip as PAID
+  markPayslipPaid(payslipId, paymentDate) {
+    const slip = this.data.payslips.find((s) => s.id === payslipId);
+    if (!slip) return false;
+    slip.payment_status = "PAID";
+    slip.payment_date = paymentDate;
+    this.dbSqlite.run(`UPDATE payslips SET payment_status = 'PAID', payment_date = ? WHERE id = ?`, [paymentDate, payslipId]);
+    return true;
+  }
   // Company Master Module methods
   getCompanies() {
     if (!this.data.companies) this.data.companies = [];
@@ -30787,6 +30796,19 @@ HR Department`;
       const result = db.payPayslips(month, company, paymentDate);
       db.logAudit("Payroll Paid", `Disbursed and sent salary notifications to ${result.count} employees for month ${month} (${company || "ALL"})`, getOperator(req));
       res.json(result);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/payslips/:id/mark-paid", (req, res) => {
+    try {
+      const { id } = req.params;
+      const { paymentDate } = req.body;
+      if (!id) return res.status(400).json({ error: "Payslip ID required" });
+      const payDate = paymentDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      db.markPayslipPaid(id, payDate);
+      db.logAudit("Salary Paid", `Marked payslip ${id} as PAID on ${payDate}`, getOperator(req));
+      res.json({ success: true, payslipId: id, paymentDate: payDate });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

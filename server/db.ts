@@ -4011,6 +4011,16 @@ Sakar & SVN Group`;
     };
   }
 
+  // Mark individual payslip as PAID
+  public markPayslipPaid(payslipId: string, paymentDate: string): boolean {
+    const slip = this.data.payslips.find(s => s.id === payslipId);
+    if (!slip) return false;
+    slip.payment_status = 'PAID';
+    slip.payment_date = paymentDate;
+    this.dbSqlite.run(`UPDATE payslips SET payment_status = 'PAID', payment_date = ? WHERE id = ?`, [paymentDate, payslipId]);
+    return true;
+  }
+
   // Company Master Module methods
   public getCompanies(): CompanyMaster[] {
     if (!this.data.companies) this.data.companies = [];

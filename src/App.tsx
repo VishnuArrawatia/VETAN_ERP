@@ -248,7 +248,7 @@ export default function App() {
   const [activeMonth, setActiveMonth] = useState('2026-05');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy'>('lifecycle');
-  const [attendanceSubTab, setAttendanceSubTab] = useState<'monthly' | 'yearly' | 'corrections'>('monthly');
+  const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
   const [loadingCorrections, setLoadingCorrections] = useState(false);
 
@@ -4546,6 +4546,12 @@ export default function App() {
                   <div className="flex border-b border-gray-150 gap-4 pb-2 items-center justify-between">
                     <div className="flex gap-2">
                       <button
+                        onClick={() => setAttendanceSubTab('daily')}
+                        className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer select-none ${attendanceSubTab === 'daily' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                      >
+                        📋 Today's Attendance
+                      </button>
+                      <button
                         onClick={() => setAttendanceSubTab('monthly')}
                         className={`px-4 py-2 text-xs font-bold rounded-xl transition cursor-pointer select-none ${attendanceSubTab === 'monthly' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
                       >
@@ -4595,7 +4601,81 @@ export default function App() {
                     ) : null;
                   })()}
 
-                  {attendanceSubTab === 'monthly' ? (
+                  {attendanceSubTab === 'daily' ? (
+                    <div className="bg-white p-6 border border-slate-200/80 rounded-3xl shadow-sm space-y-6">
+                      <div className="border-b pb-3">
+                        <h3 className="font-extrabold text-slate-950 text-sm flex items-center gap-2">
+                          📋 Today's Attendance — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </h3>
+                        <p className="text-slate-400 text-xs mt-0.5">Quick daily view: who's present, absent, on leave, or has single punch</p>
+                      </div>
+                      {(() => {
+                        const unitEmployees = employees.filter(e => (activeCompany === 'GROUP' || activeCompany === 'COMBINED') || e.company === activeCompany);
+                        const activeEmps = unitEmployees.filter(e => e.status === 'ACTIVE');
+                        const todayAtt = attendance.filter(a => a.employee_id && activeEmps.some(e => e.id === a.employee_id));
+                        const presentEmps = todayAtt.filter(a => (a.present || 0) > 0);
+                        const absentEmps = todayAtt.filter(a => (a.absent || 0) > 0 && (a.leave || 0) === 0);
+                        const onLeave = todayAtt.filter(a => (a.leave || 0) > 0);
+                        const noData = activeEmps.filter(e => !todayAtt.some(a => a.employee_id === e.id));
+                        return (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+                                <p className="text-2xl font-black text-emerald-700">{presentEmps.length}</p>
+                                <p className="text-[10px] font-bold text-emerald-600 uppercase">Present</p>
+                              </div>
+                              <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 text-center">
+                                <p className="text-2xl font-black text-rose-700">{absentEmps.length}</p>
+                                <p className="text-[10px] font-bold text-rose-600 uppercase">Absent</p>
+                              </div>
+                              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-center">
+                                <p className="text-2xl font-black text-amber-700">{onLeave.length}</p>
+                                <p className="text-[10px] font-bold text-amber-600 uppercase">On Leave</p>
+                              </div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                                <p className="text-2xl font-black text-slate-700">{noData.length}</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">No Data Yet</p>
+                              </div>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                              <p className="text-xs font-bold text-slate-700 mb-2">Employee List ({activeEmps.length} total)</p>
+                              <div className="max-h-96 overflow-y-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="sticky top-0 bg-slate-100">
+                                    <tr className="text-left text-[10px] font-bold text-slate-500 uppercase">
+                                      <th className="p-2">Employee</th>
+                                      <th className="p-2">Unit</th>
+                                      <th className="p-2 text-center">Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {activeEmps.map(emp => {
+                                      const att = todayAtt.find(a => a.employee_id === emp.id);
+                                      let status = 'No Data';
+                                      let statusColor = 'bg-slate-100 text-slate-500';
+                                      if (att) {
+                                        if ((att.leave || 0) > 0) { status = 'On Leave'; statusColor = 'bg-amber-100 text-amber-700'; }
+                                        else if ((att.present || 0) > 0 && (att.absent || 0) > 0) { status = 'Single Punch'; statusColor = 'bg-orange-100 text-orange-700'; }
+                                        else if ((att.present || 0) > 0) { status = 'Present'; statusColor = 'bg-emerald-100 text-emerald-700'; }
+                                        else if ((att.absent || 0) > 0) { status = 'Absent'; statusColor = 'bg-rose-100 text-rose-700'; }
+                                      }
+                                      return (
+                                        <tr key={emp.id} className="border-t border-slate-100 hover:bg-white">
+                                          <td className="p-2"><span className="font-semibold text-slate-800">{emp.name}</span><br/><span className="text-[10px] text-slate-400 font-mono">{emp.id}</span></td>
+                                          <td className="p-2 text-slate-600">{emp.company}</td>
+                                          <td className="p-2 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusColor}`}>{status}</span></td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : attendanceSubTab === 'monthly' ? (
                     <AttendanceSheet 
                       employees={employees}
                       onFetchAttendance={handleFetchAttendanceSub}

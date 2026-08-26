@@ -883,6 +883,33 @@ export default function PayrollRegister({
                           <Mail size={13} />
                         </button>
 
+                        {s.payment_status !== 'PAID' && (
+                          <button 
+                            onClick={async () => {
+                              const payDate = prompt('Enter payment date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+                              if (!payDate) return;
+                              try {
+                                const res = await fetch(`/api/payslips/${s.id}/mark-paid`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ paymentDate: payDate })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                  alert(`${s.employee_name} marked as PAID on ${payDate}`);
+                                  window.location.reload();
+                                }
+                              } catch (err: any) {
+                                alert('Error: ' + err.message);
+                              }
+                            }}
+                            className="p-1.5 hover:bg-emerald-50 text-emerald-600 rounded transition cursor-pointer"
+                            title="Mark as Paid"
+                          >
+                            <CheckCircle size={13} />
+                          </button>
+                        )}
+
                         {s.payment_status === 'PAID' && (
                           <button 
                             onClick={async () => {

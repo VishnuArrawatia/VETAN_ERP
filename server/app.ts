@@ -2026,6 +2026,21 @@ HR Department`;
     }
   });
 
+  // Mark individual payslip as PAID with payment date
+  app.post('/api/payslips/:id/mark-paid', (req, res) => {
+    try {
+      const { id } = req.params;
+      const { paymentDate } = req.body;
+      if (!id) return res.status(400).json({ error: 'Payslip ID required' });
+      const payDate = paymentDate || new Date().toISOString().split('T')[0];
+      db.markPayslipPaid(id, payDate);
+      db.logAudit('Salary Paid', `Marked payslip ${id} as PAID on ${payDate}`, getOperator(req));
+      res.json({ success: true, payslipId: id, paymentDate: payDate });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // PF EPF CHALLAN EXPORT DRAFT (automated text formatting for Indian EPF portal uploads)
   app.get('/api/excel/export/pf/:month', (req, res) => {
     const { month } = req.params;
