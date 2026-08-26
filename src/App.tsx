@@ -41,7 +41,8 @@ import {
   Database,
   RefreshCw,
   XCircle,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Edit2
 } from 'lucide-react';
 
 import { 
