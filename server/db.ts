@@ -2721,6 +2721,27 @@ export class PayrollDatabase {
     return this.data.attendance.filter(a => a.employee_id === employeeId);
   }
 
+  public getAttendanceByEmployeeAndMonth(employeeId: string, month: string): Attendance[] {
+    return this.data.attendance.filter(a => a.employee_id === employeeId && a.month === month);
+  }
+
+  public upsertAttendance(att: Attendance): void {
+    const idx = this.data.attendance.findIndex(a => a.id === att.id);
+    if (idx >= 0) {
+      this.data.attendance[idx] = att;
+    } else {
+      this.data.attendance.push(att);
+    }
+    // Persist to Supabase
+    if (this.supabaseAdmin) {
+      this.supabaseAdmin.from('vetan_erp_store').upsert({
+        id: 'live',
+        payload: JSON.stringify(this.data),
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
+
   public saveAttendance(bulk: Attendance[]) {
     for (const record of bulk) {
       // Auto-compute traditional fields if the new summary fields are provided

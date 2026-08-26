@@ -4608,6 +4608,7 @@ export default function App() {
                       attendance={attendance}
                       activeCompany={activeCompany}
                       activeMonth={activeMonth}
+                      onSaveAttendance={handleSaveAttendanceSub}
                     />
                   ) : attendanceSubTab === 'monthly' ? (
                     <AttendanceSheet 

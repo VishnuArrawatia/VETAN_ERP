@@ -2041,6 +2041,147 @@ HR Department`;
     }
   });
 
+  // DAILY ATTENDANCE APIs
+  // Mark all employees as present (IN+OUT) for a specific date
+  app.post('/api/daily-attendance/mark-all-present', (req, res) => {
+    try {
+      const { date, company } = req.body;
+      if (!date) return res.status(400).json({ error: 'Date required' });
+      
+      const employees = db.getEmployees().filter(e => 
+        e.status === 'ACTIVE' && 
+        (company === 'ALL' || !company || e.company === company)
+      );
+      
+      const month = date.substring(0, 7); // YYYY-MM
+      const results = [];
+      
+      for (const emp of employees) {
+        const existing = db.getAttendanceByEmployeeAndMonth(emp.id, month);
+        let att = existing.find(a => a.employee_id === emp.id);
+        
+        if (!att) {
+          att = {
+            id: `ATT-${emp.id}-${month}`,
+            employee_id: emp.id,
+            month: month,
+            total_days: 0,
+            working_days: 0,
+            lop_days: 0,
+            overtime_hours: 0,
+            present: 0,
+            absent: 0,
+            weekly_off: 0,
+            paid_holiday: 0,
+            leave: 0,
+            lwp: 0,
+            is_locked: false
+          };
+        }
+        
+        // Mark present for this date (increment by 1)
+        att.present = (att.present || 0) + 1;
+        att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0);
+        
+        db.upsertAttendance(att);
+        results.push({ employee_id: emp.id, name: emp.name, status: 'PRESENT' });
+      }
+      
+      db.logAudit('Daily Attendance', `Marked ${results.length} employees as PRESENT for ${date}`, getOperator(req));
+      res.json({ success: true, count: results.length, date, results });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Mark single employee attendance
+  app.post('/api/daily-attendance/mark-employee', (req, res) => {
+    try {
+      const { employeeId, date, status, halfDay } = req.body;
+      if (!employeeId || !date || !status) {
+        return res.status(400).json({ error: 'employeeId, date, and status required' });
+      }
+      
+      const month = date.substring(0, 7);
+      const existing = db.getAttendanceByEmployeeAndMonth(employeeId, month);
+      let att = existing.find(a => a.employee_id === employeeId);
+      
+      if (!att) {
+        att = {
+          id: `ATT-${employeeId}-${month}`,
+          employee_id: employeeId,
+          month: month,
+          total_days: 0,
+          working_days: 0,
+          lop_days: 0,
+          overtime_hours: 0,
+          present: 0,
+          absent: 0,
+          weekly_off: 0,
+          paid_holiday: 0,
+          leave: 0,
+          lwp: 0,
+          is_locked: false
+        };
+      }
+      
+      if (status === 'PRESENT') {
+        att.present = (att.present || 0) + 1;
+        if (halfDay) att.lop_days = (att.lop_days || 0) + 0.5; // Half day LOP
+      } else if (status === 'ABSENT') {
+        att.absent = (att.absent || 0) + 1;
+        att.lop_days = (att.absent || 0) + (att.lwp || 0);
+      } else if (status === 'LEAVE') {
+        att.leave = (att.leave || 0) + 1;
+      } else if (status === 'REMOVE') {
+        // Remove one day attendance
+        if ((att.present || 0) > 0) att.present = (att.present || 0) - 1;
+        else if ((att.absent || 0) > 0) att.absent = (att.absent || 0) - 1;
+        else if ((att.leave || 0) > 0) att.leave = (att.leave || 0) - 1;
+      }
+      
+      att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0);
+      att.lop_days = (att.absent || 0) + (att.lwp || 0);
+      
+      db.upsertAttendance(att);
+      db.logAudit('Daily Attendance', `Updated ${employeeId} as ${status} for ${date}`, getOperator(req));
+      res.json({ success: true, employeeId, status, date });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Get daily attendance summary
+  app.get('/api/daily-attendance/summary', (req, res) => {
+    try {
+      const { date, company } = req.query as { date?: string; company?: string };
+      if (!date) return res.status(400).json({ error: 'Date required' });
+      
+      const month = date.substring(0, 7);
+      const employees = db.getEmployees().filter(e => 
+        e.status === 'ACTIVE' && 
+        (company === 'ALL' || !company || e.company === company)
+      );
+      
+      const summary = employees.map(emp => {
+        const att = db.getAttendanceByEmployeeAndMonth(emp.id, month).find(a => a.employee_id === emp.id);
+        return {
+          employee_id: emp.id,
+          name: emp.name,
+          company: emp.company,
+          present: att?.present || 0,
+          absent: att?.absent || 0,
+          leave: att?.leave || 0,
+          halfDay: (att?.lop_days || 0) % 1 !== 0
+        };
+      });
+      
+      res.json({ success: true, date, summary });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // PF EPF CHALLAN EXPORT DRAFT (automated text formatting for Indian EPF portal uploads)
   app.get('/api/excel/export/pf/:month', (req, res) => {
     const { month } = req.params;
