@@ -392,7 +392,7 @@ export default function App() {
   const [manualBankAccount, setManualBankAccount] = useState('');
   const [manualIfsc, setManualIfsc] = useState('HDFC0000124');
   const [manualDOJ, setManualDOJ] = useState(() => new Date().toISOString().split('T')[0]);
-  const [manualUnit, setManualUnit] = useState<'SVN-1' | 'SVN II' | 'Sakar I' | 'Sakar III'>('SVN-1');
+  const [manualUnit, setManualUnit] = useState<string>('SVN-1');
   const [manualQualification, setManualQualification] = useState('');
   const [manualLocation, setManualLocation] = useState('');
   const [manualVehicleDetail, setManualVehicleDetail] = useState('');
@@ -5142,13 +5142,13 @@ export default function App() {
                           <label className="text-[10px] font-bold text-gray-400 uppercase">Corporate Unit</label>
                           <select
                             value={manualUnit}
-                            onChange={(e) => setManualUnit(e.target.value as any)}
+                            onChange={(e) => setManualUnit(e.target.value)}
                             className="w-full text-xs p-2 border rounded-lg bg-white font-bold"
+                            required
                           >
-                            <option value="SVN-1">SVN-1</option>
-                            <option value="SVN II">SVN II</option>
-                            <option value="Sakar I">Sakar I</option>
-                            <option value="Sakar III">Sakar III</option>
+                            {(activeHR?.role === 'SUPER_HR' || activeHR?.role === 'MANAGEMENT' ? companies : companies.filter(c => (activeHR?.company_rights || []).includes(c.id))).map(c => (
+                              <option key={c.id} value={c.id}>{c.id} — {c.name}</option>
+                            ))}
                           </select>
                         </div>
 
