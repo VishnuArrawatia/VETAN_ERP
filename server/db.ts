@@ -3947,6 +3947,7 @@ export class PayrollDatabase {
     run.status = 'CLOSED';
     
     this.dbSqlite.run(`UPDATE payroll_runs SET status = 'CLOSED' WHERE id = ?`, [run.id]);
+    this.persistData();
     return true;
   }
 
