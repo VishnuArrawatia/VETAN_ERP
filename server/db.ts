@@ -4340,7 +4340,7 @@ Sakar & SVN Group`;
   public isPayrollLocked(month: string, company?: string): boolean {
     const suffix = company && company !== 'ALL' ? `-${company}` : '';
     const runId = `RUN-${month}${suffix}`;
-    const run = this.data.payroll_runs.find(r => r.id === runId || (r.month === month && r.status === 'CLOSED'));
+    const run = this.data.payroll_runs.find(r => r.id === runId);
     return !!(run && run.status === 'CLOSED');
   }
 
