@@ -5573,13 +5573,21 @@ export default function App() {
                       <div className="grid grid-cols-3 gap-2">
                         <div className="space-y-1 col-span-1">
                           <label className="text-[10px] font-bold text-slate-400 uppercase">Bank Name</label>
-                          <input 
-                            type="text" 
+                          <select 
                             value={manualBankName} 
                             onChange={(e) => setManualBankName(e.target.value)} 
-                            placeholder="HDFC Bank"
-                            className="w-full text-xs p-2 border rounded-lg"
-                          />
+                            className="w-full text-xs p-2 border rounded-lg bg-white font-semibold"
+                          >
+                            <option value="HDFC BANK">HDFC BANK</option>
+                            <option value="ICICI BANK">ICICI BANK</option>
+                            <option value="SBI BANK">SBI BANK</option>
+                            <option value="AXIS BANK">AXIS BANK</option>
+                            <option value="UNION BANK">UNION BANK</option>
+                            <option value="KOTAK BANK">KOTAK BANK</option>
+                            <option value="BANK OF BARODA">BANK OF BARODA</option>
+                            <option value="CANARA BANK">CANARA BANK</option>
+                            <option value="OTHER BANK">OTHER BANK</option>
+                          </select>
                         </div>
 
                         <div className="space-y-1 col-span-1">
