@@ -4091,6 +4091,18 @@ export default function App() {
                         <Plus size={13} />
                         Register Employee
                       </button>
+
+                      {(activeHR?.role === 'SUPER_HR' || activeHR?.role === 'MANAGEMENT') && (
+                        <button
+                          onClick={() => {
+                            alert('SALARY CORRECTION MODE:\n\nClick on any employee row in the table below to open their profile.\nThen click \"Edit Profile\" button to correct salary.\n\nOnly Super Admin can edit salary structure.');
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                        >
+                          <Edit2 size={13} />
+                          Salary Correction
+                        </button>
+                      )}
                     </div>
 
                   </div>
