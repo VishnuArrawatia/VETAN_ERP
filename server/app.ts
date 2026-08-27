@@ -882,7 +882,7 @@ export async function createApp(supabaseAdmin?: any) {
   });
 
   // Employee Change Password API
-  app.post('/api/employee/change-password', (req, res) => {
+  app.post('/api/employee/change-password', async (req, res) => {
     try {
       const { employeeId, oldPassword, newPassword } = req.body;
       if (!employeeId || !oldPassword || !newPassword) {
@@ -912,6 +912,7 @@ export async function createApp(supabaseAdmin?: any) {
         password: newPassword,
         needs_password_change: false
       });
+      await db.persistDataSync();
       const { password: _pw2, ...safeUpdated } = updated as any;
       res.json({ success: true, employee: safeUpdated });
     } catch (e: any) {
@@ -920,7 +921,7 @@ export async function createApp(supabaseAdmin?: any) {
   });
 
   // Admin Reset Employee Password API
-  app.post('/api/admin/reset-employee-password', (req, res) => {
+  app.post('/api/admin/reset-employee-password', async (req, res) => {
     try {
       const { employeeId, newPassword } = req.body;
       if (!employeeId) {
@@ -938,6 +939,7 @@ export async function createApp(supabaseAdmin?: any) {
         password: newPassword,
         needs_password_change: isResettingToDefault ? true : false
       });
+      await db.persistDataSync();
       
       db.logAudit('Password Reset', `Admin reset password for Employee ${employee.name} (${employee.id})`, getOperator(req));
       res.json({ success: true, employee: updated });
@@ -946,13 +948,14 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.post('/api/employees', (req, res) => {
+  app.post('/api/employees', async (req, res) => {
     try {
       const emp: Employee = req.body;
       if (!emp.name || !emp.designation || !emp.joining_date) {
         return res.status(400).json({ error: 'Name, designation, and joining date are required fields' });
       }
       const saved = db.insertEmployee(emp);
+      await db.persistDataSync();
       db.logAudit('Employee Created', `Created employee ${saved.name} (${saved.id}) in ${saved.company}`, getOperator(req));
       res.json({ success: true, employee: saved });
     } catch (e: any) {
@@ -960,7 +963,7 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  app.put('/api/employees/:id', (req, res) => {
+  app.put('/api/employees/:id', async (req, res) => {
     try {
       const { id } = req.params;
       const operatorRole = getOperatorRole(req);
@@ -983,6 +986,9 @@ export async function createApp(supabaseAdmin?: any) {
       if (!updated) {
         return res.status(404).json({ error: 'Employee not found' });
       }
+      
+      // Ensure Supabase persistence completes before responding
+      await db.persistDataSync();
       
       // Log specific field changes
       const fieldsToTrack: (keyof Employee)[] = [
