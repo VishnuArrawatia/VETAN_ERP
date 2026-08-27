@@ -2898,7 +2898,7 @@ export class PayrollDatabase {
     return true;
   }
 
-  private autoUpdateAttendanceForLeave(employeeId: string, leaveDays: number, startDate?: string, endDate?: string): void {
+  private autoUpdateAttendanceForLeave(employeeId: string, leaveDays: number, startDate?: string, endDate?: string, leaveType?: string): void {
     if (!employeeId || !startDate) return;
     const emp = this.getEmployeeById(employeeId);
     if (!emp) return;
@@ -2924,12 +2924,24 @@ export class PayrollDatabase {
       this.data.attendance.push(att);
     }
     att.leave = (att.leave || 0) + leaveDays;
+    // Track leave types separately
+    if (!att.leave_pl) att.leave_pl = 0;
+    if (!att.leave_cl) att.leave_cl = 0;
+    if (!att.leave_sl) att.leave_sl = 0;
+    if (!att.leave_coff) att.leave_coff = 0;
+    if (leaveType) {
+      const lt = leaveType.toLowerCase();
+      if (lt === 'pl') att.leave_pl = (att.leave_pl || 0) + leaveDays;
+      else if (lt === 'cl') att.leave_cl = (att.leave_cl || 0) + leaveDays;
+      else if (lt === 'sl') att.leave_sl = (att.leave_sl || 0) + leaveDays;
+      else if (lt === 'coff' || lt === 'c-off' || lt === 'compoff') att.leave_coff = (att.leave_coff || 0) + leaveDays;
+    }
     att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave;
     att.lop_days = (att.absent || 0) + (att.lwp || 0);
     att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave + (att.lwp || 0);
     this.dbSqlite.run(
-      `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0]
+      `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked, leave_pl, leave_cl, leave_sl, leave_coff, pay_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0, att.leave_pl || 0, att.leave_cl || 0, att.leave_sl || 0, att.leave_coff || 0, att.pay_days || null]
     );
   }
 
@@ -3008,7 +3020,7 @@ export class PayrollDatabase {
             emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
             this.syncEmployee(emp);
           }
-          this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date);
+          this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
         } else {
           app.status = 'REJECTED_HR';
           app.hr_approved_date = new Date().toISOString();
@@ -3028,7 +3040,7 @@ export class PayrollDatabase {
           emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
           this.syncEmployee(emp);
         }
-        this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date);
+        this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
       } else {
         app.status = 'REJECTED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
