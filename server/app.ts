@@ -147,49 +147,6 @@ export async function createApp(supabaseAdmin?: any) {
     });
   });
 
-  // DEBUG: Test Supabase persistence directly
-  app.post('/api/debug/test-persist', async (req, res) => {
-    try {
-      const { employeeId, field, value } = req.body;
-      const loadedFromSeed = !!(db as any).loadedFromSeed;
-      const hasSupabase = !!(db as any).supabaseAdmin;
-      
-      if (!employeeId || !field) {
-        return res.status(400).json({ error: 'employeeId and field required' });
-      }
-
-      const emp = db.getEmployeeById(employeeId);
-      if (!emp) return res.status(404).json({ error: 'Employee not found' });
-
-      const oldVal = (emp as any)[field];
-      const updated = db.updateEmployee(employeeId, { [field]: value } as any);
-      await db.persistDataSync();
-      
-      // Verify by reading from Supabase directly
-      let verified = false;
-      if (hasSupabase && !loadedFromSeed) {
-        try {
-          const supa = (db as any).supabaseAdmin;
-          const { data: row } = await supa.from('vetan_erp_store').select('payload').eq('id', 'live').maybeSingle();
-          if (row?.payload?.employees) {
-            const saved = row.payload.employees.find((e: any) => e.id === employeeId);
-            verified = saved && saved[field] === value;
-          }
-        } catch (e: any) {
-          return res.json({ success: true, verified: false, verifyError: e.message, loadedFromSeed, hasSupabase });
-        }
-      }
-
-      // Revert
-      db.updateEmployee(employeeId, { [field]: oldVal } as any);
-      await db.persistDataSync();
-
-      res.json({ success: true, verified, loadedFromSeed, hasSupabase, oldValue: oldVal, newValue: value });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
   // API ROUTES
 
   // Get active dashboard metrics, including multi-company statistics
