@@ -3510,6 +3510,7 @@ export default function App() {
                       employees={employees}
                       monthlySlips={monthlySlips}
                       companies={companies}
+                      currentUser={activeHR}
                     />
                   )}
                 </div>
