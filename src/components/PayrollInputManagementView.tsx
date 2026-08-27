@@ -755,6 +755,29 @@ export default function PayrollInputManagementView({
                 <Save size={14} />
                 {savingInputs ? 'Saving...' : 'Save All Inputs'}
               </button>
+              <button
+                onClick={async () => {
+                  if (!confirm('Mark ALL employees as PAID for this month?')) return;
+                  try {
+                    const res = await fetch('/api/payslips/mark-all-paid', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ month: activeMonth, company: selectedUnit })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setStatusMsg({ type: 'success', text: `✅ Marked ${data.count} employees as PAID!` });
+                      onRefresh?.();
+                      setTimeout(() => setStatusMsg(null), 3000);
+                    }
+                  } catch (e: any) {
+                    setStatusMsg({ type: 'error', text: 'Error: ' + e.message });
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                💰 Mark All as Paid
+              </button>
             </div>
           </div>
 
@@ -793,6 +816,7 @@ export default function PayrollInputManagementView({
                   
                   <th className="p-3 text-right min-w-[100px] bg-slate-100 font-black text-slate-900">Gross ₹</th>
                   <th className="p-3 text-right min-w-[100px] bg-emerald-100 text-emerald-950 font-black">Net Salary ₹</th>
+                  <th className="p-3 text-center min-w-[100px] bg-blue-100 text-blue-950 font-black">Payment Status</th>
                   <th className="p-3 text-center min-w-[60px]">Edit</th>
                 </tr>
               </thead>
@@ -955,6 +979,36 @@ export default function PayrollInputManagementView({
                       {/* Live Computed Net Salary */}
                       <td className="p-3 text-right font-black text-emerald-900 bg-emerald-50/60">
                         ₹{netSalaryPreview.toLocaleString('en-IN')}
+                      </td>
+
+                      {/* Payment Status */}
+                      <td className="p-3 text-center">
+                        {slip.payment_status === 'PAID' ? (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
+                            ✅ PAID
+                          </span>
+                        ) : (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/payslips/${slip.id}/mark-paid`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ paymentDate: new Date().toISOString().split('T')[0] })
+                                });
+                                const data = await res.json();
+                                if (data.success) {
+                                  onRefresh?.();
+                                }
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }}
+                            className="px-2 py-1 bg-orange-100 text-orange-700 text-[10px] font-bold rounded-full hover:bg-orange-200 cursor-pointer"
+                          >
+                            ⏳ Mark Paid
+                          </button>
+                        )}
                       </td>
 
                       {/* Action Detail Drawer */}

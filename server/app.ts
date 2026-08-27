@@ -2049,6 +2049,29 @@ HR Department`;
     }
   });
 
+  // Bulk mark all payslips for a month as PAID
+  app.post('/api/payslips/mark-all-paid', (req, res) => {
+    try {
+      const { month, company } = req.body;
+      const payDate = new Date().toISOString().split('T')[0];
+      let count = 0;
+      db.data.payslips.forEach(p => {
+        if (p.month === month && (p.payment_status || 'PENDING') !== 'PAID') {
+          if (!company || company === 'ALL' || company === 'GROUP') {
+            p.payment_status = 'PAID';
+            p.payment_date = payDate;
+            count++;
+          }
+        }
+      });
+      db.persistData();
+      db.logAudit('Bulk Salary Paid', `Marked ${count} payslips as PAID for month ${month}`, getOperator(req));
+      res.json({ success: true, count, paymentDate: payDate });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // DAILY ATTENDANCE APIs
   // Mark all employees as present (IN+OUT) for a specific date
   app.post('/api/daily-attendance/mark-all-present', (req, res) => {
