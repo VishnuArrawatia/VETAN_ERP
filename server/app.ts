@@ -1500,6 +1500,34 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  // Update Leave Opening Balance (Super Admin only)
+  app.put('/api/employees/:id/leave-opening', (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'Only Super Admin can edit leave opening balance' });
+      }
+      const { id } = req.params;
+      const { leave_balance_pl, leave_balance_cl, leave_balance_sl, leave_balance_compoff } = req.body;
+      const emp = db.getEmployeeById(id);
+      if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+      if (leave_balance_pl !== undefined) emp.leave_balance_pl = Number(leave_balance_pl);
+      if (leave_balance_cl !== undefined) emp.leave_balance_cl = Number(leave_balance_cl);
+      if (leave_balance_sl !== undefined) emp.leave_balance_sl = Number(leave_balance_sl);
+      if (leave_balance_compoff !== undefined) emp.leave_balance_compoff = Number(leave_balance_compoff);
+
+      db.dbSqlite.run(`UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
+        [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, id]);
+
+      db.logAudit('Leave Opening Updated', `Updated leave opening for ${emp.name} (PL:${emp.leave_balance_pl}, CL:${emp.leave_balance_cl}, SL:${emp.leave_balance_sl}, C-Off:${emp.leave_balance_compoff || 0})`, getOperator(req));
+      db.persistData();
+      res.json({ success: true, employee: { id: emp.id, leave_balance_pl: emp.leave_balance_pl, leave_balance_cl: emp.leave_balance_cl, leave_balance_sl: emp.leave_balance_sl, leave_balance_compoff: emp.leave_balance_compoff || 0 } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Attendance Corrections / Miss Punch endpoints
   app.get('/api/attendance/corrections', (req, res) => {
     try {

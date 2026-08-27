@@ -1066,6 +1066,7 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN is_locked INTEGER DEFAULT 0`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN in_time TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN out_time TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN pay_days REAL`, () => {});
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS payroll_runs (
@@ -3620,8 +3621,8 @@ export class PayrollDatabase {
   // Automation Calculation Logic for Single Employee Draft Wage Slip
   public calculateSingleSlip(emp: Employee, att: any, month: string): Payslip {
     const totalDays = att.total_days || 30;
-    const lopDays = att.lop_days || 0;
-    const workDays = totalDays - lopDays;
+    const payDays = att.pay_days !== undefined ? Number(att.pay_days) : (totalDays - (att.lop_days || 0));
+    const workDays = payDays;
 
     const proration = Math.max(0, workDays) / totalDays;
 
@@ -3830,7 +3831,9 @@ export class PayrollDatabase {
       earned_bonus_payable: earned_bonus,
       ctc_salary,
       hidden_salary_heads: emp.hidden_salary_heads || '',
-      salary_structure_type: emp.salary_structure_type || 'FIXED'
+      salary_structure_type: emp.salary_structure_type || 'FIXED',
+      pay_days: workDays,
+      total_days: totalDays
     };
   }
 

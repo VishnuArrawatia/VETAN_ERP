@@ -1039,6 +1039,8 @@ var PayrollDatabase = class {
       });
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN out_time TEXT`, () => {
       });
+      this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN pay_days REAL`, () => {
+      });
     });
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS payroll_runs (
       id TEXT PRIMARY KEY,
@@ -3542,8 +3544,8 @@ var PayrollDatabase = class {
   // Automation Calculation Logic for Single Employee Draft Wage Slip
   calculateSingleSlip(emp, att, month) {
     const totalDays = att.total_days || 30;
-    const lopDays = att.lop_days || 0;
-    const workDays = totalDays - lopDays;
+    const payDays = att.pay_days !== void 0 ? Number(att.pay_days) : totalDays - (att.lop_days || 0);
+    const workDays = payDays;
     const proration = Math.max(0, workDays) / totalDays;
     const sets = this.getCompanySettings(emp.company);
     const isFormulaMonth = false;
@@ -3736,7 +3738,9 @@ var PayrollDatabase = class {
       earned_bonus_payable: earned_bonus,
       ctc_salary,
       hidden_salary_heads: emp.hidden_salary_heads || "",
-      salary_structure_type: emp.salary_structure_type || "FIXED"
+      salary_structure_type: emp.salary_structure_type || "FIXED",
+      pay_days: workDays,
+      total_days: totalDays
     };
   }
   updatePayslipFullVariableInputs(id, inputs) {
@@ -6575,6 +6579,31 @@ async function createApp(supabaseAdmin) {
       }
       await db.persistDataSync();
       res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.put("/api/employees/:id/leave-opening", (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") {
+        return res.status(403).json({ error: "Only Super Admin can edit leave opening balance" });
+      }
+      const { id } = req.params;
+      const { leave_balance_pl, leave_balance_cl, leave_balance_sl, leave_balance_compoff } = req.body;
+      const emp = db.getEmployeeById(id);
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+      if (leave_balance_pl !== void 0) emp.leave_balance_pl = Number(leave_balance_pl);
+      if (leave_balance_cl !== void 0) emp.leave_balance_cl = Number(leave_balance_cl);
+      if (leave_balance_sl !== void 0) emp.leave_balance_sl = Number(leave_balance_sl);
+      if (leave_balance_compoff !== void 0) emp.leave_balance_compoff = Number(leave_balance_compoff);
+      db.dbSqlite.run(
+        `UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
+        [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, id]
+      );
+      db.logAudit("Leave Opening Updated", `Updated leave opening for ${emp.name} (PL:${emp.leave_balance_pl}, CL:${emp.leave_balance_cl}, SL:${emp.leave_balance_sl}, C-Off:${emp.leave_balance_compoff || 0})`, getOperator(req));
+      db.persistData();
+      res.json({ success: true, employee: { id: emp.id, leave_balance_pl: emp.leave_balance_pl, leave_balance_cl: emp.leave_balance_cl, leave_balance_sl: emp.leave_balance_sl, leave_balance_compoff: emp.leave_balance_compoff || 0 } });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
