@@ -3814,6 +3814,9 @@ export class PayrollDatabase {
     s.earned_da = s.rate_da;
 
     s.tds = inputs.tds !== undefined ? Number(inputs.tds) : (s.tds || 0);
+    s.pf_deduction = inputs.pf_deduction !== undefined ? Number(inputs.pf_deduction) : (s.pf_deduction || 0);
+    s.loan_deduction = inputs.loan_deduction !== undefined ? Number(inputs.loan_deduction) : (s.loan_deduction || 0);
+    s.esic_deduction = inputs.esic_deduction !== undefined ? Number(inputs.esic_deduction) : (s.esic_deduction || 0);
     s.custom_deductions = inputs.custom_deductions !== undefined ? Number(inputs.custom_deductions) : (s.custom_deductions || 0);
     s.salary_advance = inputs.salary_advance !== undefined ? Number(inputs.salary_advance) : (s.salary_advance || 0);
     s.canteen_deduction = inputs.canteen_deduction !== undefined ? Number(inputs.canteen_deduction) : (s.canteen_deduction || 0);
