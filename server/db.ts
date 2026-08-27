@@ -1288,7 +1288,22 @@ export class PayrollDatabase {
       month TEXT,
       monthly_deduction REAL,
       reason TEXT,
-      status TEXT
+      status TEXT,
+      opening_balance REAL DEFAULT 0
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS bonus_provisions (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT,
+      employee_name TEXT,
+      company TEXT,
+      month TEXT,
+      base_salary REAL,
+      bonus_rate REAL DEFAULT 8.33,
+      bonus_amount REAL,
+      status TEXT DEFAULT 'ACCUMULATED',
+      paid_in_month TEXT,
+      created_at TEXT
     )`);
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS salary_revisions (
@@ -3725,9 +3740,36 @@ export class PayrollDatabase {
     const varEarnings = bonusInc + perfInc + attInc + prodInc + reimb + specAdd + arrearPay + otherEarn;
     const final_gross_salary = gross_salary + varEarnings;
 
-    const varDeductions = customDed + advanceDed + canteenDed + uniformDed + noticeDed + mobileDed + damageDed;
-    const total_deductions = pf_deduction + esic_deduction + professional_tax + tdsVal + loan_deduction + varDeductions;
+    const varDeductions = customDed + advanceDed;
+    const total_deductions = pf_deduction + esic_deduction + tdsVal + loan_deduction + varDeductions;
     const net_salary = Math.max(0, final_gross_salary - total_deductions);
+
+    // Store bonus provision in bonus_provisions table
+    if (earned_bonus > 0) {
+      const bonusId = `BONUS-${emp.id}-${month}`;
+      const existingBonus = (this.data as any).bonus_provisions?.find((b: any) => b.id === bonusId);
+      if (!existingBonus) {
+        if (!(this.data as any).bonus_provisions) (this.data as any).bonus_provisions = [];
+        (this.data as any).bonus_provisions.push({
+          id: bonusId,
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          month,
+          base_salary: rate_base,
+          bonus_rate: 8.33,
+          bonus_amount: earned_bonus,
+          status: 'ACCUMULATED',
+          paid_in_month: null,
+          created_at: new Date().toISOString()
+        });
+        try {
+          this.dbSqlite.run(`INSERT OR REPLACE INTO bonus_provisions (id, employee_id, employee_name, company, month, base_salary, bonus_rate, bonus_amount, status, paid_in_month, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+            bonusId, emp.id, emp.name, emp.company, month, rate_base, 8.33, earned_bonus, 'ACCUMULATED', null, new Date().toISOString()
+          ]);
+        } catch (e: any) { console.error('[Bonus] Insert error:', e?.message); }
+      }
+    }
     const ctc_salary = final_gross_salary + employer_pf + employer_esic + earned_bonus;
 
     return {
@@ -3765,11 +3807,11 @@ export class PayrollDatabase {
       custom_deductions: customDed,
       loan_deduction,
       salary_advance: advanceDed,
-      canteen_deduction: canteenDed,
-      uniform_deduction: uniformDed,
-      notice_deduction: noticeDed,
-      mobile_deduction: mobileDed,
-      damage_deduction: damageDed,
+      canteen_deduction: 0,
+      uniform_deduction: 0,
+      notice_deduction: 0,
+      mobile_deduction: 0,
+      damage_deduction: 0,
       bonus_incentive: bonusInc,
       performance_incentive: perfInc,
       attendance_incentive: attInc,
