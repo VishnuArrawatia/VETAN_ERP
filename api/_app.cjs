@@ -24356,6 +24356,8 @@ var PayrollDatabase = class {
     this.inMemoryOnly = false;
     /** When true, persistData() will NOT push to Supabase (seed data protection). */
     this.loadedFromSeed = false;
+    /** Track when we last loaded from Supabase to avoid stale reloads. */
+    this.lastLoadedAt = "";
     this.supabaseAdmin = supabaseAdmin || null;
   }
   async init() {
@@ -28297,34 +28299,70 @@ Sakar & SVN Group`;
    * data is saved before returning the HTTP response.
    */
   async persistDataSync() {
-    if (!this.supabaseAdmin) return;
+    if (!this.supabaseAdmin) {
+      console.error("[Supabase] persistDataSync ABORTED \u2014 supabaseAdmin is null/undefined");
+      return;
+    }
     if (this.loadedFromSeed) {
       console.warn("[Supabase] persistDataSync BLOCKED \u2014 data was loaded from seed, not pushing.");
       return;
     }
     try {
-      await this.supabaseAdmin.from("vetan_erp_store").upsert(
+      const employeeCount = this.data?.employees?.length || 0;
+      console.log(`[Supabase] persistDataSync START \u2014 ${employeeCount} employees, payload size: ${JSON.stringify(this.data).length} bytes`);
+      const { data, error } = await this.supabaseAdmin.from("vetan_erp_store").upsert(
         { id: "live", payload: this.data, updated_at: (/* @__PURE__ */ new Date()).toISOString() },
         { onConflict: "id" }
       );
+      if (error) {
+        console.error("[Supabase] persistDataSync UPsert ERROR:", error.message, "code:", error.code, "details:", error.details);
+      } else {
+        this.lastLoadedAt = (/* @__PURE__ */ new Date()).toISOString();
+        console.log("[Supabase] persistDataSync SUCCESS \u2014 data saved to vetan_erp_store");
+      }
     } catch (e) {
-      console.error("[Supabase] persistDataSync failed:", e?.message || e);
+      console.error("[Supabase] persistDataSync EXCEPTION:", e?.message || e, e?.stack || "");
     }
   }
   /**
    * Vercel: Refresh in-memory data from Supabase so warm-started instances
    * see mutations made by other serverless invocations.
+   * 
+   * Only reloads if Supabase has NEWER data (updated_at > lastLoadedAt)
+   * to prevent overwriting fresh in-memory mutations with stale data.
    */
   async reloadFromSupabase() {
     if (!this.supabaseAdmin) return;
-    try {
-      const { data: row, error } = await this.supabaseAdmin.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
-      if (!error && row?.payload && typeof row.payload === "object") {
+    const MAX_RETRIES = 2;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { data: row, error } = await this.supabaseAdmin.from("vetan_erp_store").select("payload, updated_at").eq("id", "live").maybeSingle();
+        if (error) {
+          console.error(`[Supabase] reloadFromSupabase attempt ${attempt} ERROR:`, error.message);
+          if (attempt < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+            continue;
+          }
+          return;
+        }
+        if (!row?.payload || typeof row.payload !== "object") {
+          console.warn("[Supabase] reloadFromSupabase \u2014 no payload found");
+          return;
+        }
+        const remoteUpdatedAt = row.updated_at || "";
+        if (this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
+          console.log(`[Supabase] reloadFromSupabase SKIPPED \u2014 remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
+          return;
+        }
         this.data = { ...this.data, ...row.payload };
+        this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
         this.inMemoryOnly = true;
+        console.log(`[Supabase] reloadFromSupabase OK \u2014 loaded at ${this.lastLoadedAt}, ${this.data.employees?.length || 0} employees`);
+        return;
+      } catch (e) {
+        console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
+        if (attempt < MAX_RETRIES) await new Promise((r) => setTimeout(r, 500 * attempt));
       }
-    } catch (e) {
-      console.error("[Supabase] reloadFromSupabase failed:", e?.message || e);
     }
   }
   /** Force an awaited upsert to Supabase (for critical writes). */

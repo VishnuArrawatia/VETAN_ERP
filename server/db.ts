@@ -4520,41 +4520,77 @@ Sakar & SVN Group`;
    * data is saved before returning the HTTP response.
    */
   public async persistDataSync(): Promise<void> {
-    if (!this.supabaseAdmin) return;
+    if (!this.supabaseAdmin) {
+      console.error('[Supabase] persistDataSync ABORTED — supabaseAdmin is null/undefined');
+      return;
+    }
     if (this.loadedFromSeed) {
       console.warn('[Supabase] persistDataSync BLOCKED — data was loaded from seed, not pushing.');
       return;
     }
     try {
-      await this.supabaseAdmin
+      const employeeCount = this.data?.employees?.length || 0;
+      console.log(`[Supabase] persistDataSync START — ${employeeCount} employees, payload size: ${JSON.stringify(this.data).length} bytes`);
+      const { data, error } = await this.supabaseAdmin
         .from('vetan_erp_store')
         .upsert(
           { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
           { onConflict: 'id' }
         );
+      if (error) {
+        console.error('[Supabase] persistDataSync UPsert ERROR:', error.message, 'code:', error.code, 'details:', error.details);
+      } else {
+        this.lastLoadedAt = new Date().toISOString();
+        console.log('[Supabase] persistDataSync SUCCESS — data saved to vetan_erp_store');
+      }
     } catch (e: any) {
-      console.error('[Supabase] persistDataSync failed:', e?.message || e);
+      console.error('[Supabase] persistDataSync EXCEPTION:', e?.message || e, e?.stack || '');
     }
   }
+
+  /** Track when we last loaded from Supabase to avoid stale reloads. */
+  private lastLoadedAt: string = '';
 
   /**
    * Vercel: Refresh in-memory data from Supabase so warm-started instances
    * see mutations made by other serverless invocations.
+   * 
+   * Only reloads if Supabase has NEWER data (updated_at > lastLoadedAt)
+   * to prevent overwriting fresh in-memory mutations with stale data.
    */
   public async reloadFromSupabase(): Promise<void> {
     if (!this.supabaseAdmin) return;
-    try {
-      const { data: row, error } = await this.supabaseAdmin
-        .from('vetan_erp_store')
-        .select('payload')
-        .eq('id', 'live')
-        .maybeSingle();
-      if (!error && row?.payload && typeof row.payload === 'object') {
+    const MAX_RETRIES = 2;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { data: row, error } = await this.supabaseAdmin
+          .from('vetan_erp_store')
+          .select('payload, updated_at')
+          .eq('id', 'live')
+          .maybeSingle();
+        if (error) {
+          console.error(`[Supabase] reloadFromSupabase attempt ${attempt} ERROR:`, error.message);
+          if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 500 * attempt)); continue; }
+          return;
+        }
+        if (!row?.payload || typeof row.payload !== 'object') {
+          console.warn('[Supabase] reloadFromSupabase — no payload found');
+          return;
+        }
+        const remoteUpdatedAt = row.updated_at || '';
+        if (this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
+          console.log(`[Supabase] reloadFromSupabase SKIPPED — remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
+          return;
+        }
         this.data = { ...this.data, ...row.payload };
+        this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
+        console.log(`[Supabase] reloadFromSupabase OK — loaded at ${this.lastLoadedAt}, ${this.data.employees?.length || 0} employees`);
+        return;
+      } catch (e: any) {
+        console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
+        if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 500 * attempt));
       }
-    } catch (e: any) {
-      console.error('[Supabase] reloadFromSupabase failed:', e?.message || e);
     }
   }
 
