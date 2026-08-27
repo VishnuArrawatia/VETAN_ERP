@@ -2684,20 +2684,25 @@ export class PayrollDatabase {
     return loan;
   }
 
-  public updateLoanDetails(loanId: string, updates: { opening_balance?: number; monthly_deduction?: number; opening_date?: string; reason?: string }): Loan | null {
+  public updateLoanDetails(loanId: string, updates: { amount?: number; opening_balance?: number; monthly_deduction?: number; total_installments?: number; opening_date?: string; reason?: string }): Loan | null {
     if (!this.data.loans) this.data.loans = [];
     const idx = this.data.loans.findIndex(l => l.id === loanId);
     if (idx === -1) return null;
 
     const loan = this.data.loans[idx];
+    if (updates.amount !== undefined) loan.amount = Number(updates.amount);
     if (updates.opening_balance !== undefined) loan.opening_balance = Number(updates.opening_balance);
     if (updates.monthly_deduction !== undefined) loan.monthly_deduction = Number(updates.monthly_deduction);
+    if (updates.total_installments !== undefined) loan.total_installments = Number(updates.total_installments);
     if (updates.opening_date !== undefined) loan.opening_date = updates.opening_date;
     if (updates.reason !== undefined) loan.reason = updates.reason;
 
+    // Recalculate total_amount = amount (total loan value)
+    loan.total_amount = loan.amount;
+
     this.dbSqlite.run(
-      `UPDATE loans SET opening_balance = ?, monthly_deduction = ?, opening_date = ?, reason = ? WHERE id = ?`,
-      [loan.opening_balance, loan.monthly_deduction, loan.opening_date, loan.reason, loanId]
+      `UPDATE loans SET amount = ?, opening_balance = ?, monthly_deduction = ?, total_installments = ?, opening_date = ?, reason = ? WHERE id = ?`,
+      [loan.amount, loan.opening_balance, loan.monthly_deduction, loan.total_installments, loan.opening_date, loan.reason, loanId]
     );
 
     this.persistData();
