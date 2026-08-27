@@ -30239,13 +30239,14 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
-  app.put("/api/loans/:id/details", (req, res) => {
+  app.put("/api/loans/:id/details", async (req, res) => {
     try {
       const { id } = req.params;
       const updated = db.updateLoanDetails(id, req.body);
       if (!updated) {
         return res.status(404).json({ error: "Loan record not found" });
       }
+      await db.forcePersistToSupabase();
       res.json({ success: true, loan: updated });
     } catch (e) {
       res.status(500).json({ error: e.message });
