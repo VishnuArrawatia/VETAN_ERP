@@ -29190,6 +29190,7 @@ async function createApp(supabaseAdmin) {
     const isMock = db.inMemoryOnly;
     const employeeCount = db.data?.employees?.length || 0;
     const hasSupabase = !!db.supabaseAdmin;
+    const loadedFromSeed = !!db.loadedFromSeed;
     let dbMode = "SQLite3-File";
     if (hasSupabase && employeeCount > 0) dbMode = "Supabase-Cloud";
     else if (isMock) dbMode = "InMemoryFallback";
@@ -29203,8 +29204,42 @@ async function createApp(supabaseAdmin) {
       isInMemoryMode: isMock,
       employeeCount,
       hasSupabaseClient: hasSupabase,
+      loadedFromSeed,
       initializationWarnings: warnings
     });
+  });
+  app.post("/api/debug/test-persist", async (req, res) => {
+    try {
+      const { employeeId, field, value } = req.body;
+      const loadedFromSeed = !!db.loadedFromSeed;
+      const hasSupabase = !!db.supabaseAdmin;
+      if (!employeeId || !field) {
+        return res.status(400).json({ error: "employeeId and field required" });
+      }
+      const emp = db.getEmployeeById(employeeId);
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+      const oldVal = emp[field];
+      const updated = db.updateEmployee(employeeId, { [field]: value });
+      await db.persistDataSync();
+      let verified = false;
+      if (hasSupabase && !loadedFromSeed) {
+        try {
+          const supa = db.supabaseAdmin;
+          const { data: row } = await supa.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
+          if (row?.payload?.employees) {
+            const saved = row.payload.employees.find((e) => e.id === employeeId);
+            verified = saved && saved[field] === value;
+          }
+        } catch (e) {
+          return res.json({ success: true, verified: false, verifyError: e.message, loadedFromSeed, hasSupabase });
+        }
+      }
+      db.updateEmployee(employeeId, { [field]: oldVal });
+      await db.persistDataSync();
+      res.json({ success: true, verified, loadedFromSeed, hasSupabase, oldValue: oldVal, newValue: value });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
   app.get("/api/dashboard/summary", (req, res) => {
     const { company } = req.query;
