@@ -195,6 +195,8 @@ export default function PayrollInputManagementView({
     const totalEmps = activeEmps.length;
     const processedEmps = monthSlips.length;
     const pendingEmps = Math.max(0, totalEmps - processedEmps);
+    const paidEmps = monthSlips.filter(s => s.payment_status === 'PAID').length;
+    const unpaidEmps = processedEmps - paidEmps;
 
     const totalGross = monthSlips.reduce((sum, s) => sum + (s.gross_salary || 0), 0);
     const totalPfEE = monthSlips.reduce((sum, s) => sum + (s.pf_deduction || 0), 0);
@@ -222,6 +224,8 @@ export default function PayrollInputManagementView({
       totalEmps,
       processedEmps,
       pendingEmps,
+      paidEmps,
+      unpaidEmps,
       totalGross,
       totalPfEE,
       totalPfER,
@@ -579,6 +583,10 @@ export default function PayrollInputManagementView({
           </div>
           <div className="text-[10px] font-semibold text-emerald-700 mt-1">
             {aggregates.processedEmps} Processed / {aggregates.pendingEmps} Pending
+          </div>
+          <div className="text-[10px] font-semibold mt-1">
+            <span className="text-green-600">✅ Paid: {aggregates.paidEmps}</span>
+            <span className="text-orange-600 ml-2">⏳ Pending: {aggregates.unpaidEmps}</span>
           </div>
         </div>
 
