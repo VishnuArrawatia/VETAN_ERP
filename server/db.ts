@@ -3791,6 +3791,23 @@ export class PayrollDatabase {
     const s = this.data.payslips.find(p => p.id === id);
     if (!s) return null;
 
+    // Super Admin can update salary rates directly
+    if (inputs.rate_base_salary !== undefined) s.rate_base_salary = Number(inputs.rate_base_salary);
+    if (inputs.rate_hra !== undefined) s.rate_hra = Number(inputs.rate_hra);
+    if (inputs.rate_edu_allowance !== undefined) s.rate_edu_allowance = Number(inputs.rate_edu_allowance);
+    if (inputs.rate_medical_allowance !== undefined) s.rate_medical_allowance = Number(inputs.rate_medical_allowance);
+    if (inputs.rate_conveyance_allowance !== undefined) s.rate_conveyance_allowance = Number(inputs.rate_conveyance_allowance);
+    if (inputs.rate_special_allowance !== undefined) s.rate_special_allowance = Number(inputs.rate_special_allowance);
+    if (inputs.rate_da !== undefined) s.rate_da = Number(inputs.rate_da);
+    // Recalculate earned values from rates
+    s.earned_base_salary = s.rate_base_salary;
+    s.earned_hra = s.rate_hra;
+    s.earned_edu_allowance = s.rate_edu_allowance;
+    s.earned_medical_allowance = s.rate_medical_allowance;
+    s.earned_conveyance_allowance = s.rate_conveyance_allowance;
+    s.earned_special_allowance = s.rate_special_allowance;
+    s.earned_da = s.rate_da;
+
     s.tds = inputs.tds !== undefined ? Number(inputs.tds) : (s.tds || 0);
     s.custom_deductions = inputs.custom_deductions !== undefined ? Number(inputs.custom_deductions) : (s.custom_deductions || 0);
     s.salary_advance = inputs.salary_advance !== undefined ? Number(inputs.salary_advance) : (s.salary_advance || 0);
