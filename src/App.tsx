@@ -1567,7 +1567,9 @@ export default function App() {
       const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
       const companyParam = isMgmt ? 'ALL' : activeCompany;
 
-      const dataSlips = await fetchJsonWithOfflineFallback(`/api/payslips/month/${activeMonth}?company=${companyParam}`, (store) => {
+      // Force fresh fetch for payslips with cache-busting
+      const cacheBust = Date.now();
+      const dataSlips = await fetchJsonWithOfflineFallback(`/api/payslips/month/${activeMonth}?company=${companyParam}&_t=${cacheBust}`, (store) => {
         const slips = store.payslips || [];
         return slips.filter((s: any) => {
           const monthOk = !activeMonth || s.month === activeMonth || s.payroll_month === activeMonth;
