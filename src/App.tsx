@@ -83,6 +83,7 @@ import UserRoleMasterView from './components/UserRoleMasterView';
 import UserGuideView from './components/UserGuideView';
 import EmployeeLifeCycleReport from './components/EmployeeLifeCycleReport';
 import ManagementAnalyticsModule from './components/ManagementAnalyticsModule';
+import UnitWiseSalaryReport from './components/UnitWiseSalaryReport';
 import HODMasterView from './components/HODMasterView';
 import ShiftMasterView from './components/ShiftMasterView';
 import BusinessLogicVault from './components/BusinessLogicVault';
@@ -249,7 +250,7 @@ export default function App() {
   }, [loggedInEmployee]);
   const [activeMonth, setActiveMonth] = useState('2026-05');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
-  const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy'>('lifecycle');
+  const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy' | 'salary'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
   const [loadingCorrections, setLoadingCorrections] = useState(false);
@@ -3313,6 +3314,12 @@ export default function App() {
                     >
                       EPF ECR & Master Exports
                     </button>
+                    <button
+                      onClick={() => setReportsSubTab('salary')}
+                      className={`text-xs font-black uppercase tracking-wider pb-1.5 border-b-2 transition cursor-pointer ${reportsSubTab === 'salary' ? 'border-emerald-600 text-slate-950 font-extrabold' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Unit-wise Salary Report
+                    </button>
                   </div>
 
                   {/* Render based on sub-tab */}
@@ -3495,6 +3502,15 @@ export default function App() {
                         })()}
                       </div>
                     </div>
+                  )}
+
+                  {/* UNIT-WISE SALARY REPORT */}
+                  {reportsSubTab === 'salary' && (
+                    <UnitWiseSalaryReport
+                      employees={employees}
+                      monthlySlips={monthlySlips}
+                      companies={companies}
+                    />
                   )}
                 </div>
               )}
