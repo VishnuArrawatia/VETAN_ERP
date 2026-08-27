@@ -167,8 +167,8 @@ const SIMULATED_HR_USERS = [
 const getNormalizedUnit = (val: string): string => {
   if (!val) return '';
   const upper = val.toUpperCase().trim();
-  if (upper.includes('SVN-I') || upper === 'SVN-1' || upper === 'SVN I' || upper === 'SVN_I' || (upper.includes('SVN') && (upper.includes('I') && !upper.includes('II')))) {
-    return 'SVN-I';
+  if (upper === 'SVN-1' || upper === 'SVN I' || upper === 'SVN_I' || (upper.includes('SVN') && (upper.includes('1') || (upper.includes('I') && !upper.includes('II'))))) {
+    return 'SVN-1';
   }
   if (upper.includes('SVN-II') || upper === 'SVN-2' || upper === 'SVN II' || upper === 'SVN_II' || (upper.includes('SVN') && upper.includes('II'))) {
     return 'SVN-II';
