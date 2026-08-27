@@ -1064,6 +1064,8 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN lwp INTEGER`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN ot_hours REAL`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN is_locked INTEGER DEFAULT 0`, () => {});
+      this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN in_time TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN out_time TEXT`, () => {});
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS payroll_runs (
@@ -2770,8 +2772,9 @@ export class PayrollDatabase {
       this.dbSqlite.run(
         `INSERT OR REPLACE INTO attendance (
           id, employee_id, month, total_days, working_days, lop_days, overtime_hours,
-          present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked,
+          in_time, out_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           record.id,
           record.employee_id,
@@ -2787,7 +2790,9 @@ export class PayrollDatabase {
           record.leave !== undefined ? record.leave : null,
           record.lwp !== undefined ? record.lwp : null,
           record.ot_hours !== undefined ? record.ot_hours : null,
-          record.is_locked ? 1 : 0
+          record.is_locked ? 1 : 0,
+          record.in_time || null,
+          record.out_time || null
         ]
       );
     }

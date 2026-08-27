@@ -44,6 +44,7 @@ export default function DailyAttendanceView({
   const [markingAll, setMarkingAll] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [employeeStatus, setEmployeeStatus] = useState<Record<string, 'PRESENT' | 'ABSENT' | 'LEAVE' | 'HALF_DAY'>>({});
+  const [punchTimes, setPunchTimes] = useState<Record<string, { in_time: string; out_time: string }>>({});
 
   // Get yesterday's date
   const yesterday = useMemo(() => {
@@ -120,8 +121,13 @@ export default function DailyAttendanceView({
         setSuccessMsg(`✅ Marked ${data.count} employees as PRESENT for ${yesterday}`);
         // Update local state
         const newStatus: Record<string, 'PRESENT'> = {};
-        activeEmps.forEach(emp => { newStatus[emp.id] = 'PRESENT'; });
+        const newPunch: Record<string, { in_time: string; out_time: string }> = {};
+        activeEmps.forEach(emp => {
+          newStatus[emp.id] = 'PRESENT';
+          newPunch[emp.id] = { in_time: '09:00', out_time: '18:30' };
+        });
         setEmployeeStatus(newStatus);
+        setPunchTimes(newPunch);
         setTimeout(() => setSuccessMsg(''), 3000);
       }
     } catch (err: any) {
@@ -157,6 +163,7 @@ export default function DailyAttendanceView({
       const records: Attendance[] = Object.entries(employeeStatus).map(([empId, status]) => {
         const emp = activeEmps.find(e => e.id === empId);
         const month = yesterday.substring(0, 7);
+        const punch = punchTimes[empId] || { in_time: '', out_time: '' };
         return {
           id: `ATT-${empId}-${month}`,
           employee_id: empId,
@@ -171,8 +178,10 @@ export default function DailyAttendanceView({
           paid_holiday: 0,
           leave: status === 'LEAVE' ? 1 : 0,
           lwp: 0,
-          is_locked: false
-        };
+          is_locked: false,
+          in_time: punch.in_time || undefined,
+          out_time: punch.out_time || undefined
+        } as any;
       });
       
       await onSaveAttendance(records);
@@ -291,6 +300,8 @@ export default function DailyAttendanceView({
               <tr className="text-left text-[10px] font-bold text-slate-500 uppercase">
                 <th className="p-2">Employee</th>
                 <th className="p-2">Unit</th>
+                <th className="p-2 text-center">In Time ⏰</th>
+                <th className="p-2 text-center">Out Time ⏰</th>
                 <th className="p-2 text-center">Status</th>
                 <th className="p-2 text-center">Actions</th>
               </tr>
@@ -308,6 +319,30 @@ export default function DailyAttendanceView({
                       <span className="text-[10px] text-slate-400 font-mono">{emp.id}</span>
                     </td>
                     <td className="p-2 text-slate-600">{emp.company}</td>
+                    <td className="p-2 text-center">
+                      <input
+                        type="time"
+                        value={punchTimes[emp.id]?.in_time || ''}
+                        onChange={e => setPunchTimes(prev => ({
+                          ...prev,
+                          [emp.id]: { ...prev[emp.id], in_time: e.target.value }
+                        }))}
+                        className="w-20 text-[10px] border border-slate-200 rounded px-1 py-0.5 font-mono"
+                        title="In Time"
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <input
+                        type="time"
+                        value={punchTimes[emp.id]?.out_time || ''}
+                        onChange={e => setPunchTimes(prev => ({
+                          ...prev,
+                          [emp.id]: { ...prev[emp.id], out_time: e.target.value }
+                        }))}
+                        className="w-20 text-[10px] border border-slate-200 rounded px-1 py-0.5 font-mono"
+                        title="Out Time"
+                      />
+                    </td>
                     <td className="p-2 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusDisplay.color} flex items-center justify-center gap-1`}>
                         {statusDisplay.icon}
