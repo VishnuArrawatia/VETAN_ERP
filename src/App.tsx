@@ -2668,7 +2668,14 @@ export default function App() {
               onClick={() => setActiveTab('attendance')}
               className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='attendance' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
             >
-              <span>Attendance Register</span>
+              <span className="flex items-center gap-1.5">
+                Attendance Register
+                {payrollRuns.some(r => r.month === activeMonth && r.status === 'CLOSED') && (
+                  <span className="px-1 py-0.5 bg-emerald-500 text-white text-[7px] font-bold rounded flex items-center gap-0.5">
+                    🔒
+                  </span>
+                )}
+              </span>
               <FileSpreadsheet size={14} />
             </button>
 
@@ -2708,7 +2715,14 @@ export default function App() {
               onClick={() => setActiveTab('payroll')}
               className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between ${activeHR.role === 'ATTENDANCE_ONLY_HR' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'cursor-pointer'} ${activeTab==='payroll' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
             >
-              <span>Payroll Processor</span>
+              <span className="flex items-center gap-1.5">
+                Payroll Processor
+                {payrollRuns.some(r => r.month === activeMonth && r.status === 'CLOSED') && (
+                  <span className="px-1 py-0.5 bg-emerald-500 text-white text-[7px] font-bold rounded flex items-center gap-0.5">
+                    🔒
+                  </span>
+                )}
+              </span>
               {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <Building2 size={14} />}
             </button>
 

@@ -781,8 +781,18 @@ export default function AttendanceSheet({
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="font-mono text-sm font-bold text-gray-800">
+              <span className="font-mono text-sm font-bold text-gray-800 flex items-center gap-1.5">
                 {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { year: 'numeric', month: 'long' })}
+                {isLocked && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500 text-white text-[8px] font-bold rounded flex items-center gap-0.5">
+                    <Lock size={8} /> LOCKED
+                  </span>
+                )}
+                {!isLocked && parsedRecords.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-amber-400 text-white text-[8px] font-bold rounded">
+                    UNLOCKED
+                  </span>
+                )}
               </span>
               <button 
                 onClick={() => handleMonthShift('NEXT')} 
