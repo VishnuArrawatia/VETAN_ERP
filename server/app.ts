@@ -1425,7 +1425,11 @@ export async function createApp(supabaseAdmin?: any) {
       const company = emp ? emp.company : undefined;
 
       if (db.isPayrollLocked(first.month, company)) {
-        return res.status(400).json({ error: 'Payroll month is locked. No attendance changes are allowed.' });
+        const monthName = new Date(first.month + '-02').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        return res.status(400).json({ 
+          error: `ATTENDANCE LOCKED for ${monthName} (${company || 'ALL'})`,
+          details: `Salary has already been processed and locked for this month. You cannot edit attendance after salary is finalized.\n\nTo make changes:\n1. Go to Payroll Processor\n2. UNLOCK payroll for ${monthName}\n3. Edit attendance\n4. Re-process salary\n5. Lock again`
+        });
       }
 
       db.saveAttendance(records);

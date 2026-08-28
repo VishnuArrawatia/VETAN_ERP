@@ -615,9 +615,8 @@ export default function AttendanceSheet({
   };
 
   // Save the verification grid to server
-  const handleCommitAttendance = async () => {
-    if (validationErrors.length > 0) {
-      setErrorMsg('Cannot lock or commit while validation errors exist. Please resolve all errors.');
+  const handleCommitAttendance = async () => {      if (validationErrors.length > 0) {
+      setErrorMsg('Cannot save attendance — please fix all validation errors first. Check the red highlighted rows below.');
       return;
     }
 
@@ -686,7 +685,7 @@ export default function AttendanceSheet({
         loadExistingAttendance(currentMonth);
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        setErrorMsg('Failed to commit monthly attendance summary back to the server.');
+        setErrorMsg(`❌ Cannot save attendance for ${new Date(currentMonth + '-02').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}. Possible reasons:\n\n1. Payroll is already LOCKED for this month — contact Super Admin to unlock\n2. Attendance was already FREEZED — you cannot edit after salary is processed\n3. Server error — try again or contact support`);
       }
     } catch (err: any) {
       setErrorMsg('Network error occurred: ' + err.message);
@@ -736,7 +735,9 @@ export default function AttendanceSheet({
 
         setTimeout(() => setSuccess(false), 3000);
       } else {
-        setErrorMsg('Failed to update attendance lock status on the server.');
+        setErrorMsg(lockValue 
+          ? `❌ Could not lock attendance for ${new Date(currentMonth + '-02').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}. Payroll may already be LOCKED — unlock payroll first.` 
+          : '❌ Could not unlock attendance. Payroll is LOCKED for this month — unlock payroll first from Payroll Processor.');
       }
     } catch (err: any) {
       setErrorMsg('Error changing lock status: ' + err.message);
