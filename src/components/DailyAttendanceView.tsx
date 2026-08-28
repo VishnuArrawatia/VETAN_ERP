@@ -404,3 +404,10 @@ export default function DailyAttendanceView({
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════
+// UNIT-WISE PAY DAYS SUMMARY COMPONENT
+// Shows all units' attendance summary for the month
+// HR can verify pay days before freezing attendance
+// ═══════════════════════════════════════════════════════════
+
