@@ -3733,7 +3733,7 @@ export class PayrollDatabase {
     const prevAdvance = prevSlip?.salary_advance || 0;
 
     let loan_deduction = 0;
-    const activeLoans = (this.data.loans || []).filter(l => l.employee_id === emp.id && l.status === 'ACTIVE');
+    const activeLoans = (this.data.loans || []).filter(l => l.employee_id === emp.id && (l.status === 'ACTIVE' || !l.status || l.status === 'NONE'));
     for (const l of activeLoans) {
       const skipped = Array.isArray(l.skipped_months) ? l.skipped_months : [];
       if (skipped.includes(month)) {
