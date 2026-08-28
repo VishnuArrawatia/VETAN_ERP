@@ -462,19 +462,19 @@ export default function AttendanceSheet({
       const code = String(findVal(['Worker_Code', 'Worker Code', 'Employee_ID', 'Employee ID', 'Code', 'Emp.Code', 'Emp Code'], '')).trim();
       const name = String(findVal(['Employee_Name', 'Employee Name', 'Name', 'Name of Employee'], '')).trim();
       
-      const present = Math.round(parseFloat(findVal(['Present', 'P', 'PRESENT'], '0')) || 0);
-      const absent = Math.round(parseFloat(findVal(['Absent', 'A', 'ABSENT'], '0')) || 0);
-      const weeklyOff = Math.round(parseFloat(findVal(['Weekly_Off', 'Weekly Off', 'WO', 'W/O', 'Week Off', 'WEEK Off'], '0')) || 0);
-      const paidHoliday = Math.round(parseFloat(findVal(['Paid_Holiday', 'Paid Holiday', 'PH', 'Paid Holy', 'Paid Holy Days'], '0')) || 0);
-      const leave = Math.round(parseFloat(findVal(['Leave', 'L', 'Leave Total'], '0')) || 0);
-      const lwp = Math.round(parseFloat(findVal(['LWP', 'LOP'], '0')) || 0);
+      const present = parseFloat(findVal(['Present', 'P', 'PRESENT'], '0')) || 0;
+      const absent = parseFloat(findVal(['Absent', 'A', 'ABSENT'], '0')) || 0;
+      const weeklyOff = parseFloat(findVal(['Weekly_Off', 'Weekly Off', 'WO', 'W/O', 'Week Off', 'WEEK Off'], '0')) || 0;
+      const paidHoliday = parseFloat(findVal(['Paid_Holiday', 'Paid Holiday', 'PH', 'Paid Holy', 'Paid Holy Days'], '0')) || 0;
+      const leave = parseFloat(findVal(['Leave', 'L', 'Leave Total'], '0')) || 0;
+      const lwp = parseFloat(findVal(['LWP', 'LOP'], '0')) || 0;
       const otHours = parseFloat(findVal(['OT_Hours', 'OT Hours', 'Overtime', 'OT'], '0')) || 0;
       
-      // Leave breakup columns (PL, CL, SL, CompOff)
-      const leavePL = Math.round(parseFloat(findVal(['Leave_Utilised (PL)', 'PL', 'USE PL', 'Use PL', 'leave_utilised_pl'], '0')) || 0);
-      const leaveCL = Math.round(parseFloat(findVal(['Leave_Utilised (CL)', 'CL', 'leave_utilised_cl'], '0')) || 0);
-      const leaveSL = Math.round(parseFloat(findVal(['Leave_Utilised (SL)', 'SL', 'leave_utilised_sl'], '0')) || 0);
-      const compOffUsed = Math.round(parseFloat(findVal(['C-Off_Utilised', 'C-Off', 'CompOff', 'CO', 'C OFF', 'Use C-O', 'c-off_utilised'], '0')) || 0);
+      // Leave breakup columns (PL, CL, SL, CompOff) — preserve decimals
+      const leavePL = parseFloat(findVal(['Leave_Utilised (PL)', 'PL', 'USE PL', 'Use PL', 'leave_utilised_pl'], '0')) || 0;
+      const leaveCL = parseFloat(findVal(['Leave_Utilised (CL)', 'CL', 'leave_utilised_cl'], '0')) || 0;
+      const leaveSL = parseFloat(findVal(['Leave_Utilised (SL)', 'SL', 'leave_utilised_sl'], '0')) || 0;
+      const compOffUsed = parseFloat(findVal(['C-Off_Utilised', 'C-Off', 'CompOff', 'CO', 'C OFF', 'Use C-O', 'c-off_utilised'], '0')) || 0;
 
       if (!code) {
         errors.push({
@@ -515,8 +515,9 @@ export default function AttendanceSheet({
       }
 
       // Sum Validation Rule: Present + Absent + Weekly_Off + Paid_Holiday + Leave + LWP === Total Month Calendar Days
+      // Use tolerance for decimal floating-point comparison
       const sum = present + absent + weeklyOff + paidHoliday + leave + lwp;
-      if (sum !== daysInMonth) {
+      if (Math.abs(sum - daysInMonth) > 0.01) {
         errors.push({
           row: rowNum,
           workerCode: code,
@@ -598,7 +599,7 @@ export default function AttendanceSheet({
       }
 
       const sum = rec.Present + rec.Absent + rec.Weekly_Off + rec.Paid_Holiday + rec.Leave + rec.LWP;
-      if (sum !== daysInMonth) {
+      if (Math.abs(sum - daysInMonth) > 0.01) {
         errors.push({
           row: rec.rowNum,
           workerCode: rec.Worker_Code,
