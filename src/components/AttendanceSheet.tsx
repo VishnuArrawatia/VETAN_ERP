@@ -653,6 +653,34 @@ export default function AttendanceSheet({
       }));
 
       const res = await onSaveAttendance(mappedPayload);
+      
+      // Also save leave utilization (I-L columns) to Leave Register
+      const leaveEntries = parsedRecords
+        .filter(rec => (rec.Leave_PL + rec.Leave_CL + rec.Leave_SL + rec.CompOff_Used) > 0)
+        .map(rec => ({
+          employee_id: rec.Worker_Code,
+          pl_days: rec.Leave_PL,
+          cl_days: rec.Leave_CL,
+          sl_days: rec.Leave_SL,
+          compoff_days: rec.CompOff_Used
+        }));
+      
+      if (leaveEntries.length > 0) {
+        try {
+          await fetch('/api/leave-utilization-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              month: currentMonth,
+              company: activeCompany,
+              entries: leaveEntries
+            })
+          });
+        } catch (e) {
+          console.error('Leave utilization save error:', e);
+        }
+      }
+      
       if (res) {
         setSuccess(true);
         loadExistingAttendance(currentMonth);
