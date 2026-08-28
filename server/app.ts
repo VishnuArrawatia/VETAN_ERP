@@ -39,6 +39,22 @@ export async function createApp(supabaseAdmin?: any) {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  // FIX 2: Persist-error warning interceptor
+  // If Supabase persist failed, add a warning header + body field so HR sees the error
+  app.use((req, res, next) => {
+    const originalJson = res.json.bind(res);
+    res.json = function(body: any) {
+      if (db && db.lastPersistError && req.method !== 'GET') {
+        res.setHeader('X-Persist-Warning', 'Data may not have been saved to cloud. Check server logs.');
+        if (typeof body === 'object' && body !== null && !body.persistWarning) {
+          body.persistWarning = 'WARNING: Cloud save may have failed. Your changes are saved locally but may not persist across server restarts. Please verify.';
+        }
+      }
+      return originalJson(body);
+    };
+    next();
+  });
+
   // Auditor Read-Only protection middleware
   app.use((req, res, next) => {
     const role = req.headers['x-operator-role'] as string || '';

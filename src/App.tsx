@@ -631,10 +631,32 @@ export default function App() {
       if (loggedInEmployee) {
         headers.set('X-Employee-ID', loggedInEmployee.id || '');
       }
-      return originalFetch(input, {
+      const response = await originalFetch(input, {
         ...init,
-        headers
+        headers,
+        cache: 'no-store'  // FIX 1: Disable browser/CDN caching — always fetch live data
       });
+
+      // FIX 2: Check for persist warnings from the server
+      if (response.headers.get('X-Persist-Warning')) {
+        console.warn('[PERSIST WARNING] Data may not have been saved to cloud!');
+      }
+      // Clone to read body without consuming it
+      const cloned = response.clone();
+      try {
+        const body = await cloned.json();
+        if (body && body.persistWarning) {
+          // Show warning to HR (debounce — max once per 60 seconds)
+          if (!(window as any).__lastPersistWarning || Date.now() - (window as any).__lastPersistWarning > 60000) {
+            (window as any).__lastPersistWarning = Date.now();
+            alert('⚠️ SAVE WARNING:\n\n' + body.persistWarning + '\n\nPlease check with your administrator.');
+          }
+        }
+      } catch (e) {
+        // Not JSON, ignore
+      }
+
+      return response;
     };
 
     try {

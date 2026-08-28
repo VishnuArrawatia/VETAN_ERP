@@ -4575,6 +4575,59 @@ Sakar & SVN Group`;
     return this.data;
   }
 
+  /** Track last persist success/failure for HR error surfacing */
+  public lastPersistError: string | null = null;
+  public lastPersistSuccess: boolean = true;
+
+  private async _persistToSupabaseWithRetry(maxRetries = 3): Promise<{ ok: boolean; error?: string }> {
+    if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
+    if (this.loadedFromSeed) return { ok: false, error: 'Loaded from seed — blocked' };
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const TIMEOUT_MS = 15_000;
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Supabase persist timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
+        );
+        const upsertPromise = this.supabaseAdmin
+          .from('vetan_erp_store')
+          .upsert(
+            { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
+            { onConflict: 'id' }
+          );
+
+        const { error } = await Promise.race([upsertPromise, timeoutPromise]);
+
+        if (error) {
+          const msg = error.message || String(error);
+          console.error(`[Supabase] persist attempt ${attempt}/${maxRetries} FAILED:`, msg);
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+            continue;
+          }
+          return { ok: false, error: msg };
+        }
+
+        // Success — mark persist time so reloadFromSupabase won't overwrite
+        this.lastPersistError = null;
+        this.lastPersistSuccess = true;
+        this.lastPersistedAt = new Date().toISOString();
+        return { ok: true };
+      } catch (e: any) {
+        const msg = e?.message || String(e);
+        console.error(`[Supabase] persist attempt ${attempt}/${maxRetries} EXCEPTION:`, msg);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+          continue;
+        }
+        this.lastPersistError = msg;
+        this.lastPersistSuccess = false;
+        return { ok: false, error: msg };
+      }
+    }
+    return { ok: false, error: 'All retries exhausted' };
+  }
+
   private persistData() {
     // 1. Local JSON file (existing behavior for local dev)
     try {
@@ -4584,19 +4637,13 @@ Sakar & SVN Group`;
       console.error('Failed to persist data to JSON:', e);
     }
 
-    // 2. Supabase push (fire-and-forget for Vercel persistence)
-    // SAFETY: Never push seed/fallback data to Supabase — it would overwrite real ERP data!
+    // 2. Supabase push with retry (fire-and-forget but retries)
     if (this.supabaseAdmin && !this.loadedFromSeed) {
-      this.supabaseAdmin
-        .from('vetan_erp_store')
-        .upsert(
-          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        )
-        .then(({ error }: any) => {
-          if (error) console.error('[Supabase] persistData push failed:', error.message || error);
-        })
-        .catch((e: any) => console.error('[Supabase] persistData exception:', e?.message || e));
+      this._persistToSupabaseWithRetry(3).then(result => {
+        if (!result.ok) {
+          console.error('[Supabase] persistData FAILED after retries:', result.error);
+        }
+      });
     } else if (this.loadedFromSeed && this.supabaseAdmin) {
       console.warn('[Supabase] persistData BLOCKED — data was loaded from seed, not pushing to prevent data loss.');
     }
@@ -4606,32 +4653,33 @@ Sakar & SVN Group`;
    * Synchronous Supabase persist — awaits the write so callers can be sure
    * data is saved before returning the HTTP response.
    */
-  public async persistDataSync(): Promise<void> {
+  public async persistDataSync(): Promise<{ ok: boolean; error?: string }> {
     if (!this.supabaseAdmin) {
-      console.error('[Supabase] persistDataSync ABORTED — supabaseAdmin is null/undefined');
-      return;
+      const msg = 'Supabase client not available';
+      console.error('[Supabase] persistDataSync ABORTED:', msg);
+      return { ok: false, error: msg };
     }
     if (this.loadedFromSeed) {
-      console.warn('[Supabase] persistDataSync BLOCKED — data was loaded from seed, not pushing.');
-      return;
+      const msg = 'Data loaded from seed — not pushing';
+      console.warn('[Supabase] persistDataSync BLOCKED:', msg);
+      return { ok: false, error: msg };
     }
     try {
       const employeeCount = this.data?.employees?.length || 0;
-      console.log(`[Supabase] persistDataSync START — ${employeeCount} employees, payload size: ${JSON.stringify(this.data).length} bytes`);
-      const { data, error } = await this.supabaseAdmin
-        .from('vetan_erp_store')
-        .upsert(
-          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        );
-      if (error) {
-        console.error('[Supabase] persistDataSync UPsert ERROR:', error.message, 'code:', error.code, 'details:', error.details);
-      } else {
+      const payloadSize = JSON.stringify(this.data).length;
+      console.log(`[Supabase] persistDataSync START — ${employeeCount} employees, ${payloadSize} bytes`);
+      const result = await this._persistToSupabaseWithRetry(3);
+      if (result.ok) {
         this.lastLoadedAt = new Date().toISOString();
         console.log('[Supabase] persistDataSync SUCCESS — data saved to vetan_erp_store');
+      } else {
+        console.error('[Supabase] persistDataSync FAILED:', result.error);
       }
+      return result;
     } catch (e: any) {
-      console.error('[Supabase] persistDataSync EXCEPTION:', e?.message || e, e?.stack || '');
+      const msg = e?.message || String(e);
+      console.error('[Supabase] persistDataSync EXCEPTION:', msg);
+      return { ok: false, error: msg };
     }
   }
 
@@ -4645,16 +4693,26 @@ Sakar & SVN Group`;
    * Only reloads if Supabase has NEWER data (updated_at > lastLoadedAt)
    * to prevent overwriting fresh in-memory mutations with stale data.
    */
+  /** Track when we last WROTE to Supabase (not just read). */
+  private lastPersistedAt: string = '';
+
   public async reloadFromSupabase(): Promise<void> {
     if (!this.supabaseAdmin) return;
     const MAX_RETRIES = 2;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const { data: row, error } = await this.supabaseAdmin
+        const TIMEOUT_MS = 10_000;
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('reloadFromSupabase timeout')), TIMEOUT_MS)
+        );
+        const queryPromise = this.supabaseAdmin
           .from('vetan_erp_store')
           .select('payload, updated_at')
           .eq('id', 'live')
           .maybeSingle();
+
+        const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
+
         if (error) {
           console.error(`[Supabase] reloadFromSupabase attempt ${attempt} ERROR:`, error.message);
           if (attempt < MAX_RETRIES) { await new Promise(r => setTimeout(r, 500 * attempt)); continue; }
@@ -4664,15 +4722,23 @@ Sakar & SVN Group`;
           console.warn('[Supabase] reloadFromSupabase — no payload found');
           return;
         }
+
         const remoteUpdatedAt = row.updated_at || '';
+
+        // FIX 3: Don't reload if we just persisted newer data locally
+        if (this.lastPersistedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastPersistedAt) {
+          console.log(`[Supabase] reloadFromSupabase SKIPPED — remote (${remoteUpdatedAt}) <= last persisted (${this.lastPersistedAt})`);
+          return;
+        }
         if (this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
           console.log(`[Supabase] reloadFromSupabase SKIPPED — remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
           return;
         }
+
         this.data = { ...this.data, ...row.payload };
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
-        console.log(`[Supabase] reloadFromSupabase OK — loaded at ${this.lastLoadedAt}, ${this.data.employees?.length || 0} employees`);
+        console.log(`[Supabase] reloadFromSupabase OK — ${this.data.employees?.length || 0} employees`);
         return;
       } catch (e: any) {
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
@@ -4682,22 +4748,13 @@ Sakar & SVN Group`;
   }
 
   /** Force an awaited upsert to Supabase (for critical writes). */
-  public async forcePersistToSupabase(): Promise<void> {
-    if (!this.supabaseAdmin) return;
+  public async forcePersistToSupabase(): Promise<{ ok: boolean; error?: string }> {
+    if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
     if (this.loadedFromSeed) {
       console.warn('[Supabase] forcePersist BLOCKED — loadedFromSeed is true.');
-      return;
+      return { ok: false, error: 'Loaded from seed' };
     }
-    try {
-      await this.supabaseAdmin
-        .from('vetan_erp_store')
-        .upsert(
-          { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
-          { onConflict: 'id' }
-        );
-    } catch (e: any) {
-      console.error('[Supabase] forcePersist failed:', e?.message || e);
-    }
+    return this._persistToSupabaseWithRetry(3);
   }
 
   public async restoreFullBackupJSON(backupData: any): Promise<void> {

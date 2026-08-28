@@ -12,12 +12,15 @@ let dbRef: any = null;
 
 async function ensureInit() {
   if (app) {
-    try {
-      if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+    // FIX 3: Only reload on GET (read) requests — NEVER on POST/PUT/DELETE
+    // This prevents race condition where reloadFromSupabase overwrites
+    // fresh in-memory mutations that haven't been persisted yet.
+    if (req.method === 'GET' && dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+      try {
         await dbRef.reloadFromSupabase();
+      } catch (e: any) {
+        console.error('[Vercel] reloadFromSupabase failed:', e?.message);
       }
-    } catch (e: any) {
-      console.error('[Vercel] reloadFromSupabase failed:', e?.message);
     }
     return;
   }
@@ -31,8 +34,22 @@ async function ensureInit() {
     let supabaseAdmin: any = null;
     if (supabaseUrl && supabaseKey) {
       const { createClient } = await import('@supabase/supabase-js');
-      supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-      console.log('[Vercel] Supabase service_role client initialized.');
+      supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+        // FIX 3: Add connection timeout + retry for serverless resilience
+        db: {
+          schema: 'public'
+        },
+        global: {
+          fetch: (url: any, options: any) => {
+            // Add timeout to prevent hanging serverless functions
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15_000);
+            return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+          }
+        }
+      });
+      const urlHost = new URL(supabaseUrl).hostname;
+      console.log(`[Vercel] Supabase client initialized (host: ${urlHost}).`);
     } else {
       console.warn('[Vercel] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing — running without cloud persistence.');
     }
@@ -70,6 +87,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // FIX 1: Disable all caching — force live data from Supabase
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
 
   // ── Action interceptors (before Express) ──
   // Vercel may cache api/index.ts with old code. These interceptors
