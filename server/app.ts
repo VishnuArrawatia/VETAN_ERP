@@ -2259,7 +2259,7 @@ HR Department`;
   });
 
   // Bulk update variable inputs (for bulk grid or Excel upload)
-  app.post('/api/payslips/bulk-update-inputs', (req, res) => {
+  app.post('/api/payslips/bulk-update-inputs', async (req, res) => {
     try {
       const { month, company, records } = req.body;
       if (!month || !Array.isArray(records)) {
@@ -2274,7 +2274,6 @@ HR Department`;
       const errors: string[] = [];
 
       for (const rec of records) {
-        // Can identify by employee_id or emp_code
         let slipId = rec.id;
         if (!slipId && rec.employee_id) {
           slipId = `SLIP-${rec.employee_id}-${month}`;
@@ -2297,6 +2296,9 @@ HR Department`;
           }
         }
       }
+
+      // FIX: Await Supabase persist so data survives cold start
+      await db.persistDataSync();
 
       db.logAudit('Bulk Payroll Variable Inputs Updated', `Updated ${updatedSlips.length} payroll inputs for month ${month} (${company || 'ALL'})`, getOperator(req));
       res.json({ success: true, count: updatedSlips.length, errors, slips: db.getPayslipsByMonth(month, company) });
