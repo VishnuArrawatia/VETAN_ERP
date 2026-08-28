@@ -3642,17 +3642,24 @@ HR Department`;
   // DEBUG: Check in-memory loans state
   app.get('/api/__debug/loans-state', (req, res) => {
     const loans = (db as any).data?.loans || [];
-    const activeLoans = loans.filter((l: any) => l.status === 'ACTIVE');
     const employees = (db as any).data?.employees || [];
+    // Count by raw status
+    const statusMap: Record<string, number> = {};
+    loans.forEach((l: any) => { const s = l.status || 'NONE'; statusMap[s] = (statusMap[s] || 0) + 1; });
+    // Show first 3 loans raw
+    const sample = loans.slice(0, 3).map((l: any) => ({
+      id: l.id, employee_id: l.employee_id, amount: l.amount, opening_balance: l.opening_balance,
+      monthly_deduction: l.monthly_deduction, status: l.status, emi_start_month: l.emi_start_month,
+      keys: Object.keys(l).join(',')
+    }));
     res.json({
       loansCount: loans.length,
-      activeLoansCount: activeLoans.length,
+      activeLoansCount: loans.filter((l: any) => l.status === 'ACTIVE').length,
       employeesCount: employees.length,
+      statusMap,
       inMemoryOnly: (db as any).inMemoryOnly,
       loadedFromSeed: (db as any).loadedFromSeed,
-      sampleActiveLoans: activeLoans.slice(0, 3).map((l: any) => ({
-        id: l.id, employee_id: l.employee_id, amount: l.amount, opening_balance: l.opening_balance, monthly_deduction: l.monthly_deduction, status: l.status, emi_start_month: l.emi_start_month
-      }))
+      sampleLoans: sample
     });
   });
 
