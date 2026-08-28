@@ -30664,34 +30664,35 @@ async function createApp(supabaseAdmin) {
       if (company && company !== "ALL") {
         filtered = filtered.filter((l) => l.company === company);
       }
-      const allAtts = db.getAttendance();
-      const monthAtts = month ? allAtts.filter((a) => a.month === month) : allAtts;
-      const companyAtts = company && company !== "ALL" ? monthAtts.filter((a) => {
-        const emp = db.getEmployeeById(a.employee_id);
-        return emp && emp.company === company;
-      }) : monthAtts;
-      const leaveSummary = companyAtts.map((a) => {
-        const emp = db.getEmployeeById(a.employee_id);
+      const allEmps = db.getEmployees();
+      const filteredEmps = company && company !== "ALL" ? allEmps.filter((e) => e.company === company) : allEmps;
+      const leaveSummary = filteredEmps.filter((e) => e.status === "ACTIVE").map((emp) => {
+        const att = db.getAttendance().find((a) => a.employee_id === emp.id && a.month === month);
         return {
-          employee_id: a.employee_id,
-          employee_name: emp?.name || "Unknown",
-          company: emp?.company || "",
-          month: a.month,
-          leave_pl: a.leave_pl || 0,
-          leave_cl: a.leave_cl || 0,
-          leave_sl: a.leave_sl || 0,
-          leave_coff: a.leave_coff || 0,
-          total_leave: a.leave || 0,
-          lwp: a.lwp || 0,
-          present: a.present || 0,
-          absent: a.absent || 0,
-          weekly_off: a.weekly_off || 0,
-          paid_holiday: a.paid_holiday || 0,
-          // Current remaining balance
-          balance_pl: emp?.leave_balance_pl || 0,
-          balance_cl: emp?.leave_balance_cl || 0,
-          balance_sl: emp?.leave_balance_sl || 0,
-          balance_compoff: emp?.leave_balance_compoff || 0
+          employee_id: emp.id,
+          employee_name: emp.name || "Unknown",
+          company: emp.company || "",
+          designation: emp.designation || "",
+          month: month || "",
+          // Attendance data (from attendance register)
+          total_days: att?.total_days || 30,
+          present: att?.present || 0,
+          absent: att?.absent || 0,
+          weekly_off: att?.weekly_off || 0,
+          paid_holiday: att?.paid_holiday || 0,
+          // Leave taken this month (from attendance)
+          leave_pl: att?.leave_pl || 0,
+          leave_cl: att?.leave_cl || 0,
+          leave_sl: att?.leave_sl || 0,
+          leave_coff: att?.leave_coff || 0,
+          total_leave_taken: att?.leave || 0,
+          lwp: att?.lwp || 0,
+          // Current remaining balance (from employee master)
+          balance_pl: emp.leave_balance_pl || 0,
+          balance_cl: emp.leave_balance_cl || 0,
+          balance_sl: emp.leave_balance_sl || 0,
+          balance_compoff: emp.leave_balance_compoff || 0,
+          balance_total: (emp.leave_balance_pl || 0) + (emp.leave_balance_cl || 0) + (emp.leave_balance_sl || 0) + (emp.leave_balance_compoff || 0)
         };
       });
       res.json({
