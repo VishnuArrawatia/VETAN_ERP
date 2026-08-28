@@ -3639,6 +3639,23 @@ HR Department`;
     }
   });
 
+  // DEBUG: Check in-memory loans state
+  app.get('/api/__debug/loans-state', (req, res) => {
+    const loans = (db as any).data?.loans || [];
+    const activeLoans = loans.filter((l: any) => l.status === 'ACTIVE');
+    const employees = (db as any).data?.employees || [];
+    res.json({
+      loansCount: loans.length,
+      activeLoansCount: activeLoans.length,
+      employeesCount: employees.length,
+      inMemoryOnly: (db as any).inMemoryOnly,
+      loadedFromSeed: (db as any).loadedFromSeed,
+      sampleActiveLoans: activeLoans.slice(0, 3).map((l: any) => ({
+        id: l.id, employee_id: l.employee_id, amount: l.amount, opening_balance: l.opening_balance, monthly_deduction: l.monthly_deduction, status: l.status, emi_start_month: l.emi_start_month
+      }))
+    });
+  });
+
   // Expose db instance for Vercel handler to call reloadFromSupabase()
   (app as any).locals = (app as any).locals || {};
   (app as any).locals.db = db;
