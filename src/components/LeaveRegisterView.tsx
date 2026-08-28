@@ -19,7 +19,11 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
-  Info
+  Info,
+  Edit3,
+  Save,
+  X,
+  Users
 } from 'lucide-react';
 import { Employee, LeaveApplication, Attendance } from '../types';
 
@@ -39,6 +43,20 @@ export default function LeaveRegisterView({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'register' | 'exceptions'>('register');
+  
+  // Opening Balance Edit State
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editEmpId, setEditEmpId] = useState<string | null>(null);
+  const [editPL, setEditPL] = useState(0);
+  const [editCL, setEditCL] = useState(0);
+  const [editSL, setEditSL] = useState(0);
+  const [editCompOff, setEditCompOff] = useState(0);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkPL, setBulkPL] = useState(18);
+  const [bulkCL, setBulkCL] = useState(6);
+  const [bulkSL, setBulkSL] = useState(6);
+  const [bulkCompOff, setBulkCompOff] = useState(0);
+  const [saving, setSaving] = useState(false);
   
   // Custom print ref
   const printRef = useRef<HTMLDivElement>(null);
@@ -224,6 +242,77 @@ export default function LeaveRegisterView({
     }
   };
 
+  // Open Edit Modal for single employee
+  const openEditModal = (emp: any) => {
+    setEditEmpId(emp.id);
+    setEditPL(emp.leave_balance_pl || 0);
+    setEditCL(emp.leave_balance_cl || 0);
+    setEditSL(emp.leave_balance_sl || 0);
+    setEditCompOff(emp.leave_balance_compoff || 0);
+    setEditModalOpen(true);
+  };
+
+  // Save single employee opening balance
+  const saveOpeningBalance = async () => {
+    if (!editEmpId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/employees/${editEmpId}/leave-opening`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leave_balance_pl: Number(editPL),
+          leave_balance_cl: Number(editCL),
+          leave_balance_sl: Number(editSL),
+          leave_balance_compoff: Number(editCompOff)
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Opening Balance updated successfully!');
+        setEditModalOpen(false);
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to update'));
+      }
+    } catch (e: any) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save bulk opening balance for ALL employees
+  const saveBulkOpeningBalance = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/leave-opening-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          default_balance: {
+            pl: Number(bulkPL),
+            cl: Number(bulkCL),
+            sl: Number(bulkSL),
+            compoff: Number(bulkCompOff)
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Opening Balance updated for ${data.updated} employees!`);
+        setBulkModalOpen(false);
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to update'));
+      }
+    } catch (e: any) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -239,8 +328,16 @@ export default function LeaveRegisterView({
           </p>
         </div>
 
-        {/* View Switchers */}
-        <div className="flex bg-gray-100 p-1 rounded-xl">
+        {/* View Switchers + Set Opening Balance */}
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setBulkModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-xs font-bold text-white rounded-xl transition cursor-pointer"
+          >
+            <Users size={13} />
+            Set Opening Balance
+          </button>
+          <div className="flex bg-gray-100 p-1 rounded-xl">
           <button 
             onClick={() => setActiveView('register')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -264,6 +361,7 @@ export default function LeaveRegisterView({
               <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
             )}
           </button>
+        </div>
         </div>
       </div>
 
@@ -350,13 +448,22 @@ export default function LeaveRegisterView({
                           </div>
                         </td>
                         <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <button 
-                            onClick={() => handlePrintCard(row.employee.id)}
-                            className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
-                            title="Print Leave Card"
-                          >
-                            <Printer size={13} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button 
+                              onClick={() => openEditModal(row.employee)}
+                              className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition cursor-pointer"
+                              title="Edit Opening Balance"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button 
+                              onClick={() => handlePrintCard(row.employee.id)}
+                              className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                              title="Print Leave Card"
+                            >
+                              <Printer size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -587,6 +694,117 @@ export default function LeaveRegisterView({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* EDIT OPENING BALANCE MODAL (Single Employee) */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+            <div className="bg-amber-600 p-4 text-white flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-sm">Edit Opening Leave Balance</h4>
+                <p className="text-[10px] text-amber-100 mt-0.5">Set PL, CL, SL & CompOff for {editEmpId}</p>
+              </div>
+              <button onClick={() => setEditModalOpen(false)} className="p-1 hover:bg-amber-700 rounded-lg">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">PL (Privilege Leave)</label>
+                  <input type="number" value={editPL} onChange={(e) => setEditPL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-amber-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CL (Casual Leave)</label>
+                  <input type="number" value={editCL} onChange={(e) => setEditCL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-amber-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">SL (Sick Leave)</label>
+                  <input type="number" value={editSL} onChange={(e) => setEditSL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-amber-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CompOff</label>
+                  <input type="number" value={editCompOff} onChange={(e) => setEditCompOff(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-amber-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setEditModalOpen(false)}
+                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                  Cancel
+                </button>
+                <button onClick={saveOpeningBalance} disabled={saving}
+                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+                  <Save size={13} />
+                  {saving ? 'Saving...' : 'Save Balance'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* BULK OPENING BALANCE MODAL (All Employees) */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {bulkModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+            <div className="bg-emerald-700 p-4 text-white flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-sm">Set Opening Balance for ALL Employees</h4>
+                <p className="text-[10px] text-emerald-100 mt-0.5">This will set the same balance for all active employees</p>
+              </div>
+              <button onClick={() => setBulkModalOpen(false)} className="p-1 hover:bg-emerald-800 rounded-lg">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] text-amber-800">
+                <strong>⚠️ Warning:</strong> This will OVERWRITE the opening balance for ALL active employees. Use only at the start of the financial year.
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">PL (Privilege Leave)</label>
+                  <input type="number" value={bulkPL} onChange={(e) => setBulkPL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CL (Casual Leave)</label>
+                  <input type="number" value={bulkCL} onChange={(e) => setBulkCL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">SL (Sick Leave)</label>
+                  <input type="number" value={bulkSL} onChange={(e) => setBulkSL(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CompOff</label>
+                  <input type="number" value={bulkCompOff} onChange={(e) => setBulkCompOff(Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setBulkModalOpen(false)}
+                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                  Cancel
+                </button>
+                <button onClick={saveBulkOpeningBalance} disabled={saving}
+                  className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+                  <Save size={13} />
+                  {saving ? 'Saving...' : 'Set for ALL'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
