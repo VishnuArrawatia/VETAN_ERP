@@ -29102,6 +29102,8 @@ Sakar & SVN Group`;
   addCompOffLedgerEntry(entry) {
     if (!this.data.compoff_ledger) this.data.compoff_ledger = [];
     const id = entry.id || `COL${Date.now()}`;
+    const earnedDays = Number(entry.earned_days || 0);
+    const availedDays = Number(entry.availed_days || 0);
     const newEntry = {
       id,
       employee_id: entry.employee_id,
@@ -29109,9 +29111,9 @@ Sakar & SVN Group`;
       company: entry.company,
       date_earned: entry.date_earned,
       reason: entry.reason,
-      earned_days: Number(entry.earned_days || 0),
-      availed_days: Number(entry.availed_days || 0),
-      balance: Number(entry.balance ?? entry.earned_days - entry.availed_days),
+      earned_days: earnedDays,
+      availed_days: availedDays,
+      balance: Number(entry.balance ?? earnedDays - availedDays),
       expiry_date: entry.expiry_date
     };
     this.data.compoff_ledger.push(newEntry);
@@ -29119,6 +29121,19 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO compoff_ledger (id, employee_id, employee_name, company, date_earned, reason, earned_days, availed_days, balance, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [newEntry.id, newEntry.employee_id, newEntry.employee_name, newEntry.company, newEntry.date_earned, newEntry.reason, newEntry.earned_days, newEntry.availed_days, newEntry.balance, newEntry.expiry_date]
     );
+    if (entry.employee_id) {
+      const emp = this.data.employees.find((e) => e.id === entry.employee_id);
+      if (emp) {
+        const netChange = earnedDays - availedDays;
+        emp.leave_balance_compoff = Number(emp.leave_balance_compoff || 0) + netChange;
+        if (emp.leave_balance_compoff < 0) emp.leave_balance_compoff = 0;
+        if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+          this.dbSqlite.run(`UPDATE employees SET leave_balance_compoff = ? WHERE id = ?`, [emp.leave_balance_compoff, emp.id]);
+        }
+        console.log(`[CompOff] ${emp.name}: +${earnedDays} earned, -${availedDays} availed \u2192 balance: ${emp.leave_balance_compoff}`);
+      }
+    }
+    this.persistData();
     return newEntry;
   }
   // HR Policy & Employee Handbook Operations
