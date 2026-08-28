@@ -75,6 +75,16 @@ export interface Employee {
   salary_structure_type?: 'FIXED' | 'PERCENTAGE' | 'MIXED';
   hidden_salary_heads?: string;
   pf_number?: string;
+
+  // Workforce module fields
+  father_husband_name?: string;
+  contractor?: string;
+  payment_group?: string;
+  wage_group?: string;
+  wage_rate?: number;
+  work_type?: string;
+  id_proof_type?: string;
+  id_proof_number?: string;
 }
 
 export interface LeaveApplication {
@@ -210,6 +220,11 @@ export interface Attendance {
   lwp?: number;
   ot_hours?: number;
   is_locked?: boolean;
+  // Leave breakup fields
+  leave_pl?: number;
+  leave_cl?: number;
+  leave_sl?: number;
+  compoff_used?: number;
 }
 
 export interface PayrollRun {

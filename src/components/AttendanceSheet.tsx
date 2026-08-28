@@ -48,6 +48,11 @@ interface ParsedRecord {
   Leave: number;
   LWP: number;
   OT_Hours: number;
+  // Leave breakup columns
+  Leave_PL: number;
+  Leave_CL: number;
+  Leave_SL: number;
+  CompOff_Used: number;
   rowNum: number;
 }
 
@@ -126,6 +131,10 @@ export default function AttendanceSheet({
             Leave: r.leave ?? 0,
             LWP: r.lwp ?? r.lop_days,
             OT_Hours: r.ot_hours ?? r.overtime_hours,
+            Leave_PL: r.leave_pl ?? 0,
+            Leave_CL: r.leave_cl ?? 0,
+            Leave_SL: r.leave_sl ?? 0,
+            CompOff_Used: r.compoff_used ?? 0,
             rowNum: index + 1
           };
         });
@@ -183,15 +192,18 @@ export default function AttendanceSheet({
     );
 
     const headers = [
-      'Worker_Code',
-      'Employee_Name',
+      'Emp.Code',
+      'Name',
       'Present',
       'Absent',
-      'Weekly_Off',
-      'Paid_Holiday',
+      'W/O',
+      'Paid Holy',
       'Leave',
       'LWP',
-      'OT_Hours'
+      'Leave_Utilised (PL)',
+      'Leave_Utilised (CL)',
+      'Leave_Utilised (SL)',
+      'C-Off_Utilised'
     ];
 
     // Standard working calendar defaults for standard month: 26 present, 4 weekly off, 1 paid holiday
@@ -211,7 +223,10 @@ export default function AttendanceSheet({
         defaultPaidHoliday,
         0,
         0,
-        0
+        0,  // PL
+        0,  // CL
+        0,  // SL
+        0   // C-Off
       ];
       csvRows.push(row.join(','));
     }
@@ -220,7 +235,7 @@ export default function AttendanceSheet({
     const link = document.createElement('a');
     const companyLabel = activeCompany ? activeCompany.replace(/\s+/g, '_') : 'Company';
     link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `Attendance_Template_${companyLabel}_${currentMonth}.csv`);
+    link.setAttribute('download', `Attendance_${companyLabel}_${currentMonth}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -259,6 +274,10 @@ export default function AttendanceSheet({
       Leave: 0,
       LWP: 0,
       OT_Hours: 0,
+      Leave_PL: 0,
+      Leave_CL: 0,
+      Leave_SL: 0,
+      CompOff_Used: 0,
       rowNum: index + 1
     }));
 
@@ -287,6 +306,10 @@ export default function AttendanceSheet({
       Leave: 0,
       LWP: 0,
       OT_Hours: 0,
+      Leave_PL: 0,
+      Leave_CL: 0,
+      Leave_SL: 0,
+      CompOff_Used: 0,
       rowNum: parsedRecords.length + 1
     };
 
@@ -436,16 +459,22 @@ export default function AttendanceSheet({
         return defaultVal;
       };
 
-      const code = String(findVal(['Worker_Code', 'Worker Code', 'Employee_ID', 'Employee ID', 'Code'], '')).trim();
-      const name = String(findVal(['Employee_Name', 'Employee Name', 'Name'], '')).trim();
+      const code = String(findVal(['Worker_Code', 'Worker Code', 'Employee_ID', 'Employee ID', 'Code', 'Emp.Code', 'Emp Code'], '')).trim();
+      const name = String(findVal(['Employee_Name', 'Employee Name', 'Name', 'Name of Employee'], '')).trim();
       
-      const present = Math.round(parseFloat(findVal(['Present', 'P'], '0')) || 0);
-      const absent = Math.round(parseFloat(findVal(['Absent', 'A'], '0')) || 0);
-      const weeklyOff = Math.round(parseFloat(findVal(['Weekly_Off', 'Weekly Off', 'WO'], '0')) || 0);
-      const paidHoliday = Math.round(parseFloat(findVal(['Paid_Holiday', 'Paid Holiday', 'PH'], '0')) || 0);
-      const leave = Math.round(parseFloat(findVal(['Leave', 'L'], '0')) || 0);
+      const present = Math.round(parseFloat(findVal(['Present', 'P', 'PRESENT'], '0')) || 0);
+      const absent = Math.round(parseFloat(findVal(['Absent', 'A', 'ABSENT'], '0')) || 0);
+      const weeklyOff = Math.round(parseFloat(findVal(['Weekly_Off', 'Weekly Off', 'WO', 'W/O', 'Week Off', 'WEEK Off'], '0')) || 0);
+      const paidHoliday = Math.round(parseFloat(findVal(['Paid_Holiday', 'Paid Holiday', 'PH', 'Paid Holy', 'Paid Holy Days'], '0')) || 0);
+      const leave = Math.round(parseFloat(findVal(['Leave', 'L', 'Leave Total'], '0')) || 0);
       const lwp = Math.round(parseFloat(findVal(['LWP', 'LOP'], '0')) || 0);
       const otHours = parseFloat(findVal(['OT_Hours', 'OT Hours', 'Overtime', 'OT'], '0')) || 0;
+      
+      // Leave breakup columns (PL, CL, SL, CompOff)
+      const leavePL = Math.round(parseFloat(findVal(['Leave_Utilised (PL)', 'PL', 'USE PL', 'Use PL', 'leave_utilised_pl'], '0')) || 0);
+      const leaveCL = Math.round(parseFloat(findVal(['Leave_Utilised (CL)', 'CL', 'leave_utilised_cl'], '0')) || 0);
+      const leaveSL = Math.round(parseFloat(findVal(['Leave_Utilised (SL)', 'SL', 'leave_utilised_sl'], '0')) || 0);
+      const compOffUsed = Math.round(parseFloat(findVal(['C-Off_Utilised', 'C-Off', 'CompOff', 'CO', 'C OFF', 'Use C-O', 'c-off_utilised'], '0')) || 0);
 
       if (!code) {
         errors.push({
@@ -508,6 +537,10 @@ export default function AttendanceSheet({
         Leave: leave,
         LWP: lwp,
         OT_Hours: otHours,
+        Leave_PL: leavePL,
+        Leave_CL: leaveCL,
+        Leave_SL: leaveSL,
+        CompOff_Used: compOffUsed,
         rowNum
       });
     });
@@ -610,6 +643,11 @@ export default function AttendanceSheet({
         leave: rec.Leave,
         lwp: rec.LWP,
         ot_hours: rec.OT_Hours,
+        // Leave breakup
+        leave_pl: rec.Leave_PL,
+        leave_cl: rec.Leave_CL,
+        leave_sl: rec.Leave_SL,
+        compoff_used: rec.CompOff_Used,
         is_locked: isLocked
       }));
 
@@ -908,9 +946,9 @@ export default function AttendanceSheet({
               <div className="space-y-1.5">
                 <h5 className="text-xs font-bold text-amber-900">Format Instructions & Guidelines:</h5>
                 <ul className="list-disc list-inside text-[10px] text-amber-800 space-y-1 leading-relaxed">
-                  <li>Columns MUST have headers: <span className="font-mono font-semibold">Worker_Code</span> or <span className="font-mono font-semibold">Employee_ID</span>, <span className="font-mono font-semibold">Employee_Name</span>, <span className="font-mono font-semibold">Present</span>, <span className="font-mono font-semibold">Absent</span>, <span className="font-mono font-semibold">Weekly_Off</span>, <span className="font-mono font-semibold">Paid_Holiday</span>, <span className="font-mono font-semibold">Leave</span>, <span className="font-mono font-semibold">LWP</span>, <span className="font-mono font-semibold">OT_Hours</span>.</li>
-                  <li>Present + Absent + Weekly_Off + Paid_Holiday + Leave + LWP must sum to precisely the calendar days of the month ({daysInMonth} days for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}).</li>
-                  <li>Overtime (OT) hours must be zero or a positive floating-point number.</li>
+                  <li>Supported columns: <span className="font-mono font-semibold">Emp.Code</span>, <span className="font-mono font-semibold">Name</span>, <span className="font-mono font-semibold">Present</span>, <span className="font-mono font-semibold">Absent</span>, <span className="font-mono font-semibold">W/O</span>, <span className="font-mono font-semibold">Paid Holy</span>, <span className="font-mono font-semibold">Leave</span>, <span className="font-mono font-semibold">LWP</span>, <span className="font-mono font-semibold">Leave_Utilised (PL)</span>, <span className="font-mono font-semibold">Leave_Utilised (CL)</span>, <span className="font-mono font-semibold">Leave_Utilised (SL)</span>, <span className="font-mono font-semibold">C-Off_Utilised</span>.</li>
+                  <li>Present + Absent + W/O + Paid Holy + Leave + LWP must sum to precisely {daysInMonth} days (for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}).</li>
+                  <li>Leave breakup (PL, CL, SL, C-Off) is optional — used for Leave Card tracking.</li>
                 </ul>
               </div>
             </div>
@@ -1124,11 +1162,15 @@ export default function AttendanceSheet({
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-44">Employee Name</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Present</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Absent</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Weekly Off</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-24">Paid Holiday</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Leave</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">LWP</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-24">OT Hours</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">W/O</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">PH</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">Leave</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-14">LWP</th>
+                    <th className="p-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider text-center w-14 bg-emerald-50">PL</th>
+                    <th className="p-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider text-center w-14 bg-emerald-50">CL</th>
+                    <th className="p-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider text-center w-14 bg-emerald-50">SL</th>
+                    <th className="p-3 text-[10px] font-bold text-emerald-600 uppercase tracking-wider text-center w-14 bg-emerald-50">C-Off</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">OT</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-28">Sum Days</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">Actions</th>
                   </tr>
@@ -1211,6 +1253,58 @@ export default function AttendanceSheet({
                             onChange={(e) => handleVerifyGridChange(rec.Worker_Code, 'LWP', e.target.value)}
                             disabled={isLocked}
                             className="w-14 text-center py-1 font-mono text-xs font-bold border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-gray-50/50"
+                          />
+                        </td>
+                        {/* Leave Breakup: PL */}
+                        <td className="p-2 bg-emerald-50/30">
+                          <input
+                            type="number"
+                            min="0"
+                            max={daysInMonth}
+                            step="0.5"
+                            value={rec.Leave_PL}
+                            onChange={(e) => handleVerifyGridChange(rec.Worker_Code, 'Leave_PL', e.target.value)}
+                            disabled={isLocked}
+                            className="w-14 text-center py-1 font-mono text-xs font-bold border border-emerald-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white/80"
+                          />
+                        </td>
+                        {/* CL */}
+                        <td className="p-2 bg-emerald-50/30">
+                          <input
+                            type="number"
+                            min="0"
+                            max={daysInMonth}
+                            step="0.5"
+                            value={rec.Leave_CL}
+                            onChange={(e) => handleVerifyGridChange(rec.Worker_Code, 'Leave_CL', e.target.value)}
+                            disabled={isLocked}
+                            className="w-14 text-center py-1 font-mono text-xs font-bold border border-emerald-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white/80"
+                          />
+                        </td>
+                        {/* SL */}
+                        <td className="p-2 bg-emerald-50/30">
+                          <input
+                            type="number"
+                            min="0"
+                            max={daysInMonth}
+                            step="0.5"
+                            value={rec.Leave_SL}
+                            onChange={(e) => handleVerifyGridChange(rec.Worker_Code, 'Leave_SL', e.target.value)}
+                            disabled={isLocked}
+                            className="w-14 text-center py-1 font-mono text-xs font-bold border border-emerald-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white/80"
+                          />
+                        </td>
+                        {/* CompOff Used */}
+                        <td className="p-2 bg-emerald-50/30">
+                          <input
+                            type="number"
+                            min="0"
+                            max={daysInMonth}
+                            step="0.5"
+                            value={rec.CompOff_Used}
+                            onChange={(e) => handleVerifyGridChange(rec.Worker_Code, 'CompOff_Used', e.target.value)}
+                            disabled={isLocked}
+                            className="w-14 text-center py-1 font-mono text-xs font-bold border border-emerald-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white/80"
                           />
                         </td>
                         <td className="p-2">
