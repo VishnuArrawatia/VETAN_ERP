@@ -829,61 +829,84 @@ export default function AttendanceSheet({
         </div>
       </div>
 
-      {/* Lock Status Banner */}
+      {/* Lock Status Banner — GREEN LOCK when attendance is locked */}
       {isLocked && (
-        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-300 p-5 rounded-2xl flex items-center justify-between shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-500 text-white rounded-xl">
-              <Lock size={22} />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 p-6 rounded-2xl shadow-xl"
+        >
+          <div className="flex items-center gap-5">
+            {/* Big Green Lock Icon */}
+            <div className="bg-white/20 p-4 rounded-2xl">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="11" width="18" height="11" rx="2" fill="white"/>
+                <path d="M7 11V7a5 5 0 0110 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="12" cy="16" r="1.5" fill="#22c55e"/>
+                <path d="M12 17.5v2" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-emerald-900">
-                🔒 Attendance LOCKED for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-white">
+                ✅ Attendance LOCKED Successfully!
               </h3>
-              <p className="text-xs text-emerald-700 mt-1">
-                Salary has been processed. No more attendance edits allowed.
-                {parsedRecords.length > 0 && ` • ${parsedRecords.length} employees frozen.`}
+              <p className="text-emerald-100 mt-1">
+                {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} — {parsedRecords.length} employees frozen for salary processing
               </p>
+              <div className="flex gap-2 mt-3">
+                <span className="px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-lg">
+                  📊 {parsedRecords.length} Records
+                </span>
+                <span className="px-3 py-1 bg-white/20 text-white text-xs font-semibold rounded-lg">
+                  📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length} Updated
+                </span>
+                <span className="px-3 py-1 bg-white text-emerald-700 text-xs font-bold rounded-lg">
+                  🔒 LOCKED
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-2">
             <button
               onClick={() => handleLockToggle(false)}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-white hover:bg-emerald-100 border border-emerald-300 hover:border-emerald-400 text-xs font-bold text-emerald-800 rounded-xl transition cursor-pointer shadow-sm"
+              className="px-5 py-3 bg-white/20 hover:bg-white/30 text-white font-bold rounded-xl transition cursor-pointer border border-white/30"
             >
-              <Unlock size={14} />
-              Unlock to Edit
+              <Unlock size={16} className="inline mr-2" />
+              Unlock
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Success/Error Alerts */}
       <AnimatePresence>
         {success && (
           <motion.div 
-            initial={{ opacity: 0, y: -8 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -8 }}
-            className="p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-lg"
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-gradient-to-r from-emerald-500 to-green-500 p-6 rounded-2xl shadow-xl"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-3 bg-emerald-500 text-white rounded-full">
-                <CheckCircle size={24} />
+            <div className="flex items-center gap-4">
+              {/* Green Lock Icon */}
+              <div className="bg-white/20 p-3 rounded-2xl">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="11" width="18" height="11" rx="2" fill="white"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <circle cx="12" cy="16" r="1.5" fill="#22c55e"/>
+                </svg>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-emerald-900">
-                  ✅ Attendance {isLocked ? 'LOCKED' : 'SAVED'} for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                <h3 className="text-lg font-bold text-white">
+                  ✅ Attendance {isLocked ? 'LOCKED' : 'SAVED'} Successfully!
                 </h3>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  {parsedRecords.length} employees • {isLocked ? 'Payroll frozen — no more edits allowed' : 'Data saved successfully'}
+                <p className="text-emerald-100 text-sm mt-1">
+                  {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} — {parsedRecords.length} employees {isLocked ? 'frozen for salary processing' : 'saved'}
                 </p>
               </div>
             </div>
-            <div className="flex gap-3 text-[10px] text-emerald-600">
-              <span className="px-2 py-1 bg-emerald-100 rounded-lg">📊 Attendance: {parsedRecords.length} records</span>
-              <span className="px-2 py-1 bg-emerald-100 rounded-lg">📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length} with breakup</span>
-              {isLocked && <span className="px-2 py-1 bg-emerald-600 text-white rounded-lg font-bold">🔒 LOCKED</span>}
+            <div className="flex gap-3 mt-4">
+              <span className="px-3 py-1.5 bg-white/20 text-white text-xs font-semibold rounded-lg">📊 {parsedRecords.length} Records</span>
+              <span className="px-3 py-1.5 bg-white/20 text-white text-xs font-semibold rounded-lg">📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length}</span>
+              {isLocked && <span className="px-3 py-1.5 bg-white text-emerald-700 text-xs font-bold rounded-lg">🔒 LOCKED</span>}
             </div>
           </motion.div>
         )}
