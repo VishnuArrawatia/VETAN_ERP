@@ -867,9 +867,16 @@ export default function PayrollInputManagementView({
                         ₹{(slip.pf_deduction + slip.esic_deduction + slip.professional_tax)?.toLocaleString('en-IN')}
                       </td>
 
-                      {/* Loan EMI */}
-                      <td className="p-3 text-right text-amber-900 bg-amber-50/30 font-bold">
-                        ₹{slip.loan_deduction?.toLocaleString('en-IN')}
+                      {/* Loan EMI - Editable */}
+                      <td className="p-1 text-center bg-amber-50/50 border-l border-amber-200">
+                        <input
+                          type="number"
+                          value={rowInputs.loan_deduction ?? slip.loan_deduction ?? 0}
+                          onChange={(e) => handleCellChange(slip.id, 'loan_deduction', e.target.value)}
+                          disabled={isPayrollLocked}
+                          className="w-full text-center p-1 bg-white border border-amber-300 rounded text-amber-900 font-bold focus:outline-none focus:border-amber-600"
+                          title="HR can edit Loan EMI if needed"
+                        />
                       </td>
 
                       {/* Editable Inputs: TDS */}
@@ -1021,7 +1028,7 @@ export default function PayrollInputManagementView({
                               esic: slip.esic_deduction,
                               pt: slip.professional_tax,
                               tds: rowInputs.tds ?? slip.tds ?? 0,
-                              loan: slip.loan_deduction,
+                              loan: rowInputs.loan_deduction ?? slip.loan_deduction ?? 0,
                               advance: rowInputs.salary_advance ?? slip.salary_advance ?? 0,
                               custom: rowInputs.custom_deductions ?? slip.custom_deductions ?? 0,
                               canteen_deduction: rowInputs.canteen_deduction ?? slip.canteen_deduction ?? 0,
