@@ -30650,6 +30650,118 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
+  app.post("/api/leave-utilization-bulk", async (req, res) => {
+    try {
+      const { month, company, entries } = req.body;
+      if (!month || !Array.isArray(entries)) {
+        return res.status(400).json({ error: "month and entries array required" });
+      }
+      let updated = 0;
+      const allEmps = db.getEmployees();
+      for (const entry of entries) {
+        const emp = allEmps.find((e) => e.id === entry.employee_id);
+        if (!emp) continue;
+        if (company && company !== "ALL" && emp.company !== company) continue;
+        const plDays = Number(entry.pl_days || 0);
+        const clDays = Number(entry.cl_days || 0);
+        const slDays = Number(entry.sl_days || 0);
+        const compoffDays = Number(entry.compoff_days || 0);
+        const totalLeave = plDays + clDays + slDays + compoffDays;
+        if (totalLeave === 0) continue;
+        const attId = `ATT-${emp.id}-${month}`;
+        let att = db.getAttendance().find((a) => a.employee_id === emp.id && a.month === month);
+        if (!att) {
+          att = {
+            id: attId,
+            employee_id: emp.id,
+            month,
+            total_days: 30,
+            working_days: 30,
+            lop_days: 0,
+            overtime_hours: 0,
+            present: 0,
+            absent: 0,
+            weekly_off: 0,
+            paid_holiday: 0,
+            leave: 0,
+            lwp: 0,
+            leave_pl: 0,
+            leave_cl: 0,
+            leave_sl: 0,
+            leave_coff: 0
+          };
+          db.data.attendance.push(att);
+        }
+        att.leave_pl = plDays;
+        att.leave_cl = clDays;
+        att.leave_sl = slDays;
+        att.leave_coff = compoffDays;
+        att.leave = totalLeave;
+        att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave;
+        att.lop_days = (att.absent || 0) + (att.lwp || 0);
+        att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave + (att.lwp || 0);
+        if (plDays > 0) emp.leave_balance_pl = Math.max(0, (emp.leave_balance_pl || 0) - plDays);
+        if (clDays > 0) emp.leave_balance_cl = Math.max(0, (emp.leave_balance_cl || 0) - clDays);
+        if (slDays > 0) emp.leave_balance_sl = Math.max(0, (emp.leave_balance_sl || 0) - slDays);
+        if (compoffDays > 0) emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - compoffDays);
+        if (db.dbSqlite && typeof db.dbSqlite.run === "function") {
+          db.dbSqlite.run(
+            `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked, leave_pl, leave_cl, leave_sl, leave_coff, pay_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0, att.leave_pl || 0, att.leave_cl || 0, att.leave_sl || 0, att.leave_coff || 0, att.pay_days || null]
+          );
+          db.dbSqlite.run(
+            `UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
+            [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, emp.id]
+          );
+        }
+        updated++;
+      }
+      db.logAudit("Leave Utilization Bulk", `Updated leave utilization for ${updated} employees in ${month}`, getOperator(req));
+      await db.persistDataSync();
+      res.json({ success: true, updated, month });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/leave-utilization", (req, res) => {
+    try {
+      const { month, company } = req.query;
+      if (!month) return res.status(400).json({ error: "month required" });
+      const allEmps = db.getEmployees();
+      let filteredEmps = allEmps.filter((e) => e.status === "ACTIVE");
+      if (company && company !== "ALL") {
+        filteredEmps = filteredEmps.filter((e) => e.company === company);
+      }
+      const utilization = filteredEmps.map((emp) => {
+        const att = db.getAttendance().find((a) => a.employee_id === emp.id && a.month === month);
+        return {
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          designation: emp.designation || "",
+          department: emp.department || "",
+          // Current utilization
+          pl_days: att?.leave_pl || 0,
+          cl_days: att?.leave_cl || 0,
+          sl_days: att?.leave_sl || 0,
+          compoff_days: att?.leave_coff || 0,
+          total_leave: att?.leave || 0,
+          present: att?.present || 0,
+          absent: att?.absent || 0,
+          weekly_off: att?.weekly_off || 0,
+          paid_holiday: att?.paid_holiday || 0,
+          // Remaining balance
+          balance_pl: emp.leave_balance_pl || 0,
+          balance_cl: emp.leave_balance_cl || 0,
+          balance_sl: emp.leave_balance_sl || 0,
+          balance_compoff: emp.leave_balance_compoff || 0
+        };
+      });
+      res.json({ month, company: company || "ALL", employees: utilization });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/leave-register", (req, res) => {
     try {
       const { month, company } = req.query;
