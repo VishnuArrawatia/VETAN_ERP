@@ -12,14 +12,19 @@ let dbRef: any = null;
 
 async function ensureInit(httpMethod?: string) {
   if (app) {
-    // FIX 3: Only reload on GET (read) requests — NEVER on POST/PUT/DELETE
-    // This prevents race condition where reloadFromSupabase overwrites
-    // fresh in-memory mutations that haven't been persisted yet.
-    if (httpMethod === 'GET' && dbRef && typeof dbRef.reloadFromSupabase === 'function') {
-      try {
-        await dbRef.reloadFromSupabase();
-      } catch (e: any) {
-        console.error('[Vercel] reloadFromSupabase failed:', e?.message);
+    // FIX: Always reload from Supabase to ensure fresh data (loans, attendance, etc.)
+    // On GET: always reload for latest data
+    // On POST: reload only if critical data seems missing (cold start race fix)
+    if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+      const loansCount = (dbRef.data?.loans || []).length;
+      const employeesCount = (dbRef.data?.employees || []).length;
+      const needsReload = httpMethod === 'GET' || loansCount === 0 || employeesCount === 0;
+      if (needsReload) {
+        try {
+          await dbRef.reloadFromSupabase();
+        } catch (e: any) {
+          console.error('[Vercel] reloadFromSupabase failed:', e?.message);
+        }
       }
     }
     return;
