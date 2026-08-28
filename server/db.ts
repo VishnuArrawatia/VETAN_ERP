@@ -3644,6 +3644,13 @@ export class PayrollDatabase {
     return s;
   }
 
+  // Helper: Get previous month string (e.g., '2026-04' -> '2026-03')
+  private getPreviousMonth(month: string): string {
+    const [year, mon] = month.split('-').map(Number);
+    if (mon === 1) return `${year - 1}-12`;
+    return `${year}-${String(mon - 1).padStart(2, '0')}`;
+  }
+
   // Automation Calculation Logic for Single Employee Draft Wage Slip
   public calculateSingleSlip(emp: Employee, att: any, month: string): Payslip {
     const totalDays = att.total_days || 30;
@@ -3716,6 +3723,13 @@ export class PayrollDatabase {
       const excess = annual_estimated_taxable - 700000;
       tds = Math.round((excess * 0.10) / 12);
     }
+    
+    // Get previous month's TDS for fallback
+    const prevMonth = this.getPreviousMonth(month);
+    const prevSlip = (this.data.payslips || []).find(p => p.employee_id === emp.id && p.month === prevMonth);
+    const prevTds = prevSlip?.tds || 0;
+    const prevCustom = prevSlip?.custom_deductions || 0;
+    const prevAdvance = prevSlip?.salary_advance || 0;
 
     let loan_deduction = 0;
     const activeLoans = (this.data.loans || []).filter(l => l.employee_id === emp.id && l.status === 'ACTIVE');
@@ -3745,9 +3759,14 @@ export class PayrollDatabase {
     // Check if existing slip already has manual variable inputs
     const existingSlip = (this.data.payslips || []).find(p => p.id === `SLIP-${emp.id}-${month}`);
 
-    const tdsVal = existingSlip?.tds !== undefined ? existingSlip.tds : tds;
-    const customDed = existingSlip?.custom_deductions || 0;
-    const advanceDed = existingSlip?.salary_advance || 0;
+    // TDS: Use existing slip value, or previous month value, or auto-calculate
+    const tdsVal = existingSlip?.tds !== undefined ? existingSlip.tds : (prevTds > 0 ? prevTds : tds);
+    
+    // Other Deductions: Use existing slip value, or previous month value
+    const customDed = existingSlip?.custom_deductions !== undefined ? (existingSlip.custom_deductions || 0) : prevCustom;
+    
+    // Salary Advance: Use existing slip value, or previous month value
+    const advanceDed = existingSlip?.salary_advance !== undefined ? (existingSlip.salary_advance || 0) : prevAdvance;
     const canteenDed = existingSlip?.canteen_deduction || 0;
     const uniformDed = existingSlip?.uniform_deduction || 0;
     const noticeDed = existingSlip?.notice_deduction || 0;
