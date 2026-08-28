@@ -3687,6 +3687,7 @@ export class PayrollDatabase {
     const overtime_rate = Math.round(((rate_base) / (26 * 8)) * 1.5) || 150;
     const overtime_pay = overtime_hours * overtime_rate;
 
+    const lopDays = att.lop_days || (totalDays - payDays);
     const gross_rate_full = rate_base + rate_hra + rate_special + rate_edu + rate_medical + rate_conveyance;
     const lop_deduction = Math.round(gross_rate_full * (lopDays / totalDays));
 
