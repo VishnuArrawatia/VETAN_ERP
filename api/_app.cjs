@@ -30604,6 +30604,106 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
+  app.post("/api/leave-opening-bulk", async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") {
+        return res.status(403).json({ error: "Only Super Admin can set bulk leave opening balance" });
+      }
+      const { employees, default_balance } = req.body;
+      const allEmps = db.getEmployees();
+      let updated = 0;
+      if (Array.isArray(employees)) {
+        for (const e of employees) {
+          const emp = allEmps.find((x) => x.id === e.id);
+          if (!emp) continue;
+          emp.leave_balance_pl = Number(e.pl ?? emp.leave_balance_pl);
+          emp.leave_balance_cl = Number(e.cl ?? emp.leave_balance_cl);
+          emp.leave_balance_sl = Number(e.sl ?? emp.leave_balance_sl);
+          emp.leave_balance_compoff = Number(e.compoff ?? emp.leave_balance_compoff ?? 0);
+          if (db.dbSqlite) db.dbSqlite.run(
+            `UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
+            [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff, emp.id]
+          );
+          updated++;
+        }
+      } else if (default_balance) {
+        const { pl = 18, cl = 6, sl = 6, compoff = 0 } = default_balance;
+        for (const emp of allEmps) {
+          if (emp.status === "ACTIVE") {
+            emp.leave_balance_pl = Number(pl);
+            emp.leave_balance_cl = Number(cl);
+            emp.leave_balance_sl = Number(sl);
+            emp.leave_balance_compoff = Number(compoff);
+            if (db.dbSqlite) db.dbSqlite.run(
+              `UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
+              [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff, emp.id]
+            );
+            updated++;
+          }
+        }
+      }
+      db.logAudit("Leave Opening Bulk Update", `Updated leave opening for ${updated} employees`, getOperator(req));
+      await db.persistDataSync();
+      res.json({ success: true, updated });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/leave-register", (req, res) => {
+    try {
+      const { month, company } = req.query;
+      const allLeaves = db.getLeaveApplications();
+      let filtered = allLeaves;
+      if (month) {
+        filtered = filtered.filter((l) => {
+          const sd = l.start_date || "";
+          return sd.startsWith(month);
+        });
+      }
+      if (company && company !== "ALL") {
+        filtered = filtered.filter((l) => l.company === company);
+      }
+      const allAtts = db.getAttendance();
+      const monthAtts = month ? allAtts.filter((a) => a.month === month) : allAtts;
+      const companyAtts = company && company !== "ALL" ? monthAtts.filter((a) => {
+        const emp = db.getEmployeeById(a.employee_id);
+        return emp && emp.company === company;
+      }) : monthAtts;
+      const leaveSummary = companyAtts.map((a) => {
+        const emp = db.getEmployeeById(a.employee_id);
+        return {
+          employee_id: a.employee_id,
+          employee_name: emp?.name || "Unknown",
+          company: emp?.company || "",
+          month: a.month,
+          leave_pl: a.leave_pl || 0,
+          leave_cl: a.leave_cl || 0,
+          leave_sl: a.leave_sl || 0,
+          leave_coff: a.leave_coff || 0,
+          total_leave: a.leave || 0,
+          lwp: a.lwp || 0,
+          present: a.present || 0,
+          absent: a.absent || 0,
+          weekly_off: a.weekly_off || 0,
+          paid_holiday: a.paid_holiday || 0,
+          // Current remaining balance
+          balance_pl: emp?.leave_balance_pl || 0,
+          balance_cl: emp?.leave_balance_cl || 0,
+          balance_sl: emp?.leave_balance_sl || 0,
+          balance_compoff: emp?.leave_balance_compoff || 0
+        };
+      });
+      res.json({
+        leaves: filtered,
+        summary: leaveSummary,
+        month: month || "ALL",
+        company: company || "ALL"
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/attendance/corrections", (req, res) => {
     try {
       const { company, employee_id } = req.query;
