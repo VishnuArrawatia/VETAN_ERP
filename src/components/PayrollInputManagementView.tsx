@@ -793,7 +793,7 @@ export default function PayrollInputManagementView({
           {/* Bulk Variable Input Grid */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-x-auto">
             <table className="w-full text-left border-collapse text-[11px]">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-extrabold uppercase tracking-wider">
                   <th className="p-3 sticky left-0 bg-slate-100 min-w-[160px] shadow-2xs">Employee Name</th>
                   <th className="p-3 text-center min-w-[80px] bg-slate-50">Present / LOP</th>
