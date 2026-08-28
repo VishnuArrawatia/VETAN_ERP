@@ -791,7 +791,7 @@ export default function PayrollInputManagementView({
           </div>
 
           {/* Bulk Variable Input Grid */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-x-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-auto max-h-[70vh]">
             <table className="w-full text-left border-collapse text-[11px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-extrabold uppercase tracking-wider">
