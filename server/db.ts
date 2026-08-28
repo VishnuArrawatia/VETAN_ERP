@@ -912,7 +912,11 @@ export class PayrollDatabase {
       { id: 'USR006', username: 'indraprakash', name: 'Indraprakash', role: 'COMPANY_HR', title: 'HR Officer (Sakar Unit III)', company_rights: ['Sakar-III'], password: 'indraprakash', disabled: false },
       { id: 'USR007', username: 'nilesh', name: 'Nilesh', role: 'COMPANY_HR', title: 'HR Officer (Flare)', company_rights: ['Flare-1'], password: 'nilesh', disabled: false },
       { id: 'USR008', username: 'pinki', name: 'Pinki', role: 'COMPANY_HR', title: 'HR Officer (Zenivo)', company_rights: ['Zenivo-1'], password: 'pinki', disabled: false },
-      { id: 'USR009', username: 'audit', name: 'Auditor', role: 'AUDITOR', title: 'Statutory Auditor', company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'], password: 'audit', disabled: false }
+      { id: 'USR009', username: 'audit', name: 'Auditor', role: 'AUDITOR', title: 'Statutory Auditor', company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'], password: 'audit', disabled: false },
+      { id: 'USR020', username: 'acct_vks', name: 'Accounts - VKS', role: 'AUDITOR', title: 'Accounts Officer (All Units)', company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'], password: 'VKS123', disabled: false },
+      { id: 'USR021', username: 'acct_svn1', name: 'Accounts - SVN I', role: 'AUDITOR', title: 'Accounts Officer (SVN-I)', company_rights: ['SVN-1'], password: 'SVN1ACC', disabled: false },
+      { id: 'USR022', username: 'acct_svn2', name: 'Accounts - SVN II', role: 'AUDITOR', title: 'Accounts Officer (SVN-II)', company_rights: ['SVN-II'], password: 'SVN2ACC', disabled: false },
+      { id: 'USR023', username: 'acct_sakar', name: 'Accounts - Sakar', role: 'AUDITOR', title: 'Accounts Officer (Sakar)', company_rights: ['Sakar-I', 'Sakar-III'], password: 'SAKACC', disabled: false }
     ];
   }
 
