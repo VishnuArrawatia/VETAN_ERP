@@ -1660,6 +1660,133 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  // ═══════════════════════════════════════════════════
+  // BONUS REGISTER — Monthly accumulation + Diwali payment
+  // ═══════════════════════════════════════════════════
+
+  // GET /api/bonus-register?month=2026-04&company=SVN-1
+  // Shows bonus provision for each employee in a given month
+  app.get('/api/bonus-register', (req, res) => {
+    try {
+      const { month, company, fy } = req.query as { month?: string; company?: string; fy?: string };
+      const allEmps = db.getEmployees();
+      let filteredEmps = allEmps.filter((e: any) => e.status === 'ACTIVE');
+      if (company && company !== 'ALL') {
+        filteredEmps = filteredEmps.filter((e: any) => e.company === company);
+      }
+
+      const bonusData = filteredEmps.map((emp: any) => {
+        const baseSalary = emp.base_salary || 0;
+        const bonusRate = 8.33;
+        const monthlyBonus = Math.round(baseSalary * bonusRate / 100);
+
+        // Get existing bonus provisions from DB
+        const allBonuses = (db.data as any).bonus_provisions || [];
+        const empBonuses = allBonuses.filter((b: any) => b.employee_id === emp.id);
+
+        // If specific month requested, show that month's bonus
+        let monthBonus = null;
+        if (month) {
+          monthBonus = empBonuses.find((b: any) => b.month === month);
+        }
+
+        // Annual summary (Oct-Sep = FY year)
+        // FY 2026-27 means Oct 2026 to Sep 2027
+        // Current FY for Apr-Sep 2026 period means Apr 2026 to Mar 2027 (tax year)
+        let annualBonuses = empBonuses;
+        if (fy) {
+          // FY format: "2026-27" means Apr 2026 to Mar 2027
+          const fyParts = fy.split('-');
+          const startYear = parseInt(fyParts[0]);
+          const startMonth = `${startYear}-04`;
+          const endMonth = `${startYear + 1}-03`;
+          annualBonuses = empBonuses.filter((b: any) => b.month >= startMonth && b.month <= endMonth);
+        }
+
+        const annualTotal = annualBonuses.reduce((sum: number, b: any) => sum + (b.bonus_amount || 0), 0);
+        const annualPaid = annualBonuses.filter((b: any) => b.status === 'PAID').reduce((sum: number, b: any) => sum + (b.bonus_amount || 0), 0);
+        const annualPending = annualTotal - annualPaid;
+
+        return {
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          designation: emp.designation || '',
+          department: emp.department || '',
+          base_salary: baseSalary,
+          bonus_rate: bonusRate,
+          monthly_bonus: monthlyBonus,
+          // Current month
+          month_status: monthBonus?.status || 'NOT_PROCESSED',
+          month_bonus_amount: monthBonus?.bonus_amount || 0,
+          // Annual (Oct-Sep cycle)
+          annual_total: annualTotal,
+          annual_paid: annualPaid,
+          annual_pending: annualPending,
+          // Detailed month-wise
+          month_wise: annualBonuses.map((b: any) => ({
+            month: b.month,
+            amount: b.bonus_amount,
+            status: b.status,
+            paid_in_month: b.paid_in_month
+          }))
+        };
+      });
+
+      res.json({
+        fy: fy || '2026-27',
+        company: company || 'ALL',
+        month: month || 'ALL',
+        employees: bonusData,
+        totals: {
+          employees: bonusData.length,
+          annual_total: bonusData.reduce((s: number, b: any) => s + b.annual_total, 0),
+          annual_paid: bonusData.reduce((s: number, b: any) => s + b.annual_paid, 0),
+          annual_pending: bonusData.reduce((s: number, b: any) => s + b.annual_pending, 0)
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/bonus-register/pay — Mark October bonus as PAID (Diwali payment)
+  app.post('/api/bonus-register/pay', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'Only Super Admin can mark bonus as paid' });
+      }
+      const { month, company, employee_ids } = req.body;
+      // month should be the payment month (e.g., 2026-10 for Diwali)
+      // This marks all ACCUMULATED bonuses up to that month as PAID
+      if (!month) return res.status(400).json({ error: 'Payment month is required' });
+
+      const allBonuses = (db.data as any).bonus_provisions || [];
+      let updated = 0;
+
+      for (const bonus of allBonuses) {
+        if (bonus.status !== 'ACCUMULATED') continue;
+        if (employee_ids && !employee_ids.includes(bonus.employee_id)) continue;
+        if (company && company !== 'ALL' && bonus.company !== company) continue;
+
+        bonus.status = 'PAID';
+        bonus.paid_in_month = month;
+        updated++;
+
+        if (db.dbSqlite) {
+          db.dbSqlite.run(`UPDATE bonus_provisions SET status = 'PAID', paid_in_month = ? WHERE id = ?`, [month, bonus.id]);
+        }
+      }
+
+      db.logAudit('Bonus Paid', `Marked bonus as PAID for ${updated} employees in ${month}`, getOperator(req));
+      await db.persistDataSync();
+      res.json({ success: true, updated, month });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Attendance Corrections / Miss Punch endpoints
   app.get('/api/attendance/corrections', (req, res) => {
     try {

@@ -30705,6 +30705,104 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
+  app.get("/api/bonus-register", (req, res) => {
+    try {
+      const { month, company, fy } = req.query;
+      const allEmps = db.getEmployees();
+      let filteredEmps = allEmps.filter((e) => e.status === "ACTIVE");
+      if (company && company !== "ALL") {
+        filteredEmps = filteredEmps.filter((e) => e.company === company);
+      }
+      const bonusData = filteredEmps.map((emp) => {
+        const baseSalary = emp.base_salary || 0;
+        const bonusRate = 8.33;
+        const monthlyBonus = Math.round(baseSalary * bonusRate / 100);
+        const allBonuses = db.data.bonus_provisions || [];
+        const empBonuses = allBonuses.filter((b) => b.employee_id === emp.id);
+        let monthBonus = null;
+        if (month) {
+          monthBonus = empBonuses.find((b) => b.month === month);
+        }
+        let annualBonuses = empBonuses;
+        if (fy) {
+          const fyParts = fy.split("-");
+          const startYear = parseInt(fyParts[0]);
+          const startMonth = `${startYear}-04`;
+          const endMonth = `${startYear + 1}-03`;
+          annualBonuses = empBonuses.filter((b) => b.month >= startMonth && b.month <= endMonth);
+        }
+        const annualTotal = annualBonuses.reduce((sum, b) => sum + (b.bonus_amount || 0), 0);
+        const annualPaid = annualBonuses.filter((b) => b.status === "PAID").reduce((sum, b) => sum + (b.bonus_amount || 0), 0);
+        const annualPending = annualTotal - annualPaid;
+        return {
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          designation: emp.designation || "",
+          department: emp.department || "",
+          base_salary: baseSalary,
+          bonus_rate: bonusRate,
+          monthly_bonus: monthlyBonus,
+          // Current month
+          month_status: monthBonus?.status || "NOT_PROCESSED",
+          month_bonus_amount: monthBonus?.bonus_amount || 0,
+          // Annual (Oct-Sep cycle)
+          annual_total: annualTotal,
+          annual_paid: annualPaid,
+          annual_pending: annualPending,
+          // Detailed month-wise
+          month_wise: annualBonuses.map((b) => ({
+            month: b.month,
+            amount: b.bonus_amount,
+            status: b.status,
+            paid_in_month: b.paid_in_month
+          }))
+        };
+      });
+      res.json({
+        fy: fy || "2026-27",
+        company: company || "ALL",
+        month: month || "ALL",
+        employees: bonusData,
+        totals: {
+          employees: bonusData.length,
+          annual_total: bonusData.reduce((s, b) => s + b.annual_total, 0),
+          annual_paid: bonusData.reduce((s, b) => s + b.annual_paid, 0),
+          annual_pending: bonusData.reduce((s, b) => s + b.annual_pending, 0)
+        }
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/bonus-register/pay", async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") {
+        return res.status(403).json({ error: "Only Super Admin can mark bonus as paid" });
+      }
+      const { month, company, employee_ids } = req.body;
+      if (!month) return res.status(400).json({ error: "Payment month is required" });
+      const allBonuses = db.data.bonus_provisions || [];
+      let updated = 0;
+      for (const bonus of allBonuses) {
+        if (bonus.status !== "ACCUMULATED") continue;
+        if (employee_ids && !employee_ids.includes(bonus.employee_id)) continue;
+        if (company && company !== "ALL" && bonus.company !== company) continue;
+        bonus.status = "PAID";
+        bonus.paid_in_month = month;
+        updated++;
+        if (db.dbSqlite) {
+          db.dbSqlite.run(`UPDATE bonus_provisions SET status = 'PAID', paid_in_month = ? WHERE id = ?`, [month, bonus.id]);
+        }
+      }
+      db.logAudit("Bonus Paid", `Marked bonus as PAID for ${updated} employees in ${month}`, getOperator(req));
+      await db.persistDataSync();
+      res.json({ success: true, updated, month });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/attendance/corrections", (req, res) => {
     try {
       const { company, employee_id } = req.query;
