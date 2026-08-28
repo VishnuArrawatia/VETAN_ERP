@@ -831,25 +831,30 @@ export default function AttendanceSheet({
 
       {/* Lock Status Banner */}
       {isLocked && (
-        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-100 text-rose-700 rounded-lg">
-              <Lock size={18} />
+        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-300 p-5 rounded-2xl flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-emerald-500 text-white rounded-xl">
+              <Lock size={22} />
             </div>
             <div>
-              <span className="text-xs font-bold text-rose-900 block">Attendance Input Lock Enabled</span>
-              <p className="text-[11px] text-rose-700 leading-relaxed mt-0.5">
-                The monthly summary is locked. Changes to attendance values and new document uploads are completely disabled to guarantee payroll integrity.
+              <h3 className="text-sm font-bold text-emerald-900">
+                🔒 Attendance LOCKED for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </h3>
+              <p className="text-xs text-emerald-700 mt-1">
+                Salary has been processed. No more attendance edits allowed.
+                {parsedRecords.length > 0 && ` • ${parsedRecords.length} employees frozen.`}
               </p>
             </div>
           </div>
-          <button
-            onClick={() => handleLockToggle(false)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-rose-100 border border-rose-200 hover:border-rose-300 text-xs font-bold text-rose-800 rounded-lg transition cursor-pointer"
-          >
-            <Unlock size={13} />
-            Unlock Sheets
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleLockToggle(false)}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-white hover:bg-emerald-100 border border-emerald-300 hover:border-emerald-400 text-xs font-bold text-emerald-800 rounded-xl transition cursor-pointer shadow-sm"
+            >
+              <Unlock size={14} />
+              Unlock to Edit
+            </button>
+          </div>
         </div>
       )}
 
@@ -860,10 +865,26 @@ export default function AttendanceSheet({
             initial={{ opacity: 0, y: -8 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, y: -8 }}
-            className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2"
+            className="p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-lg"
           >
-            <CheckCircle size={15} className="text-emerald-600" />
-            Monthly Attendance parameters committed securely. Compliance rates & salary revision components updated.
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-3 bg-emerald-500 text-white rounded-full">
+                <CheckCircle size={24} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-emerald-900">
+                  ✅ Attendance {isLocked ? 'LOCKED' : 'SAVED'} for {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                </h3>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  {parsedRecords.length} employees • {isLocked ? 'Payroll frozen — no more edits allowed' : 'Data saved successfully'}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 text-[10px] text-emerald-600">
+              <span className="px-2 py-1 bg-emerald-100 rounded-lg">📊 Attendance: {parsedRecords.length} records</span>
+              <span className="px-2 py-1 bg-emerald-100 rounded-lg">📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length} with breakup</span>
+              {isLocked && <span className="px-2 py-1 bg-emerald-600 text-white rounded-lg font-bold">🔒 LOCKED</span>}
+            </div>
           </motion.div>
         )}
         {errorMsg && (
