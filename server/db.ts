@@ -3964,6 +3964,27 @@ export class PayrollDatabase {
   }
 
   public runPayroll(month: string, companyFilter?: string): PayrollRun {
+    // FIX: Save manual edits before deleting payslips so they survive recalculation
+    const existingSlipsForMonth = this.data.payslips.filter(p => p.month === month);
+    const savedManualInputs: Record<string, any> = {};
+    for (const es of existingSlipsForMonth) {
+      savedManualInputs[es.employee_id] = {
+        tds: es.tds,
+        custom_deductions: es.custom_deductions,
+        salary_advance: es.salary_advance,
+        loan_deduction: es.loan_deduction,
+        bonus_incentive: es.bonus_incentive,
+        performance_incentive: es.performance_incentive,
+        attendance_incentive: es.attendance_incentive,
+        production_incentive: es.production_incentive,
+        reimbursement: es.reimbursement,
+        special_allowance_addition: es.special_allowance_addition,
+        arrear_payment: es.arrear_payment,
+        other_earnings: es.other_earnings,
+        remarks: es.remarks,
+      };
+    }
+
     if (companyFilter && companyFilter !== 'ALL') {
       this.data.payslips = this.data.payslips.filter(p => {
         const emp = this.getEmployeeById(p.employee_id);
@@ -4008,6 +4029,29 @@ export class PayrollDatabase {
       }
 
       const slip = this.calculateSingleSlip(emp, att, month);
+
+      // FIX: Restore manual edits that HR made before recalculation
+      const saved = savedManualInputs[emp.id];
+      if (saved) {
+        if (saved.tds !== undefined) slip.tds = saved.tds;
+        if (saved.custom_deductions !== undefined) slip.custom_deductions = saved.custom_deductions;
+        if (saved.salary_advance !== undefined) slip.salary_advance = saved.salary_advance;
+        if (saved.loan_deduction !== undefined && saved.loan_deduction !== 0) slip.loan_deduction = saved.loan_deduction;
+        if (saved.bonus_incentive !== undefined) slip.bonus_incentive = saved.bonus_incentive;
+        if (saved.performance_incentive !== undefined) slip.performance_incentive = saved.performance_incentive;
+        if (saved.attendance_incentive !== undefined) slip.attendance_incentive = saved.attendance_incentive;
+        if (saved.production_incentive !== undefined) slip.production_incentive = saved.production_incentive;
+        if (saved.reimbursement !== undefined) slip.reimbursement = saved.reimbursement;
+        if (saved.special_allowance_addition !== undefined) slip.special_allowance_addition = saved.special_allowance_addition;
+        if (saved.arrear_payment !== undefined) slip.arrear_payment = saved.arrear_payment;
+        if (saved.other_earnings !== undefined) slip.other_earnings = saved.other_earnings;
+        if (saved.remarks !== undefined) slip.remarks = saved.remarks;
+        // Recalculate totals after restoring manual edits
+        const varDeductions = (slip.custom_deductions || 0) + (slip.salary_advance || 0);
+        slip.total_deductions = (slip.pf_deduction || 0) + (slip.esic_deduction || 0) + (slip.tds || 0) + (slip.loan_deduction || 0) + varDeductions;
+        slip.net_salary = Math.max(0, slip.gross_salary - slip.total_deductions);
+      }
+
       activeSlips.push(slip);
 
       gross_sum += slip.gross_salary;
