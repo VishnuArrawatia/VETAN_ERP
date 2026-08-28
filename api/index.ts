@@ -10,12 +10,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 let app: any;
 let dbRef: any = null;
 
-async function ensureInit() {
+async function ensureInit(httpMethod?: string) {
   if (app) {
     // FIX 3: Only reload on GET (read) requests — NEVER on POST/PUT/DELETE
     // This prevents race condition where reloadFromSupabase overwrites
     // fresh in-memory mutations that haven't been persisted yet.
-    if (req.method === 'GET' && dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+    if (httpMethod === 'GET' && dbRef && typeof dbRef.reloadFromSupabase === 'function') {
       try {
         await dbRef.reloadFromSupabase();
       } catch (e: any) {
@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    await ensureInit();
+    await ensureInit(req.method);
   } catch (err: any) {
     return res.status(500).json({
       error: 'Server initialization failed',
