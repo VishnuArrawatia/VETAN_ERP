@@ -63,6 +63,7 @@ import { CompanyMasterView } from './components/CompanyMasterView';
 import LeavesController from './components/LeavesController';
 import FactoryGatePassView from './components/FactoryGatePassView';
 import PayrollRegister from './components/PayrollRegister';
+import AccountingSheets from './components/AccountingSheets';
 import SqlConsole from './components/SqlConsole';
 import FAndFController from './components/FAndFController';
 import Form16Portal from './components/Form16Portal';
@@ -2731,6 +2732,16 @@ export default function App() {
               {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <Coins size={14} />}
             </button>
 
+            <button
+              id="sidebar-tab-accounting"
+              disabled={activeHR.role === 'ATTENDANCE_ONLY_HR'}
+              onClick={() => setActiveTab('accounting')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between ${activeHR.role === 'ATTENDANCE_ONLY_HR' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'cursor-pointer'} ${activeTab==='accounting' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
+            >
+              <span>Accounting Sheets</span>
+              {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <FileSpreadsheet size={14} />}
+            </button>
+
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-3 pt-2.5 pb-1 block">Letters & Analytics</span>
 
             <button
@@ -3312,6 +3323,13 @@ export default function App() {
                     fetchLoans();
                   }}
                   activeHRRole={activeHR.role}
+                />
+              )}
+
+              {activeTab === 'accounting' && (
+                <AccountingSheets
+                  activeMonth={activeMonth}
+                  activeCompany={activeCompany}
                 />
               )}
 

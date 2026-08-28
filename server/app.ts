@@ -3442,6 +3442,203 @@ HR Department`;
     }
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // ACCOUNTING SHEETS — Bank + Head-wise + Unit-wise Summary
+  // ═══════════════════════════════════════════════════════════
+
+  // GET /api/accounting/bank-sheet/:month — Bank Transfer Sheet
+  app.get('/api/accounting/bank-sheet/:month', (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company } = req.query as { company?: string };
+      const slips = db.getPayslipsByMonth(month, company);
+      
+      if (slips.length === 0) {
+        return res.status(404).json({ error: 'No payslips found for this month' });
+      }
+
+      const headers = [
+        'Sr No', 'Employee Code', 'Employee Name', 'Unit', 'Department',
+        'Bank Name', 'Bank Account No', 'IFSC Code', 'Net Salary', 'Payment Status'
+      ];
+      
+      const lines = [headers.join(',')];
+      let totalNet = 0;
+
+      slips.forEach((s, i) => {
+        const emp = db.getEmployeeById(s.employee_id);
+        totalNet += s.net_salary || 0;
+        
+        const row = [
+          i + 1,
+          s.employee_id,
+          `"${s.employee_name}"`,
+          `"${emp?.company || ''}"`,
+          `"${emp?.department || ''}"`,
+          `"${s.bank_name || ''}"`,
+          `"${s.bank_account || ''}"`,
+          `"${s.ifsc || ''}"`,
+          s.net_salary,
+          s.is_paid ? 'PAID' : 'PENDING'
+        ];
+        lines.push(row.join(','));
+      });
+
+      // Add total row
+      lines.push('');
+      lines.push(`"TOTAL",,,,,,,${totalNet},`);
+
+      const csvContent = lines.join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="Bank_Sheet_${month}_${company || 'ALL'}.csv"`);
+      res.send(csvContent);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/accounting/head-wise/:month — Head-wise Accounting Sheet
+  app.get('/api/accounting/head-wise/:month', (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company } = req.query as { company?: string };
+      const slips = db.getPayslipsByMonth(month, company);
+      
+      if (slips.length === 0) {
+        return res.status(404).json({ error: 'No payslips found for this month' });
+      }
+
+      const headers = [
+        'Sr No', 'Employee Code', 'Employee Name', 'Unit',
+        'Basic Salary', 'HRA', 'DA', 'Special Allowance', 'Conveyance', 'Education', 'Medical',
+        'Gross Salary',
+        'PF Employee', 'ESIC Employee', 'PT', 'TDS', 'Loan EMI', 'Salary Advance', 'Other Deduction', 'LOP Deduction',
+        'Total Deductions',
+        'Net Salary',
+        'PF Employer', 'ESIC Employer', 'Bonus Payable'
+      ];
+      
+      const lines = [headers.join(',')];
+      
+      // Unit-wise totals
+      const unitTotals: Record<string, any> = {};
+      let grandTotals: any = {};
+
+      slips.forEach((s, i) => {
+        const emp = db.getEmployeeById(s.employee_id);
+        const unit = emp?.company || 'Unknown';
+        
+        // Initialize unit totals
+        if (!unitTotals[unit]) {
+          unitTotals[unit] = {
+            count: 0, basic: 0, hra: 0, da: 0, special: 0, conveyance: 0, edu: 0, medical: 0,
+            gross: 0, pf_emp: 0, esic_emp: 0, pt: 0, tds: 0, loan: 0, advance: 0, other: 0, lop: 0,
+            total_ded: 0, net: 0, pf_er: 0, esic_er: 0, bonus: 0
+          };
+        }
+        const ut = unitTotals[unit];
+        ut.count++;
+        
+        const basic = s.basic_salary || 0;
+        const hra = s.hra || 0;
+        const da = s.da || 0;
+        const special = s.special_allowance || 0;
+        const conveyance = s.conveyance_allowance || 0;
+        const edu = s.edu_allowance || 0;
+        const medical = s.medical_allowance || 0;
+        const gross = s.gross_salary || 0;
+        const pf_emp = s.pf_deduction || 0;
+        const esic_emp = s.esic_deduction || 0;
+        const pt = s.professional_tax || 0;
+        const tds = s.tds || 0;
+        const loan = s.loan_deduction || 0;
+        const advance = s.salary_advance || 0;
+        const other = s.other_deduction || 0;
+        const lop = s.lop_deduction || 0;
+        const total_ded = s.total_deductions || 0;
+        const net = s.net_salary || 0;
+        const pf_er = s.employer_pf || 0;
+        const esic_er = s.employer_esic || 0;
+        const bonus = s.bonus_payable || 0;
+        
+        // Add to unit totals
+        ut.basic += basic; ut.hra += hra; ut.da += da; ut.special += special;
+        ut.conveyance += conveyance; ut.edu += edu; ut.medical += medical;
+        ut.gross += gross; ut.pf_emp += pf_emp; ut.esic_emp += esic_emp;
+        ut.pt += pt; ut.tds += tds; ut.loan += loan; ut.advance += advance;
+        ut.other += other; ut.lop += lop; ut.total_ded += total_ded;
+        ut.net += net; ut.pf_er += pf_er; ut.esic_er += esic_er; ut.bonus += bonus;
+        
+        const row = [
+          i + 1, s.employee_id, `"${s.employee_name}"`, `"${unit}"`,
+          basic, hra, da, special, conveyance, edu, medical, gross,
+          pf_emp, esic_emp, pt, tds, loan, advance, other, lop,
+          total_ded, net, pf_er, esic_er, bonus
+        ];
+        lines.push(row.join(','));
+      });
+
+      // Add unit-wise summary
+      lines.push('');
+      lines.push('"UNIT-WISE SUMMARY"');
+      lines.push('"Unit","Employees","Basic","HRA","Gross","PF(EE)","ESIC(EE)","Total Ded","Net Salary","PF(ER)","ESIC(ER)","Bonus"');
+      
+      for (const [unit, ut] of Object.entries(unitTotals)) {
+        lines.push(`"${unit}",${ut.count},${ut.basic},${ut.hra},${ut.gross},${ut.pf_emp},${ut.esic_emp},${ut.total_ded},${ut.net},${ut.pf_er},${ut.esic_er},${ut.bonus}`);
+      }
+
+      const csvContent = lines.join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="Head_Wise_Accounting_${month}_${company || 'ALL'}.csv"`);
+      res.send(csvContent);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/accounting/unit-summary/:month — Unit-wise Summary
+  app.get('/api/accounting/unit-summary/:month', (req, res) => {
+    try {
+      const { month } = req.params;
+      const companies = ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III'];
+      const summary: any[] = [];
+
+      for (const company of companies) {
+        const slips = db.getPayslipsByMonth(month, company);
+        if (slips.length === 0) continue;
+
+        let totalGross = 0, totalDeductions = 0, totalNet = 0;
+        let totalPF = 0, totalESIC = 0, totalLoan = 0, totalBonus = 0;
+
+        for (const s of slips) {
+          totalGross += s.gross_salary || 0;
+          totalDeductions += s.total_deductions || 0;
+          totalNet += s.net_salary || 0;
+          totalPF += (s.pf_deduction || 0) + (s.employer_pf || 0);
+          totalESIC += (s.esic_deduction || 0) + (s.employer_esic || 0);
+          totalLoan += s.loan_deduction || 0;
+          totalBonus += s.bonus_payable || 0;
+        }
+
+        summary.push({
+          company,
+          employees: slips.length,
+          totalGross,
+          totalDeductions,
+          totalNet,
+          totalPF,
+          totalESIC,
+          totalLoan,
+          totalBonus
+        });
+      }
+
+      res.json({ month, summary });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Expose db instance for Vercel handler to call reloadFromSupabase()
   (app as any).locals = (app as any).locals || {};
   (app as any).locals.db = db;
