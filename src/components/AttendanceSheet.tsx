@@ -829,7 +829,7 @@ export default function AttendanceSheet({
         </div>
       </div>
 
-      {/* Lock Status Banner — GREEN LOCK when attendance is locked */}
+      {/* Lock Status Banner — Unit-wise GREEN LOCK */}
       {isLocked && (
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
@@ -848,7 +848,7 @@ export default function AttendanceSheet({
             </div>
             <div className="flex-1">
               <h3 className="text-xl font-bold text-white">
-                ✅ Attendance LOCKED Successfully!
+                ✅ Attendance LOCKED for {activeCompany === 'GROUP' ? 'ALL UNITS' : activeCompany}!
               </h3>
               <p className="text-emerald-100 mt-1">
                 {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} — {parsedRecords.length} employees frozen for salary processing
@@ -861,7 +861,7 @@ export default function AttendanceSheet({
                   📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length} Updated
                 </span>
                 <span className="px-3 py-1 bg-white text-emerald-700 text-xs font-bold rounded-lg">
-                  🔒 LOCKED
+                  🔒 {activeCompany} LOCKED
                 </span>
               </div>
             </div>
@@ -896,7 +896,7 @@ export default function AttendanceSheet({
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  ✅ Attendance {isLocked ? 'LOCKED' : 'SAVED'} Successfully!
+                  ✅ Attendance {isLocked ? 'LOCKED' : 'SAVED'} for {activeCompany === 'GROUP' ? 'ALL UNITS' : activeCompany}!
                 </h3>
                 <p className="text-emerald-100 text-sm mt-1">
                   {new Date(`${currentMonth}-02`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} — {parsedRecords.length} employees {isLocked ? 'frozen for salary processing' : 'saved'}
@@ -906,7 +906,7 @@ export default function AttendanceSheet({
             <div className="flex gap-3 mt-4">
               <span className="px-3 py-1.5 bg-white/20 text-white text-xs font-semibold rounded-lg">📊 {parsedRecords.length} Records</span>
               <span className="px-3 py-1.5 bg-white/20 text-white text-xs font-semibold rounded-lg">📝 Leave: {parsedRecords.filter(r => r.Leave_PL + r.Leave_CL + r.Leave_SL + r.CompOff_Used > 0).length}</span>
-              {isLocked && <span className="px-3 py-1.5 bg-white text-emerald-700 text-xs font-bold rounded-lg">🔒 LOCKED</span>}
+              <span className="px-3 py-1.5 bg-white text-emerald-700 text-xs font-bold rounded-lg">🔒 {activeCompany}</span>
             </div>
           </motion.div>
         )}
