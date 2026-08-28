@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VETAN ERP — HR User Manual (Real Screenshots)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
+        .page { max-width: 210mm; margin: 0 auto; background: white; padding: 40px; min-height: 297mm; page-break-after: always; }
+        @media print { .page { padding: 20px; margin: 0; box-shadow: none; } }
+        
+        /* Cover Page */
+        .cover { text-align: center; padding-top: 100px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; }
+        .cover h1 { font-size: 48px; margin-bottom: 10px; color: #f59e0b; }
+        .cover h2 { font-size: 24px; font-weight: 300; margin-bottom: 40px; }
+        .cover .subtitle { font-size: 18px; margin-bottom: 60px; }
+        .cover .companies { font-size: 14px; margin-top: 40px; }
+        .cover .version { margin-top: 80px; font-size: 12px; opacity: 0.8; }
+        
+        /* Section Headers */
+        h2 { color: #1a5f2a; border-bottom: 3px solid #1a5f2a; padding-bottom: 8px; margin: 30px 0 20px; font-size: 22px; }
+        h3 { color: #2d8a4e; margin: 20px 0 10px; font-size: 18px; }
+        h4 { color: #444; margin: 15px 0 8px; font-size: 15px; }
+        
+        /* Screenshot Containers */
+        .screenshot-container { margin: 20px 0; border: 2px solid #dee2e6; border-radius: 8px; overflow: hidden; }
+        .screenshot-title { background: #1a5f2a; color: white; padding: 10px 15px; font-weight: bold; font-size: 14px; }
+        .screenshot { width: 100%; height: auto; display: block; }
+        .screenshot-caption { background: #f8f9fa; padding: 10px 15px; font-size: 12px; color: #666; border-top: 1px solid #dee2e6; }
+        
+        /* Annotation Markers */
+        .marker { display: inline-block; background: #dc3545; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: bold; margin-right: 5px; vertical-align: middle; }
+        .marker-box { border: 3px solid #dc3545; border-radius: 4px; padding: 12px; margin: 10px 0; background: rgba(220, 53, 69, 0.05); }
+        
+        /* Steps */
+        .step { background: #e8f5e9; border-left: 4px solid #1a5f2a; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+        .step-number { display: inline-block; background: #1a5f2a; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: bold; margin-right: 8px; }
+        
+        /* Warning/Tip Boxes */
+        .warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .warning::before { content: "⚠️ WARNING: "; font-weight: bold; }
+        .tip { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .tip::before { content: "💡 TIP: "; font-weight: bold; }
+        .important { background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .important::before { content: "🔴 IMPORTANT: "; font-weight: bold; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }
+        th { background: #1a5f2a; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        
+        /* UI Elements */
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 4px; font-weight: bold; margin: 5px; }
+        .btn-primary { background: #1a5f2a; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        
+        /* Credential Tables */
+        .credentials { background: #f0f7ff; border: 2px solid #0066cc; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .credentials h4 { color: #0066cc; }
+        
+        /* Workflow */
+        .workflow { display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px; flex-wrap: wrap; }
+        .workflow-step { text-align: center; padding: 15px; border: 2px solid #1a5f2a; border-radius: 8px; min-width: 120px; background: white; }
+        .workflow-arrow { font-size: 24px; color: #1a5f2a; }
+    </style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="page cover">
+    <div style="font-size: 60px; margin-bottom: 20px;">🏢</div>
+    <h1>VETAN ERP</h1>
+    <h2>HR User Manual</h2>
+    <div class="subtitle">Actual Screen-by-Screen Training Guide</div>
+    
+    <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; margin: 30px auto; max-width: 400px;">
+        <p style="font-size: 16px; margin-bottom: 10px;"><strong>Sakar Electricals & Electronics Pvt. Ltd.</strong></p>
+        <p style="font-size: 16px;">SVN Opto Electronics Pvt. Ltd.</p>
+    </div>
+    
+    <div class="companies">
+        <p>Powered by Vishnu Intelligence Services</p>
+    </div>
+    
+    <div class="version">
+        <p>Version: Current VETAN ERP Production Build</p>
+        <p>URL: https://vetan-svn.vercel.app</p>
+        <p>Date: August 2026</p>
+    </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="page">
+    <h2>📋 Table of Contents</h2>
+    <table>
+        <tr><th>#</th><th>Section</th><th>Description</th></tr>
+        <tr><td>1</td><td>Login — Employee ESS</td><td>Employee self-service login</td></tr>
+        <tr><td>2</td><td>Login — HR / Admin</td><td>HR administrator login</td></tr>
+        <tr><td>3</td><td>Dashboard Overview</td><td>Main control center</td></tr>
+        <tr><td>4</td><td>Employee Master</td><td>Add, edit, search employees</td></tr>
+        <tr><td>5</td><td>Attendance Register</td><td>Mark daily attendance</td></tr>
+        <tr><td>6</td><td>Leave Management</td><td>Approve/reject leaves</td></tr>
+        <tr><td>7</td><td>Payroll Processor</td><td>Calculate salary</td></tr>
+        <tr><td>8</td><td>Salary Revision</td><td>Increments & changes</td></tr>
+        <tr><td>9</td><td>Loan Management</td><td>Loan tracking</td></tr>
+        <tr><td>10</td><td>Reports & Analytics</td><td>View reports</td></tr>
+        <tr><td>11</td><td>Employee ESS Portal</td><td>Employee self-service</td></tr>
+        <tr><td>12</td><td>Troubleshooting</td><td>Common issues & solutions</td></tr>
+        <tr><td>13</td><td>Quick Reference</td><td>Daily workflow checklist</td></tr>
+    </table>
+    
+    <div class="tip" style="margin-top: 30px;">
+        <strong>How to use this manual:</strong> Keep this PDF open beside your computer screen. Follow the numbered steps. Click exactly where the red markers show. Each screenshot matches the actual VETAN ERP screen.
+    </div>
+</div>
+
+<!-- SECTION 1: EMPLOYEE ESS LOGIN -->
+<div class="page">
+    <h2>1. Employee ESS Login</h2>
+    
+    <p>Employees use the <strong>Pink button</strong> to access the Self-Service Portal.</p>
+    
+    <div class="screenshot-container">
+        <div class="screenshot-title">📸 ACTUAL VETAN ERP Login Screen</div>
+        <img src="screenshots/01-login-page.png" class="screenshot" alt="VETAN ERP Login Page">
+        <div class="screenshot-caption">
+            <strong>This is the actual login screen you will see.</strong> Two buttons are visible:
+            <span class="marker">1</span> <strong>Employee ESS Portal (Pink)</strong> — For employees
+            <span class="marker">2</span> <strong>Admin / HR Desk (Gold)</strong> — For HR administrators
+        </div>
+    </div>
+    
+    <h3>Employee Login Steps</h3>
+    <div class="step">
+        <span class="step-number">1</span> Open Chrome/Edge browser → Go to <strong>https://vetan-svn.vercel.app</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Click <strong>"Employee ESS Portal (Pink)"</strong> button
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Enter your <strong>Employee ID</strong> (e.g., SV1ST0046)
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Enter your <strong>Password</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> Click <strong>"Sign In to Employee Portal (ESS)"</strong>
+    </div>
+    
+    <div class="credentials">
+        <h4>🔑 Employee Password Rules</h4>
+        <table>
+            <tr><th>Company</th><th>Password Format</th><th>Example</th></tr>
+            <tr><td><strong>SVN Employees</strong></td><td>Phone Last 4 Digits + Birth Year</td><td>Phone: XXXX9911, DOB: 1995 → Password: 99111995</td></tr>
+            <tr><td><strong>Sakar Employees</strong></td><td>Default Password</td><td>00001995</td></tr>
+        </table>
+        <div class="warning">
+            Sakar employees should change password after first login for security.
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 2: HR/ADMIN LOGIN -->
+<div class="page">
+    <h2>2. HR / Admin Login</h2>
+    
+    <p>HR users use the <strong>Gold button</strong> to access the management panel.</p>
+    
+    <div class="screenshot-container">
+        <div class="screenshot-title">📸 ACTUAL HR/Admin Login Form</div>
+        <img src="screenshots/03-hr-login.png" class="screenshot" alt="HR Admin Login Form">
+        <div class="screenshot-caption">
+            <strong>This is the actual HR/Admin login form.</strong>
+            <span class="marker">1</span> <strong>USERNAME</strong> — Enter your HR username
+            <span class="marker">2</span> <strong>PASSWORD</strong> — Enter your HR password
+            <span class="marker">3</span> <strong>Login →</strong> — Click to sign in
+        </div>
+    </div>
+    
+    <h3>HR Login Steps</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Admin / HR Desk (Gold)"</strong> button
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Enter your <strong>Username</strong> (e.g., vishnu, vijendra, manisha)
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Enter your <strong>Password</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Click <strong>"Login →"</strong>
+    </div>
+    
+    <div class="credentials">
+        <h4>🔑 HR Login Credentials (Unit-wise)</h4>
+        <table>
+            <tr><th>HR Name</th><th>Username</th><th>Access Level</th><th>Units</th></tr>
+            <tr><td>Vishnu Arrawatia</td><td>vishnu</td><td>Super Admin</td><td>All Units</td></tr>
+            <tr><td>Mr. V. K. Saraf</td><td>saraf</td><td>MD</td><td>All Units</td></tr>
+            <tr><td>Vijendra</td><td>vijendra</td><td>Unit HR</td><td>SVN-1</td></tr>
+            <tr><td>Manisha Sapate</td><td>manisha_s</td><td>Unit HR</td><td>SVN-II</td></tr>
+            <tr><td>Manisha</td><td>manisha</td><td>Unit HR</td><td>Sakar-I</td></tr>
+            <tr><td>Indraprakash</td><td>indraprakash</td><td>Unit HR</td><td>Sakar-III</td></tr>
+        </table>
+        <div class="warning">
+            Do NOT share your password with anyone. If you forget your password, contact the Super Admin.
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 3: DASHBOARD -->
+<div class="page">
+    <h2>3. Dashboard Overview</h2>
+    
+    <p>After login, you will see the <strong>VETAN ERP Dashboard</strong>. This is your main control center.</p>
+    
+    <div class="screenshot-container">
+        <div class="screenshot-title">📸 ACTUAL VETAN ERP Dashboard</div>
+        <img src="screenshots/02-dashboard.png" class="screenshot" alt="VETAN ERP Dashboard">
+        <div class="screenshot-caption">
+            <strong>This is the actual Dashboard you will see after login.</strong>
+        </div>
+    </div>
+    
+    <h3>Dashboard Sections Explained</h3>
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>Top Bar</strong> — Shows company logos (SVN Opto, Sakar Electricals) and HR user buttons</p>
+        <p><span class="marker">2</span> <strong>Left Sidebar</strong> — Navigation menu with all modules (Employee Master, Attendance, Leave, etc.)</p>
+        <p><span class="marker">3</span> <strong>Unit Selector</strong> — Dropdown to filter by specific unit or view GROUP DASHBOARD</p>
+        <p><span class="marker">4</span> <strong>Month Selector</strong> — Change the payroll processing month</p>
+        <p><span class="marker">5</span> <strong>KPI Cards</strong> — Total Employees, Present Today, On Leave, Pending Leaves</p>
+        <p><span class="marker">6</span> <strong>Compliance Indicators</strong> — Attendance rate, Leave utilization, Loan recovery</p>
+        <p><span class="marker">7</span> <strong>Quick Actions</strong> — Approve Leave, Miss Punch, Salary Revision</p>
+        <p><span class="marker">8</span> <strong>Active Session</strong> — Shows logged-in user details and role</p>
+        <p><span class="marker">9</span> <strong>Calendar & Events</strong> — Holidays, Birthdays, Upcoming leaves</p>
+    </div>
+    
+    <h3>Left Sidebar Menu Items</h3>
+    <table>
+        <tr><th>Section</th><th>Module</th><th>What It Does</th></tr>
+        <tr><td rowspan="5"><strong>CORE HRMS</strong></td><td>Dashboard Summary</td><td>Main overview (current screen)</td></tr>
+        <tr><td>Employee Master</td><td>Add, edit, search employees</td></tr>
+        <tr><td>Attendance Register</td><td>Mark daily attendance</td></tr>
+        <tr><td>Leave Management</td><td>Approve/reject leave requests</td></tr>
+        <tr><td>Factory Gate Pass</td><td>In/Out tracking</td></tr>
+        <tr><td rowspan="3"><strong>COMP & BENEFITS</strong></td><td>Payroll Processor</td><td>Calculate monthly salary</td></tr>
+        <tr><td>Salary Revision</td><td>Process increments</td></tr>
+        <tr><td>Loan Management</td><td>Track employee loans</td></tr>
+        <tr><td rowspan="3"><strong>LETTERS & ANALYTICS</strong></td><td>Reports & Analytics</td><td>View all reports</td></tr>
+        <tr><td>HR Letters Hub</td><td>Generate letters</td></tr>
+        <tr><td>Settings & Master</td><td>Company, HOD, Users (Super Admin only)</td></tr>
+    </table>
+</div>
+
+<!-- SECTION 4: EMPLOYEE MASTER -->
+<div class="page">
+    <h2>4. Employee Master</h2>
+    
+    <p>The Employee Master is where you manage all employee records.</p>
+    
+    <h3>Step 1: Open Employee Master</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Employee Master"</strong> in the left sidebar
+    </div>
+    
+    <h3>Employee Master Features</h3>
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>Search Box</strong> — Type Employee ID, Name, or Phone to find any employee</p>
+        <p><span class="marker">2</span> <strong>Company Filter</strong> — Select a specific company/unit to view only those employees</p>
+        <p><span class="marker">3</span> <strong>Add Employee</strong> — Click to add a new employee record</p>
+        <p><span class="marker">4</span> <strong>Import Excel</strong> — Bulk import employees from Excel</p>
+        <p><span class="marker">5</span> <strong>Export Excel</strong> — Download employee list as Excel</p>
+        <p><span class="marker">6</span> <strong>Edit Button</strong> — Click on employee row to modify record</p>
+    </div>
+    
+    <h3>Step 2: Add New Employee</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"+ Add Employee"</strong> button
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Fill in mandatory fields: <strong>Employee ID, Name, Company</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Fill optional fields: Department, Designation, Phone, Date of Joining
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Enter salary details: Base Salary, Salary Structure (FIXED)
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> Click <strong>"Save Employee"</strong>
+    </div>
+    
+    <div class="important">
+        Employee ID is PERMANENT. Do NOT change it after creation. The system generates the password from Employee ID automatically.
+    </div>
+    
+    <h3>Important Fields</h3>
+    <table>
+        <tr><th>Field</th><th>Mandatory?</th><th>Description</th></tr>
+        <tr><td>Employee ID</td><td>✅ Yes</td><td>Unique code (e.g., SV1ST0099)</td></tr>
+        <tr><td>Employee Name</td><td>✅ Yes</td><td>Full name as per records</td></tr>
+        <tr><td>Company</td><td>✅ Yes</td><td>SVN-1, SVN-II, Sakar-I, or Sakar-III</td></tr>
+        <tr><td>Department</td><td>No</td><td>Production, Assembly, Quality, etc.</td></tr>
+        <tr><td>Designation</td><td>No</td><td>Officer, Technician, Worker, etc.</td></tr>
+        <tr><td>Phone Number</td><td>No</td><td>10-digit mobile number</td></tr>
+        <tr><td>Date of Joining</td><td>No</td><td>When employee joined</td></tr>
+        <tr><td>Base Salary</td><td>No</td><td>Monthly basic salary (₹)</td></tr>
+        <tr><td>Salary Structure</td><td>No</td><td>FIXED (recommended)</td></tr>
+    </table>
+</div>
+
+<!-- SECTION 5: ATTENDANCE -->
+<div class="page">
+    <h2>5. Attendance Register</h2>
+    
+    <p>Mark daily attendance for all employees.</p>
+    
+    <h3>Step 1: Open Attendance Register</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Attendance Register"</strong> in the left sidebar
+    </div>
+    
+    <h3>Step 2: Select Month & Company</h3>
+    <div class="step">
+        <span class="step-number">2</span> Select the <strong>Month</strong> from dropdown (e.g., May 2026)
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Select the <strong>Company/Unit</strong> (SVN-1, SVN-II, Sakar-I, Sakar-III)
+    </div>
+    
+    <h3>Step 3: Mark Attendance</h3>
+    <div class="step">
+        <span class="step-number">4</span> Click on any cell to change attendance status
+    </div>
+    
+    <h3>Attendance Codes</h3>
+    <table>
+        <tr><th>Code</th><th>Meaning</th><th>Color</th></tr>
+        <tr><td><strong>P</strong></td><td>Present</td><td style="background: #d4edda;">Green</td></tr>
+        <tr><td><strong>A</strong></td><td>Absent</td><td style="background: #f8d7da;">Red</td></tr>
+        <tr><td><strong>L</strong></td><td>Leave</td><td style="background: #fff3cd;">Yellow</td></tr>
+        <tr><td><strong>WO</strong></td><td>Weekly Off</td><td style="background: #cce5ff;">Blue</td></tr>
+        <tr><td><strong>PH</strong></td><td>Paid Holiday</td><td style="background: #d4edda;">Green</td></tr>
+    </table>
+    
+    <h3>Step 4: Save Attendance</h3>
+    <div class="step">
+        <span class="step-number">5</span> Click <strong>"Save Attendance"</strong> button after marking all employees
+    </div>
+    
+    <div class="tip">
+        <strong>Auto-Leave:</strong> When an employee's leave request is approved through Leave Management, the attendance register is automatically updated with Leave (L) status for those dates.
+    </div>
+    
+    <h3>Import Attendance from Excel</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Import Attendance"</strong> button
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Select your Excel file with attendance data
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Review the import preview
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Click <strong>"Confirm Import"</strong>
+    </div>
+</div>
+
+<!-- SECTION 6: LEAVE MANAGEMENT -->
+<div class="page">
+    <h2>6. Leave Management</h2>
+    
+    <p>Approve or reject employee leave requests.</p>
+    
+    <h3>Step 1: Open Leave Management</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Leave Management"</strong> in the left sidebar
+    </div>
+    
+    <h3>Leave Workflow</h3>
+    <div class="workflow">
+        <div class="workflow-step">
+            <strong>① Employee</strong><br>
+            <small>Applies Leave</small>
+        </div>
+        <div class="workflow-arrow">→</div>
+        <div class="workflow-step">
+            <strong>② HOD</strong><br>
+            <small>Reviews & Approves</small>
+        </div>
+        <div class="workflow-arrow">→</div>
+        <div class="workflow-step">
+            <strong>③ HR</strong><br>
+            <small>Final Approval</small>
+        </div>
+        <div class="workflow-arrow">→</div>
+        <div class="workflow-step" style="background: #d4edda;">
+            <strong>④ APPROVED</strong><br>
+            <small>Attendance Updated</small>
+        </div>
+    </div>
+    
+    <h3>Leave Types</h3>
+    <table>
+        <tr><th>Code</th><th>Full Name</th><th>Annual Allowance</th><th>Notes</th></tr>
+        <tr><td><strong>PL</strong></td><td>Privilege Leave</td><td>18 days/year</td><td>Minimum 2 days application</td></tr>
+        <tr><td><strong>CL</strong></td><td>Casual Leave</td><td>6 days/year</td><td>For personal/emergency work</td></tr>
+        <tr><td><strong>SL</strong></td><td>Sick Leave</td><td>6 days/year</td><td>For medical reasons</td></tr>
+    </table>
+    
+    <h3>How to Approve Leave</h3>
+    <div class="step">
+        <span class="step-number">1</span> Open <strong>Leave Management</strong> → <strong>Pending Approvals</strong> tab
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Review the leave request details
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Click <strong>"Approve"</strong> or <strong>"Reject"</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> System automatically updates attendance and deducts leave balance
+    </div>
+    
+    <div class="important">
+        When HR approves leave, the system automatically:<br>
+        1. Updates attendance register (marks as Leave)<br>
+        2. Deducts from employee's leave balance<br>
+        3. Ensures no LOP deduction in payroll
+    </div>
+</div>
+
+<!-- SECTION 7: PAYROLL -->
+<div class="page">
+    <h2>7. Payroll Processor</h2>
+    
+    <p>Calculate monthly salary for all employees.</p>
+    
+    <h3>Step 1: Open Payroll Processor</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Payroll Processor"</strong> in the left sidebar
+    </div>
+    
+    <h3>Step 2: Select Month & Company</h3>
+    <div class="step">
+        <span class="step-number">2</span> Select <strong>Month</strong> (e.g., May 2026)
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Select <strong>Company</strong> (SVN-1, Sakar-I, or ALL)
+    </div>
+    
+    <h3>Step 3: Calculate Salary</h3>
+    <div class="step">
+        <span class="step-number">4</span> Click <strong>"Calculate Draft Salary"</strong>
+    </div>
+    
+    <h3>What System Auto-Calculates</h3>
+    <table>
+        <tr><th>Earnings</th><th>Deductions</th></tr>
+        <tr><td>Base Salary</td><td>PF Employee (12% of Basic)</td></tr>
+        <tr><td>HRA (40% of Basic)</td><td>ESIC (0.75% if applicable)</td></tr>
+        <tr><td>Special Allowance</td><td>Professional Tax</td></tr>
+        <tr><td>Conveyance Allowance</td><td>LOP Deduction (Absent days)</td></tr>
+        <tr><td>Medical Allowance</td><td>Loan Deduction (Auto from Loan Register)</td></tr>
+        <tr><td>Education Allowance</td><td>Other Deductions</td></tr>
+        <tr><td><strong>GROSS</strong></td><td><strong>TOTAL DEDUCTIONS</strong></td></tr>
+        <tr><td colspan="2"><strong>NET PAY = GROSS - TOTAL DEDUCTIONS</strong></td></tr>
+    </table>
+    
+    <h3>Step 4: Download & Verify</h3>
+    <div class="step">
+        <span class="step-number">5</span> Click <strong>"Download Excel"</strong> to export salary sheet
+    </div>
+    <div class="step">
+        <span class="step-number">6</span> Verify all amounts are correct
+    </div>
+    
+    <h3>Step 5: Close Payroll</h3>
+    <div class="step">
+        <span class="step-number">7</span> Click <strong>"Close & Approve Payroll"</strong> to lock the month
+    </div>
+    
+    <div class="warning">
+        After closing payroll, no further changes are allowed for that month. Make sure all data is correct before closing.
+    </div>
+</div>
+
+<!-- SECTION 8 & 9: SALARY REVISION & LOAN -->
+<div class="page">
+    <h2>8. Salary Revision</h2>
+    
+    <p>Process increments and salary changes.</p>
+    
+    <h3>Step 1: Open Salary Revision</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Salary Revision"</strong> in the left sidebar
+    </div>
+    
+    <h3>Step 2: Search Employee</h3>
+    <div class="step">
+        <span class="step-number">2</span> Enter <strong>Employee ID or Name</strong> to find the employee
+    </div>
+    
+    <h3>Step 3: Enter New Salary</h3>
+    <div class="step">
+        <span class="step-number">3</span> Current salary is auto-filled (read-only)
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Enter <strong>New Base Salary</strong> amount
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> Select <strong>Effective From Date</strong> (e.g., 01-May-2026)
+    </div>
+    <div class="step">
+        <span class="step-number">6</span> Enter <strong>Reason</strong> (e.g., "May-26 Increment")
+    </div>
+    <div class="step">
+        <span class="step-number">7</span> Click <strong>"Save Revision"</strong>
+    </div>
+    
+    <div class="important">
+        Salary Revision does NOT overwrite the old salary. The system maintains a complete history of all salary changes with dates and reasons.
+    </div>
+    
+    <h2>9. Loan Management</h2>
+    
+    <p>Track employee loans and auto-deduct EMI from salary.</p>
+    
+    <h3>Step 1: Open Loan Management</h3>
+    <div class="step">
+        <span class="step-number">1</span> Click <strong>"Loan Management"</strong> in the left sidebar
+    </div>
+    
+    <h3>Step 2: Add New Loan</h3>
+    <div class="step">
+        <span class="step-number">2</span> Click <strong>"Add New Loan"</strong> tab
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Select <strong>Employee</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Enter <strong>Loan Amount</strong> and <strong>Monthly EMI</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> Click <strong>"Save Loan"</strong>
+    </div>
+    
+    <div class="tip">
+        Loan EMI is <strong>automatically deducted</strong> during payroll calculation. When HR runs "Calculate Draft Salary", the system checks for active loans and deducts the EMI from net pay.
+    </div>
+</div>
+
+<!-- SECTION 10 & 11: REPORTS & ESS -->
+<div class="page">
+    <h2>10. Reports & Analytics</h2>
+    
+    <p>View various reports and export to Excel.</p>
+    
+    <h3>Available Reports</h3>
+    <table>
+        <tr><th>Report</th><th>Description</th></tr>
+        <tr><td>Employee Directory</td><td>Complete list of all employees</td></tr>
+        <tr><td>Attendance Summary</td><td>Monthly attendance with Present/Absent/Leave counts</td></tr>
+        <tr><td>Payroll Register</td><td>Complete salary register with breakdown</td></tr>
+        <tr><td>Leave Report</td><td>Leave balance and history</td></tr>
+        <tr><td>Loan Outstanding</td><td>All active loans with balance</td></tr>
+        <tr><td>PF ECR Report</td><td>EPF contribution details</td></tr>
+        <tr><td>Form 16</td><td>Annual tax declaration</td></tr>
+    </table>
+    
+    <h2>11. Employee ESS Portal</h2>
+    
+    <p>Employees can access their own data through the Self-Service Portal.</p>
+    
+    <h3>Employee ESS Features</h3>
+    <table>
+        <tr><th>Feature</th><th>What Employee Can Do</th></tr>
+        <tr><td>📊 Dashboard</td><td>View attendance summary, leave balance</td></tr>
+        <tr><td>👤 Profile</td><td>View personal details, salary</td></tr>
+        <tr><td>📅 Attendance</td><td>View own attendance history</td></tr>
+        <tr><td>🏖️ Leave</td><td>Apply for leave, view history</td></tr>
+        <tr><td>💰 Payslip</td><td>View and download payslips</td></tr>
+        <tr><td>📋 Form 16</td><td>Download tax declaration</td></tr>
+        <tr><td>🔒 Security</td><td>Change password</td></tr>
+    </table>
+</div>
+
+<!-- SECTION 12 & 13: TROUBLESHOOTING & QUICK REFERENCE -->
+<div class="page">
+    <h2>12. Troubleshooting</h2>
+    
+    <table>
+        <tr><th>Problem</th><th>Solution</th></tr>
+        <tr>
+            <td><strong>"Authentication service unavailable"</strong></td>
+            <td>Internet connection problem. Check WiFi/mobile data. Try again after 30 seconds.</td>
+        </tr>
+        <tr>
+            <td><strong>"Incorrect Password"</strong></td>
+            <td>Check Employee ID and Password. SVN: Phone last 4 + Birth year. Sakar: 00001995</td>
+        </tr>
+        <tr>
+            <td><strong>"Employee not found"</strong></td>
+            <td>Check Employee ID spelling. It is case-sensitive. Contact HR if problem persists.</td>
+        </tr>
+        <tr>
+            <td><strong>"Failed to fetch"</strong></td>
+            <td>Server is temporarily unavailable. Wait 1-2 minutes and try again.</td>
+        </tr>
+        <tr>
+            <td><strong>Page not loading / Blank screen</strong></td>
+            <td>Clear browser cache: Chrome → Settings → Clear browsing data → Cached images and files.</td>
+        </tr>
+        <tr>
+            <td><strong>Cannot see other company data</strong></td>
+            <td>Check your access level. HR users can only see their assigned unit.</td>
+        </tr>
+        <tr>
+            <td><strong>Salary revision not saving</strong></td>
+            <td>Payroll month may be locked. Contact Super Admin to unlock.</td>
+        </tr>
+        <tr>
+            <td><strong>Attendance not updating</strong></td>
+            <td>Click "Save Attendance" button after making changes.</td>
+        </tr>
+    </table>
+    
+    <h2>13. Quick Reference Card</h2>
+    
+    <h3>Daily HR Workflow</h3>
+    <table>
+        <tr><th>#</th><th>Time</th><th>Task</th><th>Where</th></tr>
+        <tr><td>1</td><td>Morning</td><td>Mark daily attendance</td><td>Attendance Register</td></tr>
+        <tr><td>2</td><td>Morning</td><td>Check pending leave requests</td><td>Leave Management → Pending</td></tr>
+        <tr><td>3</td><td>Morning</td><td>Check miss punch requests</td><td>Dashboard → Approve Miss Punch</td></tr>
+        <tr><td>4</td><td>Afternoon</td><td>Process new employee additions</td><td>Employee Master → Add</td></tr>
+        <tr><td>5</td><td>Afternoon</td><td>Process salary revisions</td><td>Salary Revision</td></tr>
+        <tr><td>6</td><td>Month End</td><td>Run Payroll Calculation</td><td>Payroll Processor → Calculate</td></tr>
+        <tr><td>7</td><td>Month End</td><td>Download & Verify Salary Sheet</td><td>Payroll Processor → Download Excel</td></tr>
+        <tr><td>8</td><td>Month End</td><td>Close & Approve Payroll</td><td>Payroll Processor → Close</td></tr>
+    </table>
+    
+    <div style="text-align: center; margin-top: 40px; padding: 20px; background: #e8f5e9; border-radius: 8px;">
+        <h3 style="color: #1a5f2a;">Need Help?</h3>
+        <p>Contact Super Admin: <strong>Vishnu Arrawatia</strong></p>
+        <p>📱 Contact IT Department</p>
+        <p style="margin-top: 15px; font-size: 12px; color: #666;">
+            © 2026 Sakar Electricals & Electronics Pvt. Ltd. & SVN Opto Electronics Pvt. Ltd.<br>
+            Powered by Vishnu Intelligence Services
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

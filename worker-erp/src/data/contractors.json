@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Bhavin Bhandari",
+    "unit": "SVN-II",
+    "pf_applicable": "YES",
+    "esic_applicable": "YES",
+    "commission_per_day": 25,
+    "gst_rate": 0.18,
+    "tds_rate": 0.02
+  },
+  {
+    "name": "Shilpa Bhagone",
+    "unit": "SVN-II",
+    "pf_applicable": "YES",
+    "esic_applicable": "YES",
+    "commission_per_day": 25,
+    "gst_rate": 0.18,
+    "tds_rate": 0.02
+  },
+  {
+    "name": "Veer Enterprises",
+    "unit": "SVN-II",
+    "pf_applicable": "YES",
+    "esic_applicable": "YES",
+    "commission_per_day": 25,
+    "gst_rate": 0.18,
+    "tds_rate": 0.02
+  },
+  {
+    "name": "SVN-II",
+    "unit": "SVN-II",
+    "pf_applicable": "YES",
+    "esic_applicable": "YES",
+    "commission_per_day": 0,
+    "gst_rate": 0,
+    "tds_rate": 0
+  },
+  {
+    "name": "Sakar-I",
+    "unit": "Sakar-I",
+    "pf_applicable": "YES",
+    "esic_applicable": "YES",
+    "commission_per_day": 0,
+    "gst_rate": 0,
+    "tds_rate": 0
+  }
+]

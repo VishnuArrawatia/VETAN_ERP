@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VETAN ERP — Logo Options v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f1f5f9; padding: 40px 20px; }
+  
+  .title { text-align: center; margin-bottom: 40px; }
+  .title h1 { font-size: 28px; font-weight: 900; color: #0f172a; }
+  .title p { color: #64748b; margin-top: 8px; font-size: 14px; }
+  
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1100px; margin: 0 auto; }
+  
+  .card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .card:hover { border-color: #6366f1; transform: translateY(-4px); box-shadow: 0 8px 25px rgba(99,102,241,0.15); }
+  .card.selected { border-color: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,0.2); }
+  
+  .card-number {
+    position: absolute; top: 12px; left: 12px;
+    background: #6366f1; color: white; font-weight: 800; font-size: 13px;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  
+  .logo-area {
+    position: relative;
+    padding: 50px 30px;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 140px;
+  }
+  
+  .card-label {
+    padding: 16px 20px;
+    border-top: 1px solid #f1f5f9;
+    background: #fafbfc;
+  }
+  .card-label h3 { font-size: 15px; font-weight: 800; color: #0f172a; }
+  .card-label p { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+  /* ========== OPTION 1 — Dark Icon + VETAN big ERP small ========== */
+  .opt1 { display: flex; align-items: center; gap: 14px; }
+  .opt1-icon {
+    width: 50px; height: 50px;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(15,23,42,0.25);
+  }
+  .opt1-icon svg { width: 26px; height: 26px; color: #f59e0b; }
+  .opt1-brand { display: flex; align-items: baseline; gap: 0; }
+  .opt1-brand .v { font-family: 'Outfit', sans-serif; font-size: 30px; font-weight: 900; color: #0f172a; letter-spacing: -1px; line-height: 1; }
+  .opt1-brand .e { font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: #6366f1; letter-spacing: 1px; margin-left: 3px; position: relative; top: -8px; }
+  .opt1-sub { font-size: 8px; font-weight: 600; color: #94a3b8; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+  /* ========== OPTION 2 — Gold accent bar ========== */
+  .opt2 { display: flex; align-items: center; gap: 0; }
+  .opt2-icon {
+    background: #0f172a;
+    padding: 14px 16px;
+    border-radius: 12px 0 0 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .opt2-icon svg { width: 24px; height: 24px; color: #f59e0b; }
+  .opt2-text {
+    background: #0f172a;
+    padding: 10px 22px 10px 16px;
+    border-radius: 0 12px 12px 0;
+    display: flex; flex-direction: column;
+  }
+  .opt2-brand { display: flex; align-items: baseline; }
+  .opt2-brand .v { font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 900; color: white; letter-spacing: -0.5px; line-height: 1; }
+  .opt2-brand .e { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; color: #f59e0b; letter-spacing: 2px; margin-left: 4px; position: relative; top: -6px; }
+  .opt2-sub { font-size: 7.5px; font-weight: 600; color: #64748b; letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+
+  /* ========== OPTION 3 — Gradient line underneath ========== */
+  .opt3 { display: flex; flex-direction: column; align-items: flex-start; }
+  .opt3-top { display: flex; align-items: center; gap: 12px; }
+  .opt3-diamond {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, #f59e0b, #ea580c);
+    transform: rotate(45deg);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 15px rgba(245,158,11,0.3);
+  }
+  .opt3-diamond svg { width: 20px; height: 20px; transform: rotate(-45deg); color: white; }
+  .opt3-brand { display: flex; align-items: baseline; }
+  .opt3-brand .v { font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 900; background: linear-gradient(135deg, #0f172a, #334155); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+  .opt3-brand .e { font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; color: #ea580c; letter-spacing: 1px; margin-left: 3px; position: relative; top: -10px; }
+  .opt3-accent { width: 100%; height: 3px; background: linear-gradient(90deg, #f59e0b, #ea580c, #ef4444); border-radius: 2px; margin-top: 8px; }
+  .opt3-sub { font-size: 8px; font-weight: 600; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+
+  /* ========== OPTION 4 — Minimal circle ========== */
+  .opt4 { display: flex; align-items: center; gap: 14px; }
+  .opt4-circle {
+    width: 50px; height: 50px;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 3px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.15);
+  }
+  .opt4-circle svg { width: 24px; height: 24px; color: #f59e0b; }
+  .opt4-brand { display: flex; flex-direction: column; }
+  .opt4-name { display: flex; align-items: baseline; }
+  .opt4-name .v { font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px; line-height: 1; }
+  .opt4-name .e { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; color: #6366f1; letter-spacing: 2px; margin-left: 3px; position: relative; top: -8px; }
+  .opt4-sub { font-size: 8px; font-weight: 700; color: #94a3b8; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+
+  #selected-msg { text-align:center; margin-top:30px; font-size:18px; font-weight:700; color:#10b981; display:none; }
+</style>
+</head>
+<body>
+
+<div class="title">
+  <h1>🎨 VETAN ERP — Logo Options</h1>
+  <p>VETAN bada + ERP chhota uske baad. Kaunsa style pasand hai?</p>
+</div>
+
+<div class="grid">
+
+  <!-- OPTION 1 -->
+  <div class="card" onclick="selectOption(this, 1)">
+    <div class="logo-area">
+      <div class="card-number">1</div>
+      <div class="opt1">
+        <div class="opt1-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18"/>
+            <path d="M5 21V7l7-4 7 4v14"/>
+            <path d="M9 21v-6h6v6"/>
+            <path d="M10 9h4"/>
+            <path d="M10 13h4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="opt1-brand">
+            <span class="v">VETAN</span><span class="e">ERP</span>
+          </div>
+          <div class="opt1-sub">Powered by Vishnu Intelligence</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>Option 1 — Dark Shield + Purple ERP</h3>
+      <p>Dark icon, VETAN bold black, ERP small purple superscript</p>
+    </div>
+  </div>
+
+  <!-- OPTION 2 -->
+  <div class="card" onclick="selectOption(this, 2)">
+    <div class="logo-area">
+      <div class="card-number">2</div>
+      <div class="opt2">
+        <div class="opt2-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18"/>
+            <path d="M5 21V7l7-4 7 4v14"/>
+            <path d="M9 21v-6h6v6"/>
+            <path d="M10 9h4"/>
+            <path d="M10 13h4"/>
+          </svg>
+        </div>
+        <div class="opt2-text">
+          <div class="opt2-brand">
+            <span class="v">VETAN</span><span class="e">ERP</span>
+          </div>
+          <div class="opt2-sub">Multi-Unit Statutory Suite</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>Option 2 — Dark Bar + Gold ERP</h3>
+      <p>Connected dark bar, VETAN white, ERP gold superscript</p>
+    </div>
+  </div>
+
+  <!-- OPTION 3 -->
+  <div class="card" onclick="selectOption(this, 3)">
+    <div class="logo-area">
+      <div class="card-number">3</div>
+      <div class="opt3">
+        <div class="opt3-top">
+          <div class="opt3-diamond">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18"/>
+              <path d="M5 21V7l7-4 7 4v14"/>
+              <path d="M9 21v-6h6v6"/>
+            </svg>
+          </div>
+          <div class="opt3-brand">
+            <span class="v">VETAN</span><span class="e">ERP</span>
+          </div>
+        </div>
+        <div class="opt3-accent"></div>
+        <div class="opt3-sub">Powered by Vishnu Intelligence Services</div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>Option 3 — Orange Diamond + Gradient Line</h3>
+      <p>Orange diamond icon, VETAN gradient dark, ERP orange superscript</p>
+    </div>
+  </div>
+
+  <!-- OPTION 4 -->
+  <div class="card" onclick="selectOption(this, 4)">
+    <div class="logo-area">
+      <div class="card-number">4</div>
+      <div class="opt4">
+        <div class="opt4-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18"/>
+            <path d="M5 21V7l7-4 7 4v14"/>
+            <path d="M9 21v-6h6v6"/>
+            <path d="M10 9h4"/>
+            <path d="M10 13h4"/>
+          </svg>
+        </div>
+        <div class="opt4-brand">
+          <div class="opt4-name">
+            <span class="v">VETAN</span><span class="e">ERP</span>
+          </div>
+          <div class="opt4-sub">Multi-Unit Statutory Suite</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-label">
+      <h3>Option 4 — Circle Border + Purple ERP</h3>
+      <p>Clean circle, VETAN bold dark, ERP small purple superscript</p>
+    </div>
+  </div>
+
+</div>
+
+<div id="selected-msg">
+  ✅ Selected! Aapne choose kiya: <span id="selected-num"></span>
+</div>
+
+<script>
+function selectOption(el, num) {
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('selected-msg').style.display = 'block';
+  document.getElementById('selected-num').textContent = 'Option ' + num;
+}
+</script>
+
+</body>
+</html>

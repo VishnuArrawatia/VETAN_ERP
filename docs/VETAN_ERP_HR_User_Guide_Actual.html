@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VETAN ERP — HR User Manual (Actual Screen-by-Screen)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
+        .page { max-width: 210mm; margin: 0 auto; background: white; padding: 40px; min-height: 297mm; page-break-after: always; }
+        @media print { .page { padding: 20px; margin: 0; box-shadow: none; } }
+        
+        /* Cover Page */
+        .cover { text-align: center; padding-top: 120px; background: linear-gradient(135deg, #1a5f2a 0%, #2d8a4e 100%); color: white; }
+        .cover h1 { font-size: 48px; margin-bottom: 10px; }
+        .cover h2 { font-size: 24px; font-weight: 300; margin-bottom: 40px; }
+        .cover .subtitle { font-size: 18px; margin-bottom: 60px; }
+        .cover .companies { font-size: 14px; margin-top: 40px; }
+        .cover .version { margin-top: 80px; font-size: 12px; opacity: 0.8; }
+        
+        /* Section Headers */
+        h2 { color: #1a5f2a; border-bottom: 3px solid #1a5f2a; padding-bottom: 8px; margin: 30px 0 20px; font-size: 22px; }
+        h3 { color: #2d8a4e; margin: 20px 0 10px; font-size: 18px; }
+        h4 { color: #444; margin: 15px 0 8px; font-size: 15px; }
+        
+        /* Screen Mockups */
+        .screen { background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 15px 0; position: relative; }
+        .screen-header { background: #1a5f2a; color: white; padding: 10px 15px; border-radius: 6px 6px 0 0; margin: -20px -20px 15px; font-weight: bold; }
+        .screen-body { padding: 10px; }
+        
+        /* Annotation Markers */
+        .marker { display: inline-block; background: #dc3545; color: white; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; font-weight: bold; margin-right: 5px; vertical-align: middle; }
+        .marker-box { border: 3px solid #dc3545; border-radius: 4px; padding: 8px; margin: 10px 0; background: rgba(220, 53, 69, 0.05); }
+        
+        /* Steps */
+        .step { background: #e8f5e9; border-left: 4px solid #1a5f2a; padding: 12px 16px; margin: 10px 0; border-radius: 0 6px 6px 0; }
+        .step-number { display: inline-block; background: #1a5f2a; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: bold; margin-right: 8px; }
+        
+        /* Warning/Tip Boxes */
+        .warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .warning::before { content: "⚠️ WARNING: "; font-weight: bold; }
+        .tip { background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .tip::before { content: "💡 TIP: "; font-weight: bold; }
+        .important { background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 12px; margin: 15px 0; }
+        .important::before { content: "🔴 IMPORTANT: "; font-weight: bold; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }
+        th { background: #1a5f2a; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        
+        /* UI Elements */
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 4px; font-weight: bold; margin: 5px; }
+        .btn-primary { background: #1a5f2a; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .field { display: inline-block; background: white; border: 1px solid #ccc; padding: 6px 10px; border-radius: 4px; margin: 3px; }
+        .menu-item { background: #e8f5e9; padding: 8px 12px; border-radius: 4px; margin: 5px 0; border-left: 3px solid #1a5f2a; }
+        
+        /* Credential Tables */
+        .credentials { background: #f0f7ff; border: 2px solid #0066cc; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .credentials h4 { color: #0066cc; }
+        
+        /* Navigation Sidebar Mockup */
+        .sidebar-mock { background: white; border: 2px solid #dee2e6; border-radius: 8px; padding: 10px; width: 250px; }
+        .sidebar-section { font-size: 10px; color: #666; text-transform: uppercase; padding: 8px 0 4px; font-weight: bold; letter-spacing: 1px; }
+        .sidebar-item { padding: 8px 12px; border-radius: 6px; margin: 2px 0; font-size: 13px; cursor: pointer; }
+        .sidebar-item.active { background: #1a5f2a; color: white; font-weight: bold; }
+        .sidebar-item:hover { background: #e8f5e9; }
+        
+        /* Dashboard Card Mockup */
+        .dashboard-card { display: inline-block; background: white; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; margin: 5px; min-width: 150px; text-align: center; }
+        .dashboard-card .number { font-size: 28px; font-weight: bold; color: #1a5f2a; }
+        .dashboard-card .label { font-size: 11px; color: #666; }
+        
+        /* Form Field Layout */
+        .form-row { display: flex; gap: 15px; margin: 10px 0; }
+        .form-group { flex: 1; }
+        .form-group label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; }
+        .form-group .input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        
+        /* Tabs */
+        .tab-bar { display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 15px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab.active { border-bottom-color: #1a5f2a; font-weight: bold; color: #1a5f2a; }
+        
+        /* Print Styles */
+        @media print {
+            body { background: white; }
+            .page { box-shadow: none; border: none; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="page cover">
+    <div style="font-size: 60px; margin-bottom: 20px;">🏢</div>
+    <h1>VETAN ERP</h1>
+    <h2>HR User Manual</h2>
+    <div class="subtitle">Actual Screen-by-Screen Training Guide</div>
+    
+    <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; margin: 30px auto; max-width: 400px;">
+        <p style="font-size: 16px; margin-bottom: 10px;"><strong>Sakar Electricals & Electronics Pvt. Ltd.</strong></p>
+        <p style="font-size: 16px;">SVN Opto Electronics Pvt. Ltd.</p>
+    </div>
+    
+    <div class="companies">
+        <p>Powered by Vishnu Intelligence Services</p>
+    </div>
+    
+    <div class="version">
+        <p>Version: Current VETAN ERP Production Build</p>
+        <p>URL: https://vetan-svn.vercel.app</p>
+        <p>Date: August 2026</p>
+    </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="page">
+    <h2>📋 Table of Contents</h2>
+    <table>
+        <tr><th>#</th><th>Section</th><th>Page</th></tr>
+        <tr><td>1</td><td>How to Open VETAN ERP</td><td>3</td></tr>
+        <tr><td>2</td><td>Login — HR / Admin</td><td>3</td></tr>
+        <tr><td>3</td><td>Dashboard Overview</td><td>5</td></tr>
+        <tr><td>4</td><td>Employee Master</td><td>8</td></tr>
+        <tr><td>5</td><td>Attendance Register</td><td>12</td></tr>
+        <tr><td>6</td><td>Leave Management</td><td>15</td></tr>
+        <tr><td>7</td><td>Factory Gate Pass</td><td>18</td></tr>
+        <tr><td>8</td><td>Payroll Processor</td><td>20</td></tr>
+        <tr><td>9</td><td>Salary Revision</td><td>25</td></tr>
+        <tr><td>10</td><td>Loan Management</td><td>27</td></tr>
+        <tr><td>11</td><td>Reports & Analytics</td><td>29</td></tr>
+        <tr><td>12</td><td>HR Letters Hub</td><td>32</td></tr>
+        <tr><td>13</td><td>Settings & Master Data</td><td>34</td></tr>
+        <tr><td>14</td><td>Employee ESS (Self-Service)</td><td>38</td></tr>
+        <tr><td>15</td><td>Password Rules & Security</td><td>42</td></tr>
+        <tr><td>16</td><td>Mobile / PWA Installation</td><td>44</td></tr>
+        <tr><td>17</td><td>Troubleshooting</td><td>46</td></tr>
+        <tr><td>18</td><td>Quick Reference Card</td><td>48</td></tr>
+    </table>
+    
+    <div class="tip" style="margin-top: 30px;">
+        <strong>How to use this manual:</strong> Keep this PDF open beside your computer screen. Follow the numbered steps. Click exactly where the red markers show. Each screenshot matches the actual VETAN ERP screen.
+    </div>
+</div>
+
+<!-- SECTION 1 & 2: LOGIN -->
+<div class="page">
+    <h2>1. How to Open VETAN ERP</h2>
+    
+    <h3>Step 1: Open Your Web Browser</h3>
+    <p>Open <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on your computer or phone.</p>
+    
+    <h3>Step 2: Type the VETAN ERP Address</h3>
+    <div class="screen">
+        <div class="screen-header">🌐 Browser Address Bar</div>
+        <div class="screen-body">
+            <div class="marker-box">
+                <span class="marker">1</span> Click on the address bar at the top of your browser
+            </div>
+            <div class="field" style="width: 100%; text-align: center; font-size: 16px; padding: 12px;">
+                https://vetan-svn.vercel.app
+            </div>
+            <p style="margin-top: 10px;">Press <strong>Enter</strong> on your keyboard.</p>
+        </div>
+    </div>
+    
+    <h3>Step 3: You Will See the VETAN ERP Login Page</h3>
+    <div class="screen">
+        <div class="screen-header">🏢 VETAN ERP — Login Screen (Actual)</div>
+        <div class="screen-body">
+            <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #1a5f2a, #2d8a4e); color: white; border-radius: 8px; margin-bottom: 15px;">
+                <h3 style="font-size: 28px;">VETAN ERP</h3>
+                <p>Sakar Electricals & Electronics Pvt. Ltd.</p>
+                <p>SVN Opto Electronics Pvt. Ltd.</p>
+            </div>
+            
+            <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
+                <div class="marker-box" style="flex: 1; max-width: 250px; text-align: center; border-color: #e91e63;">
+                    <span class="marker" style="background: #e91e63;">1</span><br>
+                    <strong style="color: #e91e63;">Employee ESS Portal</strong><br>
+                    <small style="color: #666;">(Pink Button)</small>
+                </div>
+                <div class="marker-box" style="flex: 1; max-width: 250px; text-align: center; border-color: #ffc107;">
+                    <span class="marker" style="background: #ffc107; color: #333;">2</span><br>
+                    <strong style="color: #ffc107;">Admin / HR Desk</strong><br>
+                    <small style="color: #666;">(Gold Button)</small>
+                </div>
+            </div>
+            
+            <div class="important">
+                HR users must click <strong>"Admin / HR Desk (Gold)"</strong> button to login.
+                Employee ESS is only for staff self-service.
+            </div>
+        </div>
+    </div>
+    
+    <h2>2. Login — HR / Admin</h2>
+    
+    <h3>Step 1: Click "Admin / HR Desk"</h3>
+    <p>Click the <strong>Gold button</strong> labeled "Admin / HR Desk (Gold)".</p>
+    
+    <h3>Step 2: Enter Your Credentials</h3>
+    <div class="screen">
+        <div class="screen-header">🔐 Admin / HR Login Form (Actual)</div>
+        <div class="screen-body">
+            <h3 style="text-align: center; color: #ffc107;">Sign In as Admin / HR</h3>
+            <p style="text-align: center; color: #666; margin-bottom: 15px;">Enter your administrator credentials to access the management panel.</p>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">1</span> USERNAME / ADMIN ID</label>
+                    <input type="text" class="input" placeholder="Enter Username or Admin ID (e.g. vishnu)" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">2</span> ADMINISTRATOR PASSWORD</label>
+                    <input type="password" class="input" placeholder="Enter administrator password..." readonly>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="btn btn-primary" style="padding: 12px 40px; font-size: 16px;">
+                    <span class="marker">3</span> Sign In as Admin
+                </button>
+            </div>
+            
+            <div class="tip" style="margin-top: 15px;">
+                Click the eye icon (👁️) next to the password field to show/hide your password.
+            </div>
+        </div>
+    </div>
+    
+    <div class="credentials">
+        <h4>🔑 HR Login Credentials (Unit-wise)</h4>
+        <table>
+            <tr><th>HR Name</th><th>Username</th><th>Access Level</th><th>Units</th></tr>
+            <tr><td>Vishnu Arrawatia</td><td>vishnu</td><td>Super Admin</td><td>All Units</td></tr>
+            <tr><td>Vijendra</td><td>vijendra</td><td>Company HR</td><td>SVN-1</td></tr>
+            <tr><td>Manisha Sapate</td><td>manisha_s</td><td>Company HR</td><td>SVN-II</td></tr>
+            <tr><td>Manisha</td><td>manisha</td><td>Company HR</td><td>Sakar-I</td></tr>
+            <tr><td>Indraprakash</td><td>indraprakash</td><td>Company HR</td><td>Sakar-III</td></tr>
+        </table>
+        <div class="warning">
+            Do NOT share your password with anyone. If you forget your password, contact the Super Admin.
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 3: DASHBOARD -->
+<div class="page">
+    <h2>3. Dashboard Overview</h2>
+    
+    <p>After login, you will see the <strong>VETAN ERP Dashboard</strong>. This is your main control center.</p>
+    
+    <h3>Actual Dashboard Layout</h3>
+    <div class="screen">
+        <div class="screen-header">📊 VETAN ERP Dashboard (Actual Screen)</div>
+        <div class="screen-body">
+            
+            <!-- Top Bar -->
+            <div style="background: #1a5f2a; color: white; padding: 10px 15px; border-radius: 6px; display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <div>
+                    <strong>VETAN ERP</strong> — Multi-Unit Statutory Suite
+                </div>
+                <div>
+                    <span class="marker" style="background: white; color: #1a5f2a;">1</span> Vishnu Arrawatia (Super)
+                </div>
+            </div>
+            
+            <!-- Left Sidebar -->
+            <div style="display: flex; gap: 15px;">
+                <div class="sidebar-mock">
+                    <div class="sidebar-section">ACTIVE HR SPECIALIST PROFILE</div>
+                    <div style="padding: 5px; font-weight: bold;">Vishnu Arrawatia</div>
+                    <div style="font-size: 11px; color: #666;">Company Management • SUPER_HR</div>
+                    
+                    <div class="sidebar-section">AUTHORIZED UNITS</div>
+                    <div style="font-size: 11px;">SVN-1 • SVN-II • SAKAR-I • SAKAR-III</div>
+                    
+                    <div class="sidebar-section">WORKSPACE</div>
+                    <div class="form-group" style="margin: 5px 0;">
+                        <select class="input" style="font-size: 11px;">
+                            <option>◇ GROUP DASHBOARD</option>
+                            <option>◇ UNIT: SVN-1</option>
+                            <option>◇ UNIT: SVN-II</option>
+                            <option>◇ UNIT: Sakar-I</option>
+                            <option>◇ UNIT: Sakar-III</option>
+                        </select>
+                    </div>
+                    
+                    <div class="sidebar-section">CYCLE MONTH</div>
+                    <div class="field" style="font-size: 12px; width: 100%; text-align: center;">2026-05</div>
+                    
+                    <div class="sidebar-section">CORE HRMS</div>
+                    <div class="sidebar-item active">📊 Dashboard Summary</div>
+                    <div class="sidebar-item">👤 Employee Master</div>
+                    <div class="sidebar-item">📅 Attendance Register</div>
+                    <div class="sidebar-item">🏖️ Leave Management</div>
+                    <div class="sidebar-item">🚪 Factory Gate Pass</div>
+                    <div class="sidebar-item">👷 Workforce Module</div>
+                    
+                    <div class="sidebar-section">COMP & BENEFITS</div>
+                    <div class="sidebar-item">💰 Payroll Processor</div>
+                    <div class="sidebar-item">📈 Salary Revision</div>
+                    <div class="sidebar-item">🏦 Loan Management</div>
+                    
+                    <div class="sidebar-section">LETTERS & ANALYTICS</div>
+                    <div class="sidebar-item">📊 Reports & Analytics</div>
+                    <div class="sidebar-item">📝 HR Letters Hub</div>
+                    <div class="sidebar-item">📖 System User Guide</div>
+                    <div class="sidebar-item">⚙️ Settings & Master</div>
+                </div>
+                
+                <!-- Main Content -->
+                <div style="flex: 1;">
+                    <h3>Welcome back, Vishnu Arrawatia</h3>
+                    <p style="color: #666; font-size: 12px;">Group Division Overview — SELECTED DASHBOARD MODE: GROUP VIEW | Month: 2026-05</p>
+                    
+                    <h4>OPERATIONAL CORPORATE KPIS</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <div class="dashboard-card">
+                            <div class="number">100</div>
+                            <div class="label">TOTAL EMPLOYEES<br>Active in All Units</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #28a745;">99</div>
+                            <div class="label">PRESENT TODAY<br>Est. Live Turnout</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #ffc107;">0</div>
+                            <div class="label">ON LEAVE<br>Approved leaves active</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #ffc107;">0</div>
+                            <div class="label">PENDING LEAVES<br>Awaiting HR signoff</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #dc3545;">2</div>
+                            <div class="label">PENDING CORRECTION<br>Miss-punch logs filed</div>
+                        </div>
+                    </div>
+                    
+                    <h4>COMPLIANCE & HEALTH INDICATORS</h4>
+                    <div style="display: flex; gap: 10px;">
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #28a745;">100%</div>
+                            <div class="label">ATT. RATE</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #ffc107;">12%</div>
+                            <div class="label">UTILIZED<br>Leave Cards</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #17a2b8;">68.4%</div>
+                            <div class="label">RECOVERED<br>Loan Disclosures</div>
+                        </div>
+                        <div class="dashboard-card">
+                            <div class="number" style="color: #6f42c1;">17%</div>
+                            <div class="label">PROCESSED<br>Cycle Status</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <h3>Dashboard Controls Explained</h3>
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>HR Profile & Quick Switch</strong> — Shows your name and role. Click other HR names to switch user.</p>
+        <p><span class="marker">2</span> <strong>Unit Selector</strong> — Dropdown to filter by specific unit (SVN-1, SVN-II, Sakar-I, Sakar-III) or view GROUP DASHBOARD.</p>
+        <p><span class="marker">3</span> <strong>Month Selector</strong> — Change the payroll processing month (e.g., 2026-05).</p>
+        <p><span class="marker">4</span> <strong>Sidebar Navigation</strong> — Click any module to open it (Employee Master, Attendance, Leave, etc.).</p>
+        <p><span class="marker">5</span> <strong>KPI Cards</strong> — Real-time counts: Total Employees, Present, On Leave, Pending Leaves, Miss Punch.</p>
+        <p><span class="marker">6</span> <strong>Health Indicators</strong> — Attendance rate, Leave utilization, Loan recovery, Payroll cycle status.</p>
+    </div>
+</div>
+
+<!-- SECTION 3 CONTINUED: DASHBOARD ACTIONS -->
+<div class="page">
+    <h3>Quick Action Command Hub</h3>
+    <div class="screen">
+        <div class="screen-header">⚡ Quick Actions (Actual Dashboard)</div>
+        <div class="screen-body">
+            <h4>HR OPERATIONS</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #28a745;">
+                    <span class="marker" style="background: #28a745;">1</span>
+                    <strong>Approve Leave</strong><br>
+                    <small>Sign off pending leave requests</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #ffc107;">
+                    <span class="marker" style="background: #ffc107; color: #333;">2</span>
+                    <strong>Approve Miss Punch</strong><br>
+                    <small>Audit employee daily timesheet</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #17a2b8;">
+                    <span class="marker" style="background: #17a2b8;">3</span>
+                    <strong>Unit Transfer</strong><br>
+                    <small>Process inter-company transfers</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #6f42c1;">
+                    <span class="marker" style="background: #6f42c1;">4</span>
+                    <strong>Salary Revision</strong><br>
+                    <small>Process base CTC hikes & changes</small>
+                </div>
+            </div>
+            
+            <h4>EMPLOYEE SELF-SERVICE</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #e91e63;">
+                    <span class="marker" style="background: #e91e63;">5</span>
+                    <strong>Apply Leave</strong><br>
+                    <small>Submit PL/CL request</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #ff9800;">
+                    <span class="marker" style="background: #ff9800;">6</span>
+                    <strong>Miss Punch Request</strong><br>
+                    <small>File attendance correction</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #4caf50;">
+                    <span class="marker" style="background: #4caf50;">7</span>
+                    <strong>Download Payslip</strong><br>
+                    <small>Export official PDF salary slips</small>
+                </div>
+                <div class="marker-box" style="flex: 1; min-width: 180px; border-color: #2196f3;">
+                    <span class="marker" style="background: #2196f3;">8</span>
+                    <strong>Download Form 16</strong><br>
+                    <small>Get fiscal tax declarations</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <h3>Sidebar Navigation — How to Move Between Modules</h3>
+    <div class="screen">
+        <div class="screen-header">📌 Left Sidebar Menu (Actual)</div>
+        <div class="screen-body">
+            <div class="sidebar-mock" style="width: 100%;">
+                <div class="sidebar-section">CORE HRMS</div>
+                <div class="sidebar-item active" style="background: #1a5f2a; color: white;">
+                    <span class="marker" style="background: white; color: #1a5f2a;">A</span> 📊 Dashboard Summary
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">B</span> 👤 Employee Master — <em>Add, edit, search employees</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">C</span> 📅 Attendance Register — <em>Mark daily attendance</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">D</span> 🏖️ Leave Management — <em>Approve/reject leaves</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">E</span> 🚪 Factory Gate Pass — <em>In/Out tracking</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">F</span> 👷 Workforce Module — <em>Contractor workers</em>
+                </div>
+                
+                <div class="sidebar-section">COMP & BENEFITS</div>
+                <div class="sidebar-item">
+                    <span class="marker">G</span> 💰 Payroll Processor — <em>Calculate salary</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">H</span> 📈 Salary Revision — <em>Increments & changes</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">I</span> 🏦 Loan Management — <em>Loan tracking</em>
+                </div>
+                
+                <div class="sidebar-section">LETTERS & ANALYTICS</div>
+                <div class="sidebar-item">
+                    <span class="marker">J</span> 📊 Reports & Analytics — <em>View reports</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">K</span> 📝 HR Letters Hub — <em>Generate letters</em>
+                </div>
+                <div class="sidebar-item">
+                    <span class="marker">L</span> ⚙️ Settings & Master — <em>Company, HOD, Users</em>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tip">
+        <strong>Navigation Tip:</strong> Click any sidebar item to switch modules. The active module is highlighted in green. The sidebar stays visible on the left side at all times.
+    </div>
+</div>
+
+<!-- SECTION 4: EMPLOYEE MASTER -->
+<div class="page">
+    <h2>4. Employee Master</h2>
+    
+    <p>The Employee Master is where you manage all employee records. This is the most important module.</p>
+    
+    <h3>Step 1: Open Employee Master</h3>
+    <div class="screen">
+        <div class="screen-header">👤 Employee Master List (Actual Screen)</div>
+        <div class="screen-body">
+            <!-- Toolbar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span class="marker">1</span>
+                    <input type="text" class="input" placeholder="🔍 Search employees..." style="width: 200px;" readonly>
+                    <span class="marker">2</span>
+                    <select class="input" style="width: 150px;">
+                        <option>All Companies</option>
+                        <option>SVN-1</option>
+                        <option>SVN-II</option>
+                        <option>Sakar-I</option>
+                        <option>Sakar-III</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <span class="marker">3</span>
+                    <button class="btn btn-primary">+ Add Employee</button>
+                    <span class="marker">4</span>
+                    <button class="btn btn-secondary">📥 Import Excel</button>
+                    <span class="marker">5</span>
+                    <button class="btn btn-secondary">📤 Export Excel</button>
+                </div>
+            </div>
+            
+            <!-- Employee Table -->
+            <table>
+                <thead>
+                    <tr>
+                        <th><span class="marker" style="background: white; color: #1a5f2a;">6</span> Code</th>
+                        <th>Name</th>
+                        <th>Company</th>
+                        <th>Department</th>
+                        <th>Designation</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>SV1ST0001</td>
+                        <td>Manoj Kailash Gupta</td>
+                        <td>SVN-1</td>
+                        <td>Production</td>
+                        <td>Officer</td>
+                        <td><span style="color: green;">● ACTIVE</span></td>
+                        <td>
+                            <span class="marker" style="background: #007bff; font-size: 10px;">7</span>
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>SV1ST0002</td>
+                        <td>Manoj Kumar Yadav</td>
+                        <td>SVN-1</td>
+                        <td>Assembly</td>
+                        <td>Technician</td>
+                        <td><span style="color: green;">● ACTIVE</span></td>
+                        <td><button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</button></td>
+                    </tr>
+                    <tr>
+                        <td>SK1ST0008</td>
+                        <td>Jiteshbhai Bhagubhai Halpati</td>
+                        <td>Sakar-I</td>
+                        <td>Production</td>
+                        <td>Worker</td>
+                        <td><span style="color: green;">● ACTIVE</span></td>
+                        <td><button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="text-align: center; padding: 10px; color: #666; font-size: 12px;">
+                Showing 1-30 of 100 employees | <strong>Previous</strong> | <strong>1</strong> 2 3 4 | <strong>Next</strong>
+            </div>
+        </div>
+    </div>
+    
+    <h3>Employee Master Controls Explained</h3>
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>Search Box</strong> — Type Employee ID, Name, or Phone to find any employee instantly.</p>
+        <p><span class="marker">2</span> <strong>Company Filter</strong> — Select a specific company/unit to view only those employees.</p>
+        <p><span class="marker">3</span> <strong>Add Employee</strong> — Click to add a new employee record.</p>
+        <p><span class="marker">4</span> <strong>Import Excel</strong> — Bulk import employees from an Excel spreadsheet.</p>
+        <p><span class="marker">5</span> <strong>Export Excel</strong> — Download the current employee list as an Excel file.</p>
+        <p><span class="marker">6</span> <strong>Table Headers</strong> — Click to sort by that column.</p>
+        <p><span class="marker">7</span> <strong>Edit Button</strong> — Click to modify the employee record.</p>
+    </div>
+    
+    <h3>Step 2: Add New Employee</h3>
+    <div class="screen">
+        <div class="screen-header">➕ Add Employee Form (Actual Fields)</div>
+        <div class="screen-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">1</span> Employee ID * (MANDATORY)</label>
+                    <input type="text" class="input" placeholder="e.g., SV1ST0099" readonly>
+                    <small style="color: #666;">Must match your company records. Unique code.</small>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">2</span> Employee Name * (MANDATORY)</label>
+                    <input type="text" class="input" placeholder="Full name" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">3</span> Company * (MANDATORY)</label>
+                    <select class="input"><option>SVN-1</option><option>SVN-II</option><option>Sakar-I</option><option>Sakar-III</option></select>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">4</span> Department</label>
+                    <input type="text" class="input" placeholder="e.g., Production" readonly>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">5</span> Designation</label>
+                    <input type="text" class="input" placeholder="e.g., Technician" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">6</span> Phone Number</label>
+                    <input type="text" class="input" placeholder="10-digit mobile" readonly>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">7</span> Date of Joining</label>
+                    <input type="date" class="input" readonly>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">8</span> Date of Birth</label>
+                    <input type="date" class="input" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">9</span> Base Salary (₹)</label>
+                    <input type="number" class="input" placeholder="Monthly basic salary" readonly>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">10</span> Salary Structure</label>
+                    <select class="input"><option>FIXED</option><option>PERCENTAGE</option></select>
+                </div>
+            </div>
+            
+            <div class="warning" style="margin-top: 15px;">
+                Employee ID is PERMANENT. Do NOT change it after creation. The system generates the password from Employee ID automatically.
+            </div>
+            
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="btn btn-primary" style="padding: 12px 40px;">💾 Save Employee</button>
+                <button class="btn btn-secondary" style="padding: 12px 20px; margin-left: 10px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 5: ATTENDANCE -->
+<div class="page">
+    <h2>5. Attendance Register</h2>
+    
+    <h3>Step 1: Open Attendance Register</h3>
+    <p>Click <strong>"📅 Attendance Register"</strong> in the left sidebar.</p>
+    
+    <div class="screen">
+        <div class="screen-header">📅 Attendance Register (Actual Screen)</div>
+        <div class="screen-body">
+            <!-- Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
+                <span class="marker">1</span>
+                <select class="input"><option>May 2026</option><option>Jun 2026</option><option>Jul 2026</option></select>
+                <span class="marker">2</span>
+                <select class="input"><option>Sakar-I</option><option>SVN-1</option><option>SVN-II</option><option>Sakar-III</option></select>
+                <span class="marker">3</span>
+                <button class="btn btn-primary">📥 Import Attendance</button>
+                <span class="marker">4</span>
+                <button class="btn btn-secondary">📤 Export</button>
+                <span class="marker">5</span>
+                <button class="btn btn-primary">💾 Save Attendance</button>
+            </div>
+            
+            <!-- Attendance Table -->
+            <div style="overflow-x: auto;">
+                <table style="font-size: 11px; min-width: 800px;">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 80px;"><span class="marker" style="background: white; color: #1a5f2a; font-size: 9px;">6</span> Emp Code</th>
+                            <th style="min-width: 120px;">Name</th>
+                            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th>
+                            <th style="background: #e8f5e9;">Total</th>
+                            <th style="background: #fff3cd;">Present</th>
+                            <th style="background: #f8d7da;">Absent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>SV1ST0001</td>
+                            <td>Manoj Gupta</td>
+                            <td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td>
+                            <td style="background: #cce5ff;">WO</td><td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td>
+                            <td style="background: #f8d7da;">A</td><td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td>
+                            <td style="background: #d4edda;">P</td>
+                            <td style="background: #e8f5e9; font-weight: bold;">30</td>
+                            <td style="background: #fff3cd; font-weight: bold;">27</td>
+                            <td style="background: #f8d7da; font-weight: bold;">1</td>
+                        </tr>
+                        <tr>
+                            <td>SK1ST0008</td>
+                            <td>Jiteshbhai Halpati</td>
+                            <td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td><td style="background: #fff3cd;">L</td>
+                            <td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td><td style="background: #cce5ff;">WO</td>
+                            <td style="background: #d4edda;">P</td><td style="background: #d4edda;">P</td><td style="background: #f8d7da;">A</td>
+                            <td style="background: #d4edda;">P</td>
+                            <td style="background: #e8f5e9; font-weight: bold;">30</td>
+                            <td style="background: #fff3cd; font-weight: bold;">26</td>
+                            <td style="background: #f8d7da; font-weight: bold;">1</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display: flex; gap: 20px; margin-top: 10px; font-size: 11px;">
+                <span>P = Present</span>
+                <span>A = Absent</span>
+                <span>L = Leave</span>
+                <span>WO = Weekly Off</span>
+                <span>PH = Paid Holiday</span>
+            </div>
+        </div>
+    </div>
+    
+    <h3>Attendance Controls Explained</h3>
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>Month Selector</strong> — Choose the month for attendance marking.</p>
+        <p><span class="marker">2</span> <strong>Company Filter</strong> — Select which company/unit to view.</p>
+        <p><span class="marker">3</span> <strong>Import Attendance</strong> — Bulk import attendance from Excel.</p>
+        <p><span class="marker">4</span> <strong>Export</strong> — Download attendance data as Excel.</p>
+        <p><span class="marker">5</span> <strong>Save Attendance</strong> — Save all attendance changes.</p>
+        <p><span class="marker">6</span> <strong>Employee Columns</strong> — Click any cell to change attendance status (P/A/L/WO).</p>
+    </div>
+    
+    <div class="tip">
+        <strong>How to mark attendance:</strong> Click on the cell for the employee and date. Type P (Present), A (Absent), L (Leave), or WO (Weekly Off). Click "Save Attendance" when done.
+    </div>
+    
+    <div class="important">
+        Auto-Leave: When an employee's leave request is approved through Leave Management, the attendance register is automatically updated with Leave (L) status for those dates.
+    </div>
+</div>
+
+<!-- SECTION 6: LEAVE MANAGEMENT -->
+<div class="page">
+    <h2>6. Leave Management</h2>
+    
+    <h3>Step 1: Open Leave Management</h3>
+    <p>Click <strong>"🏖️ Leave Management"</strong> in the left sidebar.</p>
+    
+    <div class="screen">
+        <div class="screen-header">🏖️ Leave Management (Actual Screen)</div>
+        <div class="screen-body">
+            <!-- Tabs -->
+            <div class="tab-bar">
+                <div class="tab active">Pending Approvals</div>
+                <div class="tab">Leave History</div>
+                <div class="tab">Leave Balance</div>
+            </div>
+            
+            <!-- Pending Leaves Table -->
+            <table>
+                <thead>
+                    <tr>
+                        <th><span class="marker" style="background: white; color: #1a5f2a;">1</span> Leave ID</th>
+                        <th>Employee</th>
+                        <th>Type</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Days</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th><span class="marker" style="background: white; color: #1a5f2a;">2</span> Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>LV006</td>
+                        <td>Panchal Viraj (SK1ST0033)</td>
+                        <td>CL</td>
+                        <td>01-Sep-2026</td>
+                        <td>01-Sep-2026</td>
+                        <td>1</td>
+                        <td>Personal work</td>
+                        <td><span style="background: #fff3cd; padding: 2px 8px; border-radius: 4px;">PENDING_HOD</span></td>
+                        <td>
+                            <span class="marker" style="background: #28a745; font-size: 10px;">3</span>
+                            <button class="btn btn-primary" style="padding: 4px 8px; font-size: 11px;">Approve</button>
+                            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;">Reject</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <h3>Leave Workflow</h3>
+    <div class="screen">
+        <div class="screen-header">🔄 Leave Approval Workflow</div>
+        <div class="screen-body">
+            <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px;">
+                <div class="marker-box" style="text-align: center; border-color: #e91e63; min-width: 120px;">
+                    <span class="marker" style="background: #e91e63;">①</span><br>
+                    <strong>Employee</strong><br>
+                    <small>Applies Leave</small>
+                </div>
+                <div style="font-size: 24px; color: #1a5f2a;">→</div>
+                <div class="marker-box" style="text-align: center; border-color: #ffc107; min-width: 120px;">
+                    <span class="marker" style="background: #ffc107; color: #333;">②</span><br>
+                    <strong>HOD</strong><br>
+                    <small>Reviews & Approves</small>
+                </div>
+                <div style="font-size: 24px; color: #1a5f2a;">→</div>
+                <div class="marker-box" style="text-align: center; border-color: #1a5f2a; min-width: 120px;">
+                    <span class="marker">③</span><br>
+                    <strong>HR</strong><br>
+                    <small>Final Approval</small>
+                </div>
+                <div style="font-size: 24px; color: #1a5f2a;">→</div>
+                <div class="marker-box" style="text-align: center; border-color: #28a745; min-width: 120px;">
+                    <span class="marker" style="background: #28a745;">④</span><br>
+                    <strong>APPROVED</strong><br>
+                    <small>Attendance Updated</small>
+                </div>
+            </div>
+            
+            <div class="step">
+                <span class="step-number">1</span> Employee submits leave request through ESS Portal (mobile or desktop).
+            </div>
+            <div class="step">
+                <span class="step-number">2</span> Request status becomes <strong>PENDING_HOD</strong>. HOD reviews and approves/rejects.
+            </div>
+            <div class="step">
+                <span class="step-number">3</span> After HOD approval, status becomes <strong>PENDING_HR</strong>. HR reviews and approves/rejects.
+            </div>
+            <div class="step">
+                <span class="step-number">4</span> After HR approval, status becomes <strong>APPROVED</strong>. Leave balance is automatically deducted. Attendance register is automatically updated.
+            </div>
+        </div>
+    </div>
+    
+    <h3>Leave Types</h3>
+    <table>
+        <tr><th>Code</th><th>Full Name</th><th>Annual Allowance</th><th>Notes</th></tr>
+        <tr><td><strong>PL</strong></td><td>Privilege Leave</td><td>18 days/year</td><td>Minimum 2 days application</td></tr>
+        <tr><td><strong>CL</strong></td><td>Casual Leave</td><td>6 days/year</td><td>For personal/emergency work</td></tr>
+        <tr><td><strong>SL</strong></td><td>Sick Leave</td><td>6 days/year</td><td>For medical reasons</td></tr>
+    </table>
+    
+    <div class="tip">
+        Leave Balance is displayed on the Employee ESS Dashboard. HR can view all balances from Leave Management → Leave Balance tab.
+    </div>
+</div>
+
+<!-- SECTION 7 & 8: GATE PASS & PAYROLL -->
+<div class="page">
+    <h2>7. Factory Gate Pass</h2>
+    
+    <div class="screen">
+        <div class="screen-header">🚪 Factory Gate Pass (Actual Screen)</div>
+        <div class="screen-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">1</span> Employee</label>
+                    <select class="input"><option>Select Employee...</option></select>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">2</span> Pass Type</label>
+                    <select class="input"><option>OUT</option><option>IN</option></select>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">3</span> Reason</label>
+                    <input type="text" class="input" placeholder="Purpose of gate pass" readonly>
+                </div>
+            </div>
+            <button class="btn btn-primary"><span class="marker">4</span> Save Gate Pass</button>
+        </div>
+    </div>
+    
+    <div class="marker-box">
+        <p><span class="marker">1</span> Select employee from dropdown</p>
+        <p><span class="marker">2</span> Choose IN (entering factory) or OUT (leaving factory)</p>
+        <p><span class="marker">3</span> Enter the reason for gate pass</p>
+        <p><span class="marker">4</span> Click Save to record the gate pass entry</p>
+    </div>
+    
+    <h2>8. Payroll Processor</h2>
+    
+    <div class="screen">
+        <div class="screen-header">💰 Payroll Processor (Actual Screen)</div>
+        <div class="screen-body">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <span class="marker">1</span>
+                <select class="input"><option>May 2026</option><option>Jun 2026</option><option>Jul 2026</option></select>
+                <span class="marker">2</span>
+                <select class="input"><option>Sakar-I</option><option>SVN-1</option><option>ALL</option></select>
+                <span class="marker">3</span>
+                <button class="btn btn-primary">🧮 Calculate Draft Salary</button>
+                <span class="marker">4</span>
+                <button class="btn btn-secondary">📥 Download Excel</button>
+                <span class="marker">5</span>
+                <button class="btn btn-danger">🔒 Close & Approve Payroll</button>
+            </div>
+            
+            <!-- Payslip Preview -->
+            <div style="background: white; border: 2px solid #1a5f2a; border-radius: 8px; padding: 20px; margin: 10px 0;">
+                <div style="text-align: center; border-bottom: 2px solid #1a5f2a; padding-bottom: 10px; margin-bottom: 15px;">
+                    <h3 style="color: #1a5f2a;">SVN Opto Electronics Pvt. Ltd.</h3>
+                    <p style="font-size: 12px;">Monthly Salary Slip — May 2026</p>
+                </div>
+                
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div>
+                        <strong>Employee:</strong> SK1ST0008<br>
+                        <strong>Name:</strong> Jiteshbhai Halpati<br>
+                        <strong>Department:</strong> Production
+                    </div>
+                    <div>
+                        <strong>Working Days:</strong> 31<br>
+                        <strong>Present:</strong> 29<br>
+                        <strong>Leave:</strong> 1 | <strong>Absent:</strong> 1
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 30px;">
+                    <div style="flex: 1;">
+                        <h4 style="color: #28a745;">EARNINGS</h4>
+                        <table style="font-size: 12px;">
+                            <tr><td>Base Salary</td><td style="text-align: right;">₹14,730</td></tr>
+                            <tr><td>HRA</td><td style="text-align: right;">₹4,910</td></tr>
+                            <tr><td>Special Allowance</td><td style="text-align: right;">₹2,468</td></tr>
+                            <tr><td>Conveyance</td><td style="text-align: right;">₹2,455</td></tr>
+                            <tr><td>Medical</td><td style="text-align: right;">₹1,228</td></tr>
+                            <tr><td>Education</td><td style="text-align: right;">₹1,228</td></tr>
+                            <tr style="font-weight: bold; background: #e8f5e9;"><td>GROSS</td><td style="text-align: right;">₹27,019</td></tr>
+                        </table>
+                    </div>
+                    <div style="flex: 1;">
+                        <h4 style="color: #dc3545;">DEDUCTIONS</h4>
+                        <table style="font-size: 12px;">
+                            <tr><td>PF Employee (12%)</td><td style="text-align: right;">₹1,768</td></tr>
+                            <tr><td>Professional Tax</td><td style="text-align: right;">₹200</td></tr>
+                            <tr><td>LOP Deduction</td><td style="text-align: right;">₹0</td></tr>
+                            <tr><td>Loan Deduction</td><td style="text-align: right;">₹0</td></tr>
+                            <tr style="font-weight: bold; background: #f8d7da;"><td>TOTAL DEDUCTIONS</td><td style="text-align: right;">₹1,968</td></tr>
+                            <tr style="font-weight: bold; background: #d4edda;"><td>NET PAY</td><td style="text-align: right;">₹25,051</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <h3>Payroll Workflow</h3>
+    <div class="step">
+        <span class="step-number">1</span> <strong>Select Month & Company</strong> — Choose the payroll month and company from dropdowns.
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> <strong>Click "Calculate Draft Salary"</strong> — System auto-calculates all earnings and deductions.
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> <strong>Review the Payslip</strong> — Check all amounts are correct.
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> <strong>Download Excel</strong> — Export the salary sheet for verification.
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> <strong>Close & Approve</strong> — Lock the payroll month. No further changes allowed after this.
+    </div>
+</div>
+
+<!-- SECTION 9 & 10: SALARY REVISION & LOAN -->
+<div class="page">
+    <h2>9. Salary Revision</h2>
+    
+    <div class="screen">
+        <div class="screen-header">📈 Salary Revision (Actual Screen)</div>
+        <div class="screen-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">1</span> Search Employee</label>
+                    <input type="text" class="input" placeholder="Employee ID or Name" readonly>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">2</span> Current Base Salary (₹)</label>
+                    <input type="text" class="input" value="14,730" readonly style="background: #f0f0f0;">
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">3</span> New Base Salary (₹)</label>
+                    <input type="number" class="input" placeholder="Enter new salary" readonly>
+                </div>
+                <div class="form-group">
+                    <label><span class="marker">4</span> Effective From Date</label>
+                    <input type="date" class="input" readonly>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label><span class="marker">5</span> Reason / Remarks</label>
+                    <input type="text" class="input" placeholder="e.g., May-26 Increment" readonly>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary"><span class="marker">6</span> 💾 Save Revision</button>
+        </div>
+    </div>
+    
+    <div class="marker-box">
+        <p><span class="marker">1</span> <strong>Search</strong> — Enter employee ID or name to find the employee.</p>
+        <p><span class="marker">2</span> <strong>Current Salary</strong> — Shows the existing salary (auto-filled, read-only).</p>
+        <p><span class="marker">3</span> <strong>New Salary</strong> — Enter the revised salary amount.</p>
+        <p><span class="marker">4</span> <strong>Effective Date</strong> — When the new salary starts (e.g., 01-May-2026 for May increment).</p>
+        <p><span class="marker">5</span> <strong>Reason</strong> — Why the salary is changing (May Increment, November Increment, etc.).</p>
+        <p><span class="marker">6</span> <strong>Save</strong> — Click to save the revision. Previous salary history is preserved.</p>
+    </div>
+    
+    <div class="important">
+        Salary Revision does NOT overwrite the old salary. The system maintains a complete history of all salary changes with dates and reasons.
+    </div>
+    
+    <h2>10. Loan Management</h2>
+    
+    <div class="screen">
+        <div class="screen-header">🏦 Loan Management (Actual Screen)</div>
+        <div class="screen-body">
+            <div class="tab-bar">
+                <div class="tab active">Active Loans</div>
+                <div class="tab">Loan History</div>
+                <div class="tab">Add New Loan</div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th><span class="marker" style="background: white; color: #1a5f2a;">1</span> Employee</th>
+                        <th>Loan Type</th>
+                        <th>Opening Balance</th>
+                        <th>EMI</th>
+                        <th>Months Paid</th>
+                        <th>Remaining</th>
+                        <th>Status</th>
+                        <th><span class="marker" style="background: white; color: #1a5f2a;">2</span> Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>SK1ST0008</td>
+                        <td>Salary Advance</td>
+                        <td>₹20,000</td>
+                        <td>₹5,000</td>
+                        <td>1</td>
+                        <td>₹15,000</td>
+                        <td><span style="color: green;">● ACTIVE</span></td>
+                        <td><button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</button></td>
+                    </tr>
+                    <tr>
+                        <td>SK1ST0009</td>
+                        <td>Salary Advance</td>
+                        <td>₹25,000</td>
+                        <td>₹5,000</td>
+                        <td>1</td>
+                        <td>₹20,000</td>
+                        <td><span style="color: green;">● ACTIVE</span></td>
+                        <td><button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="marker-box" style="margin-top: 15px;">
+                <p><span class="marker">1</span> <strong>Employee</strong> — Loan is linked to specific employee.</p>
+                <p><span class="marker">2</span> <strong>Actions</strong> — View loan details, mark payment, or close loan.</p>
+            </div>
+            
+            <div class="tip">
+                Loan EMI is <strong>automatically deducted</strong> during payroll calculation. When HR runs "Calculate Draft Salary", the system checks for active loans and deducts the EMI from net pay.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 11, 12: REPORTS & HR LETTERS -->
+<div class="page">
+    <h2>11. Reports & Analytics</h2>
+    
+    <div class="screen">
+        <div class="screen-header">📊 Reports & Analytics (Actual Screen)</div>
+        <div class="screen-body">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                <div class="marker-box">
+                    <span class="marker">1</span>
+                    <strong>Employee Directory Report</strong><br>
+                    <small>Complete list of all employees with details. Filter by company.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">2</span>
+                    <strong>Attendance Summary</strong><br>
+                    <small>Monthly attendance report with Present/Absent/Leave counts.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">3</span>
+                    <strong>Payroll Register</strong><br>
+                    <small>Complete salary register with earnings and deductions breakdown.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">4</span>
+                    <strong>Leave Report</strong><br>
+                    <small>Leave balance and history for all employees.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">5</span>
+                    <strong>Loan Outstanding Report</strong><br>
+                    <small>All active loans with EMI and balance details.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">6</span>
+                    <strong>PF ECR Report</strong><br>
+                    <small>EPF contribution details for statutory filing.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">7</span>
+                    <strong>Form 16</strong><br>
+                    <small>Annual tax declaration for employees.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">8</span>
+                    <strong>Audit Log</strong><br>
+                    <small>Track all changes made by HR users. (Super Admin only)</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">View</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tip">
+        All reports can be exported to Excel using the "Export" button on each report page.
+    </div>
+    
+    <h2>12. HR Letters Hub</h2>
+    
+    <div class="screen">
+        <div class="screen-header">📝 HR Letters Hub (Actual Screen)</div>
+        <div class="screen-body">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                <div class="marker-box">
+                    <span class="marker">1</span>
+                    <strong>Appointment Letter</strong><br>
+                    <small>Generate appointment letter for new employees.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">2</span>
+                    <strong>Salary Certificate</strong><br>
+                    <small>Salary verification letter for bank/visa purposes.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">3</span>
+                    <strong>Experience Certificate</strong><br>
+                    <small>Work experience letter for departing employees.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">4</span>
+                    <strong>Relieving Letter</strong><br>
+                    <small>Relieving letter after full and final settlement.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+                <div class="marker-box">
+                    <span class="marker">5</span>
+                    <strong>Address Proof</strong><br>
+                    <small>Address verification letter for employees.</small>
+                    <br><button class="btn btn-secondary" style="margin-top: 5px;">Generate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 13, 14, 15, 16 -->
+<div class="page">
+    <h2>13. Settings & Master Data</h2>
+    
+    <div class="screen">
+        <div class="screen-header">⚙️ Settings & Master (Actual Screen)</div>
+        <div class="screen-body">
+            <p style="margin-bottom: 10px;">Click <strong>"Settings & Master"</strong> in the left sidebar to expand:</p>
+            
+            <div class="marker-box">
+                <span class="marker">1</span>
+                <strong>Company Master</strong> — Manage company details, addresses, GST, PAN, PF/ESIC numbers. <em>(Super Admin only)</em>
+            </div>
+            <div class="marker-box">
+                <span class="marker">2</span>
+                <strong>HOD Master</strong> — Add/Edit Head of Department records. <em>(Super Admin only)</em>
+            </div>
+            <div class="marker-box">
+                <span class="marker">3</span>
+                <strong>Shift Master</strong> — Configure shift timings (Morning, General, Night). <em>(Super Admin only)</em>
+            </div>
+            <div class="marker-box">
+                <span class="marker">4</span>
+                <strong>User Management</strong> — Add/modify HR user accounts and access levels. <em>(Super Admin only)</em>
+            </div>
+            <div class="marker-box">
+                <span class="marker">5</span>
+                <strong>Audit Log</strong> — View all system changes and user actions. <em>(Super Admin only)</em>
+            </div>
+        </div>
+    </div>
+    
+    <div class="important">
+        Settings & Master sections are <strong>Super Admin only</strong>. Regular HR users cannot access these sections.
+    </div>
+    
+    <h2>14. Employee ESS (Self-Service Portal)</h2>
+    
+    <p>Employee ESS is accessed via the <strong>Pink button</strong> on the login page.</p>
+    
+    <div class="screen">
+        <div class="screen-header">👤 Employee ESS Portal</div>
+        <div class="screen-body">
+            <h3>Login as Employee</h3>
+            <div class="step">
+                <span class="step-number">1</span> Open VETAN ERP login page → Click <strong>"Employee ESS Portal (Pink)"</strong>
+            </div>
+            <div class="step">
+                <span class="step-number">2</span> Enter Employee ID (e.g., SV1ST0046)
+            </div>
+            <div class="step">
+                <span class="step-number">3</span> Enter Password (Phone last 4 digits + Birth year)
+            </div>
+            <div class="step">
+                <span class="step-number">4</span> Click <strong>"Sign In to Employee Portal"</strong>
+            </div>
+            
+            <h3 style="margin-top: 20px;">Employee ESS Features</h3>
+            <table>
+                <tr><th>Feature</th><th>What Employee Can Do</th></tr>
+                <tr><td>📊 Dashboard</td><td>View attendance summary, leave balance, pending items</td></tr>
+                <tr><td>👤 Profile</td><td>View personal details, salary, department</td></tr>
+                <tr><td>📅 Attendance</td><td>View own attendance history</td></tr>
+                <tr><td>🏖️ Leave</td><td>Apply for leave, view leave history</td></tr>
+                <tr><td>💰 Payslip</td><td>View and download monthly payslips</td></tr>
+                <tr><td>📋 Form 16</td><td>Download annual tax declaration</td></tr>
+                <tr><td>🔒 Security</td><td>Change password</td></tr>
+            </table>
+        </div>
+    </div>
+    
+    <h2>15. Password Rules & Security</h2>
+    
+    <div class="screen">
+        <div class="screen-header">🔑 Password Rules (Actual)</div>
+        <div class="screen-body">
+            <h3>SVN Employee Password Pattern</h3>
+            <div class="marker-box">
+                <p><strong>Phone Last 4 Digits</strong> + <strong>Birth Year</strong> = Password</p>
+                <p style="font-size: 12px; color: #666;">Example: Phone ending in 9911, born in 1995 → Password: 99111995</p>
+            </div>
+            
+            <h3>Sakar Employee Password Pattern</h3>
+            <div class="marker-box">
+                <p><strong>All Sakar employees have the same default password:</strong></p>
+                <p style="font-size: 16px; font-weight: bold; color: #dc3545;">00001995</p>
+                <p style="font-size: 12px; color: #666;">Sakar employees should change password after first login.</p>
+            </div>
+            
+            <h3>HR/Admin Password</h3>
+            <div class="marker-box">
+                <p>HR passwords are set by the Super Admin. Do NOT share your password.</p>
+            </div>
+            
+            <div class="warning">
+                Do NOT write passwords on paper or share them via phone/email. Change your password regularly.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SECTION 16, 17, 18 -->
+<div class="page">
+    <h2>16. Mobile / PWA Installation</h2>
+    
+    <p>VETAN ERP can be installed as an app on your phone. No download needed!</p>
+    
+    <h3>Android Phone (Chrome Browser)</h3>
+    <div class="step">
+        <span class="step-number">1</span> Open Chrome and go to <strong>https://vetan-svn.vercel.app</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Tap the <strong>⋮ (three dots)</strong> menu at top right
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Tap <strong>"Install"</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> VETAN ERP icon will appear on your home screen ✅
+    </div>
+    
+    <h3>iPhone (Safari Browser)</h3>
+    <div class="step">
+        <span class="step-number">1</span> Open Safari and go to <strong>https://vetan-svn.vercel.app</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">2</span> Tap the <strong>Share button (⬆️)</strong> at bottom
+    </div>
+    <div class="step">
+        <span class="step-number">3</span> Scroll down and tap <strong>"Add to Home Screen"</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">4</span> Tap <strong>"Add"</strong>
+    </div>
+    <div class="step">
+        <span class="step-number">5</span> VETAN ERP icon will appear on your home screen ✅
+    </div>
+    
+    <h2>17. Troubleshooting</h2>
+    
+    <table>
+        <tr><th>Problem</th><th>Solution</th></tr>
+        <tr>
+            <td><strong>"Authentication service unavailable"</strong></td>
+            <td>Internet connection problem. Check your WiFi/mobile data. Try again after 30 seconds.</td>
+        </tr>
+        <tr>
+            <td><strong>"Incorrect Password"</strong></td>
+            <td>Check your Employee ID and Password. SVN: Phone last 4 + Birth year. Sakar: 00001995</td>
+        </tr>
+        <tr>
+            <td><strong>"Employee not found"</strong></td>
+            <td>Check Employee ID spelling. It is case-sensitive. Contact HR if problem persists.</td>
+        </tr>
+        <tr>
+            <td><strong>"Failed to fetch"</strong></td>
+            <td>Server is temporarily unavailable. Wait 1-2 minutes and try again.</td>
+        </tr>
+        <tr>
+            <td><strong>Page not loading / Blank screen</strong></td>
+            <td>Clear browser cache: Chrome → Settings → Clear browsing data → Cached images and files.</td>
+        </tr>
+        <tr>
+            <td><strong>Cannot see other company data</strong></td>
+            <td>Check your access level. HR users can only see their assigned unit. Contact Super Admin for access.</td>
+        </tr>
+        <tr>
+            <td><strong>Salary revision not saving</strong></td>
+            <td>Payroll month may be locked. Contact Super Admin to unlock the month.</td>
+        </tr>
+        <tr>
+            <td><strong>Attendance not updating</strong></td>
+            <td>Click "Save Attendance" button after making changes. Check if your internet is working.</td>
+        </tr>
+    </table>
+    
+    <h2>18. Quick Reference Card</h2>
+    
+    <div class="screen">
+        <div class="screen-header">📋 Quick Reference — Daily HR Workflow</div>
+        <div class="screen-body">
+            <table>
+                <tr><th>#</th><th>Time</th><th>Task</th><th>Where</th></tr>
+                <tr><td>1</td><td>Morning</td><td>Mark daily attendance</td><td>Attendance Register</td></tr>
+                <tr><td>2</td><td>Morning</td><td>Check pending leave requests</td><td>Leave Management → Pending</td></tr>
+                <tr><td>3</td><td>Morning</td><td>Check miss punch requests</td><td>Dashboard → Approve Miss Punch</td></tr>
+                <tr><td>4</td><td>Afternoon</td><td>Process new employee additions</td><td>Employee Master → Add</td></tr>
+                <tr><td>5</td><td>Afternoon</td><td>Process salary revisions (if any)</td><td>Salary Revision</td></tr>
+                <tr><td>6</td><td>Month End</td><td>Run Payroll Calculation</td><td>Payroll Processor → Calculate</td></tr>
+                <tr><td>7</td><td>Month End</td><td>Download & Verify Salary Sheet</td><td>Payroll Processor → Download Excel</td></tr>
+                <tr><td>8</td><td>Month End</td><td>Close & Approve Payroll</td><td>Payroll Processor → Close</td></tr>
+            </table>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 40px; padding: 20px; background: #e8f5e9; border-radius: 8px;">
+        <h3 style="color: #1a5f2a;">Need Help?</h3>
+        <p>Contact Super Admin: <strong>Vishnu Arrawatia</strong></p>
+        <p>📧 Email: vishnu@sakarelectricals.com</p>
+        <p>📱 Phone: Contact IT Department</p>
+        <p style="margin-top: 15px; font-size: 12px; color: #666;">
+            © 2026 Sakar Electricals & Electronics Pvt. Ltd. & SVN Opto Electronics Pvt. Ltd.<br>
+            Powered by Vishnu Intelligence Services
+        </p>
+    </div>
+</div>
+
+</body>
+</html>

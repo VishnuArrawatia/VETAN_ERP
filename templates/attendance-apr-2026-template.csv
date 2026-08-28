@@ -1,0 +1,146 @@
+Emp.Code,Name,Unit,Present,Absent,W/O,Paid_Holy_Days,Leave,LWP,Month_Days,Paid_Days,Leave_Utilised,C-Off_Utilised,C-Off_Availed
+SV1ST0001,Manoj Kailash Gupta,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0002,Manoj Kumar Yadav,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0003,Sanjay Yadav,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0006,Chhaya Mayur Dhonde,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0007,Alpeshkumar Maganbhai Lad,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0011,Patel Kaushalkumar Kantilal,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0014,Nitish Son Of Jot Kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0020,Nishant Kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0023,Vikas Sonu Kumar Singh,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0024,Pritam Rameshwar Rajbhar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0025,Dattatray Rajaram Datkhile,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0026,Nilu Krupashankar Singh,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0028,Raju Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0029,Vijendra Singh Chundawat,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0030,Aman Rajesh Mishra,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0032,Amit Kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0033,Vishnu Arrawatia,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0036,Mahesh Baburao Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0037,Nilesh Dattatray Raut,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0038,Rahul Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0039,Suraj Sunil Shinde,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0040,Suraj Sanjay Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0041,Jawahar kumar Yadav,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0042,Sagar Rajesh Kolhi,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0043,Surendra Singh,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0044,Vinod Ramrao Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0045,Vikas Ramdas Gavhane,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0046,Sunil Baburao Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0048,Amol Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0049,Vikram Sanjay Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0050,Sachin Sanjay Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0051,Sonu Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0052,Sunil Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0053,Chetan Rajesh Sharma,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0054,Shivani Gupta,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0056,Chetan Rajesh Sharma,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0057,Deepak Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0058,Rohit Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0059,Sahil Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0060,Vikas Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0061,Sagar Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0062,Sanjay Amrat,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0063,Amit Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0064,Sonu Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0065,Roshan Lal,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0066,Abhishek Ranjan,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0067,Vikas Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0068,Sagar Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0069,Rahul Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0070,Sandip Dilipbhai Patel,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0071,Rajesh Singh,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0072,Deepak kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0073,Vikas Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0074,Sagar Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0075,Rahul Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0076,Sonu Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0077,Sunil Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0078,Ganvit Sanjaybhai Chandubhai,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0079,Amol Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0080,Vikram Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0081,Devendra Chotulal Patil,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0082,Sachin Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0083,Vikas Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0084,Sagar Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0085,Rahul Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0086,Sonu Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0087,Sunil Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0088,Amol Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0089,Vikram Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0090,Sandeep Kanji Patel,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0091,Sachin Rajesh Koli,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0092,Shubham Pandey,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0093,Vishwanath Kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0094,Ganesh Haushiram Kudale,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0095,Mehta Mayank Rameshbhai,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0096,Roshan Lal,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0097,Satish Purushottam Bhat,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0098,Maroti Baburao Keshatwar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0099,Santosh Pathak,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0100,Rakesh Kumar,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1ST0101,Nitish Kumar Ray,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV1WR0018,Shubham Pandey,SVN-1,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0001,Sonu Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0002,Vikas Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0003,Sagar Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0004,Rahul Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0005,Sunil Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0006,Nilamani Behera,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0007,Amol Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0008,Vikram Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0009,Sachin Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0010,Vikas Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0011,Sagar Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0012,Rahul Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0013,Sonu Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0014,Sunil Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0015,Amol Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0016,Vikram Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SV2ST0017,Sachin Rajesh Koli,SVN-II,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0001,Mangesh Dagdu Gurav,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0004,Kalpesh Kantilal Patel,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0005,Amitkumar Harkishandas Lad,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0006,Riken Hasmukhbhai Mahyavanshi,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0007,Sanjay Bhagwandas Khernar,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0008,Jiteshbhai Bhagubhai Halpati,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0009,Patel Maheshbhai Umedbhai,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0011,Santosh Kumar Pandey,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0014,Daxesh Bhanabhai Patel,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0015,Kapilkumar Dahyabhai Koli,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0016,Chhintarmal Jat,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0018,Khaniya Yogesh Shankarbhai,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0021,Kuldeep Vinodbhai Patel,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0022,Dhanga Anilbhai Ramanbhai,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0024,Vishnu Arrawatia,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0025,Ranjeer Singh,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0028,Vishal Jagdish Singh,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0030,Sandeep Swami,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0033,Panchal Viraj Haresh bhai,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0034,Patel Roshani Mayurbhai,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0036,Rohit Raj Chandarwanshi,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0048,Reshma Prashant Golipkar,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0063,Anuragkumar Sing,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0067,Manisha Sapate,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0077,Dinesh Kumar,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0078,Dipak Kumar Nishad,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0079,Aanand Gokarn,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0081,Mr. Vinod Kumar,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0084,Ravi Prakash Kulhari,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0086,Arun Mourya,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0088,Taniya Sharma,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0089,Pawan Kumar Yadav,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0091,Sridhar Sahoo,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK1ST0092,Rohit Dwivedi,Sakar-I,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0001,Keyur Vinodchandra Lad,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0005,Nehalkumar Pareshbhai Tailor,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0006,Tusharkumar Bhagubhai Rohit,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0007,Ramandeep Singh,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0008,Vinaykant Kantilal Patel,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0010,Indrabhushan Mishra,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0011,Rajendran Choriya,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0014,Madhuvan Dhavalbhai Navin Bhai,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0017,Vivek Patel,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+SK3ST0018,Alok Kumar Yadav,Sakar-III,0,0,0,0,0,0,30,0,0,0,0
+FL1ST0001,Vikram Rajesh Koli,Flare-1,0,0,0,0,0,0,30,0,0,0,0
+ZP1ST0001,Sachin Rajesh Koli,Zenivo-1,0,0,0,0,0,0,30,0,0,0,0

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">  <title>SVN-Sakar Group Workerforce — HR User Manual</title>
+<style>
+  @page { size: A4; margin: 20mm; }
+  @media print {
+    body { font-size: 11pt; }
+    .page-break { page-break-before: always; }
+    .no-print { display: none; }
+    .cover { page-break-after: always; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 210mm; margin: 0 auto; padding: 20px; }
+  
+  /* Cover Page */
+  .cover { text-align: center; padding: 80px 40px; background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%); color: white; border-radius: 12px; min-height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  .cover h1 { font-size: 42px; margin-bottom: 10px; letter-spacing: 2px; }
+  .cover h2 { font-size: 24px; font-weight: 300; margin-bottom: 40px; opacity: 0.9; }
+  .cover .version { background: rgba(255,255,255,0.2); padding: 12px 30px; border-radius: 8px; font-size: 16px; margin-top: 20px; }
+  .cover .date { margin-top: 30px; font-size: 14px; opacity: 0.8; }
+  
+  /* TOC */
+  .toc { padding: 30px 0; }
+  .toc h2 { font-size: 24px; color: #1e40af; border-bottom: 3px solid #3b82f6; padding-bottom: 10px; margin-bottom: 20px; }
+  .toc ol { padding-left: 25px; }
+  .toc li { padding: 6px 0; font-size: 15px; border-bottom: 1px dotted #ddd; }
+  .toc a { color: #1e40af; text-decoration: none; }
+  
+  /* Sections */
+  .section { margin: 30px 0; }
+  .section h2 { font-size: 24px; color: #1e40af; border-left: 5px solid #3b82f6; padding-left: 15px; margin-bottom: 20px; }
+  .section h3 { font-size: 18px; color: #444; margin: 15px 0 8px; }
+  .section p { margin: 8px 0; text-align: justify; }
+  
+  /* Steps */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { counter-increment: step; padding: 10px 10px 10px 50px; margin: 8px 0; background: #f8fafc; border-radius: 8px; border-left: 3px solid #3b82f6; position: relative; }
+  .steps li::before { content: counter(step); position: absolute; left: 12px; top: 10px; background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; }
+  
+  /* Screenshots */
+  .screenshot { margin: 20px 0; text-align: center; }
+  .screenshot img { max-width: 100%; border: 2px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .screenshot .caption { font-size: 12px; color: #666; margin-top: 8px; font-style: italic; }
+  
+  /* Tips/Warnings */
+  .tip { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .tip::before { content: "💡 Tip: "; font-weight: bold; color: #065f46; }
+  .warning { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .warning::before { content: "⚠️ Important: "; font-weight: bold; color: #92400e; }
+  .note { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .note::before { content: "ℹ️ Note: "; font-weight: bold; color: #1e40af; }
+  
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th { background: #1e40af; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 8px 0 8px 30px; position: relative; }
+  .checklist li::before { content: "☐"; position: absolute; left: 0; font-size: 18px; color: #3b82f6; }
+  
+  /* Quick Ref */
+  .quick-ref { background: #f1f5f9; border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 20px 0; }
+  .quick-ref h2 { text-align: center; margin-bottom: 15px; }
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .flow-item { background: white; border: 1px solid #3b82f6; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 500; }
+  .flow-arrow { font-size: 20px; color: #3b82f6; display: flex; align-items: center; }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <h1>SVN-SAKAR GROUP WORKERFORCE</h1>
+  <h2>HR User Manual</h2>
+  <div class="version">Version 2.0</div>
+  <div class="date">August 2026</div>
+  <p style="margin-top:40px; opacity:0.7; font-size:14px;">Confidential — For Internal Use Only</p>
+</div>
+
+<!-- ==================== TABLE OF CONTENTS ==================== -->
+<div class="page-break toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li><a href="#s1">How to Open Workforce ERP</a></li>
+    <li><a href="#s2">Login</a></li>
+    <li><a href="#s3">Dashboard</a></li>
+    <li><a href="#s4">Worker Master</a></li>
+    <li><a href="#s5">Attendance</a></li>
+    <li><a href="#s6">Leave Control</a></li>
+    <li><a href="#s7">Wage History</a></li>
+    <li><a href="#s8">Increments (May / November)</a></li>
+    <li><a href="#s9">Attrition Report (Worker Exit)</a></li>
+    <li><a href="#s10">Reports &amp; Excel Export</a></li>
+    <li><a href="#s11">Import Data from Excel</a></li>
+    <li><a href="#s12">Logout</a></li>
+    <li><a href="#s13">HR Do's &amp; Don'ts</a></li>
+    <li><a href="#s14">Troubleshooting</a></li>
+    <li><a href="#s15">Quick Reference Card</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 1. HOW TO OPEN ==================== -->
+<div class="page-break section" id="s1">
+  <h2>1. How to Open Workforce ERP</h2>
+  <p>Workforce ERP runs on a central server computer. You access it through a web browser — no software installation is needed on your computer.</p>
+  
+  <h3>What You Need</h3>
+  <ul>
+    <li><strong>Web Browser:</strong> Google Chrome or Microsoft Edge (recommended)</li>
+    <li><strong>Network:</strong> Your computer must be connected to the same company network as the server</li>
+  </ul>
+
+  <h3>Steps to Open</h3>
+  <ol class="steps">
+    <li>Open <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on your computer.</li>
+    <li>In the address bar (top of browser), type: <code>http://192.168.1.31:3001</code></li>
+    <li>Press <strong>Enter</strong> on your keyboard.</li>
+    <li>The Workforce ERP login screen will appear.</li>
+  </ol>
+
+  <div class="screenshot">
+    <img src="screenshots/01-login.png" alt="Workforce ERP Login Screen">
+    <div class="caption">Figure 1: Workforce ERP Login Screen</div>
+  </div>
+
+  <div class="tip">Bookmark this page in your browser for quick access. Press Ctrl+D to bookmark.</div>
+  
+  <div class="warning">The server computer must be turned ON and running for you to access Workforce ERP. If the page does not open, contact your IT administrator.</div>
+</div>
+
+<!-- ==================== 2. LOGIN ==================== -->
+<div class="page-break section" id="s2">
+  <h2>2. Login</h2>
+  <p>Every HR user has their own username and password. Your login gives you access only to your assigned unit/factory.</p>
+
+  <h3>Steps to Login</h3>
+  <ol class="steps">
+    <li>Enter your <strong>Username</strong> in the first field.</li>
+    <li>Enter your <strong>Password</strong> in the second field.</li>
+    <li>Click the <strong>Login</strong> button.</li>
+    <li>The Dashboard will open showing your unit's data.</li>
+  </ol>
+
+  <h3>What HR Can Access</h3>
+  <table>
+    <tr><th>Feature</th><th>HR Access</th></tr>
+    <tr><td>Dashboard</td><td>✅ View your unit's data only</td></tr>
+    <tr><td>Worker Master</td><td>✅ Add, Edit, Deactivate workers in your unit</td></tr>
+    <tr><td>Attendance</td><td>✅ View and mark attendance</td></tr>
+    <tr><td>Leave Control</td><td>✅ Apply leaves for company workers</td></tr>
+    <tr><td>Wage History</td><td>✅ View and add wage revisions</td></tr>
+    <tr><td>Increments</td><td>✅ Add May/November increments</td></tr>
+    <tr><td>Attrition Report</td><td>✅ View and export exits</td></tr>
+    <tr><td>Reports</td><td>✅ View and export to Excel</td></tr>
+    <tr><td>User Management</td><td>❌ Only Super Admin can manage users</td></tr>
+  </table>
+
+  <div class="note">Your HR login gives access ONLY to your assigned unit. For example, SVN-II HR can see only SVN-II workers. They cannot see SVN-I, Sakar-I, or Sakar-III workers.</div>
+
+  <div class="warning">Never share your password with anyone. If you forget your password, contact the Super Admin.</div>
+</div>
+
+<!-- ==================== 3. DASHBOARD ==================== -->
+<div class="page-break section" id="s3">
+  <h2>3. Dashboard</h2>
+  <p>The Dashboard is the first screen you see after login. It gives you a quick overview of your unit's workforce.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/13-hr-dashboard.png" alt="HR Dashboard">
+    <div class="caption">Figure 2: HR Dashboard showing SVN-II unit data</div>
+  </div>
+
+  <h3>What Each Section Shows</h3>
+  <table>
+    <tr><th>Section</th><th>What It Means</th></tr>
+    <tr><td><strong>Total Workers</strong></td><td>Total number of workers in your unit</td></tr>
+    <tr><td><strong>Active</strong></td><td>Workers currently working (not exited)</td></tr>
+    <tr><td><strong>Inactive</strong></td><td>Workers who have left the company</td></tr>
+    <tr><td><strong>Total CTC</strong></td><td>Total monthly cost to company for all workers</td></tr>
+    <tr><td><strong>Unit-wise Workers</strong></td><td>Bar chart showing workers by factory/unit</td></tr>
+    <tr><td><strong>Contractor-wise</strong></td><td>Workers grouped by contractor</td></tr>
+    <tr><td><strong>PF/ESIC Status</strong></td><td>How many workers are PF/ESIC eligible</td></tr>
+    <tr><td><strong>Department-wise</strong></td><td>Workers grouped by department</td></tr>
+  </table>
+
+  <div class="tip">The Dashboard updates automatically whenever data changes. No need to refresh the page.</div>
+</div>
+
+<!-- ==================== 4. WORKER MASTER ==================== -->
+<div class="page-break section" id="s4">
+  <h2>4. Worker Master</h2>
+  <p>Worker Master is where you manage all worker records — add new workers, edit details, search, and deactivate workers who have left.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/14-hr-workers.png" alt="Worker Master">
+    <div class="caption">Figure 3: Worker Master — list of workers in your unit</div>
+  </div>
+
+  <h3>4.1 Search for a Worker</h3>
+  <ol class="steps">
+    <li>Click on <strong>Worker Master</strong> in the left sidebar.</li>
+    <li>In the <strong>Search</strong> box, type the worker's code (e.g., SV2PBHA001) or name.</li>
+    <li>The list will filter automatically as you type.</li>
+  </ol>
+
+  <h3>4.2 Filter Workers</h3>
+  <ol class="steps">
+    <li>Use the <strong>Unit</strong> dropdown to filter by unit (if you have access to multiple).</li>
+    <li>Use the <strong>Status</strong> dropdown to show Active or Inactive workers.</li>
+  </ol>
+
+  <h3>4.3 Add a New Worker</h3>
+  <ol class="steps">
+    <li>Click the <strong>+ Add Worker</strong> button (top right).</li>
+    <li>Fill in the required fields: <strong>Worker Code</strong>, <strong>Name</strong>, <strong>Unit</strong>, <strong>Department</strong>.</li>
+    <li>Fill other fields as available: Father Name, Gender, DOJ, DOB, Wage, PF status.</li>
+    <li>Click <strong>Save</strong>.</li>
+  </ol>
+
+  <div class="warning"><strong>Worker Code must be unique.</strong> If a worker code already exists, the system will show an error. Use a different code.</div>
+
+  <h3>4.4 Edit a Worker</h3>
+  <ol class="steps">
+    <li>Find the worker using Search.</li>
+    <li>Click the <strong>Edit</strong> (pencil ✏️) icon in the Actions column.</li>
+    <li>Make your changes in the form.</li>
+    <li>Click <strong>Update</strong>.</li>
+  </ol>
+
+  <h3>4.5 Deactivate (Exit) a Worker</h3>
+  <ol class="steps">
+    <li>Find the worker using Search.</li>
+    <li>Click the <strong>Delete</strong> (trash 🗑️) icon.</li>
+    <li>Confirm the deactivation.</li>
+    <li>The worker status changes to <strong>Inactive</strong>. Historical data is preserved.</li>
+  </ol>
+
+  <div class="note">Deactivating a worker does NOT delete their records. All attendance, wage, and leave history remains available for reports.</div>
+
+  <h3>Important Fields Explained</h3>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td>Worker Code</td><td>Unique ID for the worker (e.g., SV2PBHA001)</td></tr>
+    <tr><td>Unit</td><td>Factory/plant where the worker works</td></tr>
+    <tr><td>Type</td><td>Company, Contractor-PF, or Contractor-Non-PF</td></tr>
+    <tr><td>Source</td><td>Contractor name (if applicable)</td></tr>
+    <tr><td>PF Flag</td><td>YES = PF applicable, NO = Not applicable</td></tr>
+    <tr><td>Total Wage</td><td>Daily wage rate in ₹</td></tr>
+    <tr><td>Status</td><td>Active = working, Inactive = left</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 5. ATTENDANCE ==================== -->
+<div class="page-break section" id="s5">
+  <h2>5. Attendance</h2>
+  <p>The Attendance module shows monthly attendance records for all workers in your unit.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/06-attendance.png" alt="Attendance">
+    <div class="caption">Figure 4: Attendance view with month and unit filters</div>
+  </div>
+
+  <h3>How to View Attendance</h3>
+  <ol class="steps">
+    <li>Click <strong>Attendance</strong> in the left sidebar.</li>
+    <li>Select the <strong>Month</strong> and <strong>Year</strong> from the dropdown.</li>
+    <li>Select your <strong>Unit</strong> from the dropdown (or leave blank for all accessible units).</li>
+    <li>Click the <strong>Load</strong> button.</li>
+  </ol>
+
+  <h3>Understanding the Columns</h3>
+  <table>
+    <tr><th>Column</th><th>Meaning</th></tr>
+    <tr><td>Present</td><td>Number of days worker was present</td></tr>
+    <tr><td>Absent</td><td>Number of days worker was absent</td></tr>
+    <tr><td>Leave</td><td>Number of days on leave</td></tr>
+    <tr><td>LWP</td><td>Leave Without Pay days</td></tr>
+    <tr><td>OT Hours</td><td>Extra/Overtime hours worked</td></tr>
+    <tr><td>Weekly Off</td><td>Sundays/holiday offs</td></tr>
+  </table>
+</div>
+
+<!-- ==================== 6. LEAVE CONTROL ==================== -->
+<div class="page-break section" id="s6">
+  <h2>6. Leave Control</h2>
+  <p>Leave Control manages leave balance and leave applications for <strong>Company-roll workers only</strong>.</p>
+
+  <div class="warning">Leave Control does NOT apply to Contractor workers. Only workers with Type = "Company" are included in leave management.</div>
+
+  <div class="screenshot">
+    <img src="screenshots/04-leave.png" alt="Leave Control">
+    <div class="caption">Figure 5: Leave Control — shows company workers with leave balances</div>
+  </div>
+
+  <h3>6.1 Understanding Leave Balance</h3>
+  <table>
+    <tr><th>Column</th><th>Meaning</th></tr>
+    <tr><td>Allocated</td><td>Total leaves given for the year (default: 24)</td></tr>
+    <tr><td>Taken</td><td>Leaves already used this year</td></tr>
+    <tr><td>Remaining</td><td>Leaves still available (Allocated - Taken)</td></tr>
+  </table>
+
+  <h3>6.2 Apply Leave for a Worker</h3>
+  <ol class="steps">
+    <li>Find the worker in the Leave Control list.</li>
+    <li>Click <strong>Apply Leave</strong> next to their name.</li>
+    <li>A form will open showing the worker's leave balance.</li>
+    <li>Select <strong>Leave Type</strong>: Casual, Sick, Earned, or LWP.</li>
+    <li>Enter <strong>From Date</strong> and <strong>To Date</strong>.</li>
+    <li>Enter the <strong>number of days</strong>.</li>
+    <li>Enter a <strong>Reason</strong> (optional).</li>
+    <li>Click <strong>Apply Leave</strong>.</li>
+  </ol>
+
+  <div class="note">If remaining leave is less than the days requested, the system will show an error. The worker must have enough leave balance.</div>
+
+  <h3>6.3 Export Leave Report to Excel</h3>
+  <ol class="steps">
+    <li>On the Leave Control page, click <strong>Export Excel</strong> button (top right).</li>
+    <li>An Excel file will download to your computer's Downloads folder.</li>
+    <li>Open the file to view the leave report for all company workers.</li>
+  </ol>
+</div>
+
+<!-- ==================== 7. WAGE HISTORY ==================== -->
+<div class="page-break section" id="s7">
+  <h2>7. Wage History</h2>
+  <p>Wage History tracks every wage change for a worker with the effective date. <strong>Never overwrite the old wage directly</strong> — always use Wage History to record changes.</p>
+
+  <div class="warning">Do NOT simply edit the worker's wage in Worker Master. Always use Wage History to maintain an audit trail of all wage changes.</div>
+
+  <div class="screenshot">
+    <img src="screenshots/08-wage-history-data.png" alt="Wage History with data">
+    <div class="caption">Figure 6: Wage History showing all wage changes for worker SV2PBHA001</div>
+  </div>
+
+  <h3>7.1 View Wage History</h3>
+  <ol class="steps">
+    <li>Click <strong>Wage History</strong> in the left sidebar.</li>
+    <li>Enter the <strong>Worker Code</strong> in the search box.</li>
+    <li>Click <strong>Search</strong>.</li>
+    <li>All past wage changes for this worker will be displayed.</li>
+  </ol>
+
+  <h3>7.2 Add a Wage Revision</h3>
+  <ol class="steps">
+    <li>Search for the worker first.</li>
+    <li>Click <strong>+ Add Revision</strong> button.</li>
+    <li>Enter <strong>Effective From</strong> date (the date from which new wage applies).</li>
+    <li>Select <strong>Change Type</strong>: Revision, May Increment, November Increment, or Mid-Month Revision.</li>
+    <li>Enter the <strong>New Total Wage</strong> (₹).</li>
+    <li>Enter Basic Wage, HRA, and Other Allowance (if known).</li>
+    <li>Enter <strong>Reason/Remarks</strong> (e.g., "Annual revision", "Performance bonus").</li>
+    <li>Click <strong>Save Revision</strong>.</li>
+  </ol>
+
+  <h3>Understanding the Wage History Columns</h3>
+  <table>
+    <tr><th>Column</th><th>Meaning</th></tr>
+    <tr><td>Effective From</td><td>Date from which the new wage applies</td></tr>
+    <tr><td>Old Wage</td><td>Previous daily wage (₹)</td></tr>
+    <tr><td>New Wage</td><td>Updated daily wage (₹)</td></tr>
+    <tr><td>Type</td><td>Revision, May Increment, November Increment, etc.</td></tr>
+    <tr><td>Reason</td><td>Why the wage was changed</td></tr>
+    <tr><td>Changed By</td><td>Which HR user made the change</td></tr>
+  </table>
+
+  <div class="tip">The system automatically calculates monthly wages based on the Effective From date. If a wage changes mid-month, only the applicable rate is used.</div>
+</div>
+
+<!-- ==================== 8. INCREMENTS ==================== -->
+<div class="page-break section" id="s8">
+  <h2>8. Increments (May / November)</h2>
+  <p>The Increments module is used for annual wage revisions — typically May Increment and November Increment. It also supports special mid-month revisions.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/09-increments.png" alt="Increments">
+    <div class="caption">Figure 7: Increment management screen</div>
+  </div>
+
+  <h3>8.1 Types of Increments</h3>
+  <table>
+    <tr><th>Type</th><th>When Used</th></tr>
+    <tr><td><strong>May Increment</strong></td><td>Annual increment typically given in May</td></tr>
+    <tr><td><strong>November Increment</strong></td><td>Mid-year increment typically given in November</td></tr>
+    <tr><td><strong>Special / Mid-Month</strong></td><td>Any other wage revision outside the regular cycle</td></tr>
+  </table>
+
+  <h3>8.2 Add an Increment</h3>
+  <ol class="steps">
+    <li>Click <strong>Increments</strong> in the left sidebar.</li>
+    <li>Enter the <strong>Worker Code</strong> and click <strong>Search</strong>.</li>
+    <li>Click <strong>+ Add Increment</strong>.</li>
+    <li>Select <strong>Increment Type</strong>: May, November, or Special.</li>
+    <li>Enter <strong>Effective From</strong> date.</li>
+    <li>Enter <strong>New Wage</strong> (₹).</li>
+    <li>Enter <strong>Reason</strong> (e.g., "Annual May 2026 increment").</li>
+    <li>Click <strong>Save Increment</strong>.</li>
+  </ol>
+
+  <div class="note">The system automatically calculates the increment amount (New Wage - Old Wage) and percentage. You only need to enter the new wage.</div>
+
+  <h3>8.3 View All Increments</h3>
+  <p>Scroll down on the Increments page to see "All Increments" — a table of all increments across workers. Use the filters to view by type (May/November/Special) and year.</p>
+</div>
+
+<!-- ==================== 9. ATTRITION ==================== -->
+<div class="page-break section" id="s9">
+  <h2>9. Attrition Report (Worker Exit)</h2>
+  <p>When a worker leaves the company, you record their exit. The worker becomes inactive but all historical data remains available.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/10-attrition.png" alt="Attrition Report">
+    <div class="caption">Figure 8: Attrition Report showing exited workers</div>
+  </div>
+
+  <h3>9.1 Record a Worker Exit</h3>
+  <ol class="steps">
+    <li>Go to <strong>Worker Master</strong>.</li>
+    <li>Search for the worker.</li>
+    <li>Click the <strong>Edit</strong> (pencil ✏️) icon.</li>
+    <li>Enter the <strong>Exit Date</strong>.</li>
+    <li>Enter the <strong>Exit Reason</strong> (e.g., "Resigned", "End of contract", "Personal reasons").</li>
+    <li>Click <strong>Update</strong>.</li>
+    <li>The worker status changes to <strong>Inactive</strong>.</li>
+  </ol>
+
+  <h3>9.2 View Attrition Report</h3>
+  <ol class="steps">
+    <li>Click <strong>Attrition Report</strong> in the left sidebar.</li>
+    <li>Select <strong>Year</strong> to filter exits by year.</li>
+    <li>Select <strong>Month</strong> to filter exits by month (optional).</li>
+    <li>Select <strong>Unit</strong> to filter by factory (optional).</li>
+    <li>The report shows: Worker Code, Name, Unit, Department, Type, Source, Joining Date, Exit Date, Reason.</li>
+  </ol>
+
+  <h3>9.3 Export Attrition Report</h3>
+  <ol class="steps">
+    <li>Set your filters (year, month, unit).</li>
+    <li>Click <strong>Export Excel</strong> button (top right).</li>
+    <li>An Excel file will download with the filtered attrition data.</li>
+  </ol>
+</div>
+
+<!-- ==================== 10. REPORTS ==================== -->
+<div class="page-break section" id="s10">
+  <h2>10. Reports &amp; Excel Export</h2>
+  <p>Workforce ERP provides several reports that can be exported to Excel.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/05-reports.png" alt="Reports">
+    <div class="caption">Figure 9: Reports page with available report types</div>
+  </div>
+
+  <h3>Available Reports</h3>
+  <table>
+    <tr><th>Report</th><th>What It Shows</th></tr>
+    <tr><td>Worker Master Report</td><td>Complete list of all workers with details</td></tr>
+    <tr><td>Unit-wise Report</td><td>Workers grouped by unit with counts</td></tr>
+    <tr><td>Contractor-wise Report</td><td>Workers grouped by contractor/source</td></tr>
+    <tr><td>Department-wise Report</td><td>Workers grouped by department</td></tr>
+    <tr><td>PF/ESIC Report</td><td>Workers with PF and ESIC status</td></tr>
+    <tr><td>Attendance Report</td><td>Monthly attendance summary</td></tr>
+    <tr><td>Leave Report</td><td>Leave balances for all company workers</td></tr>
+    <tr><td>Attrition Report</td><td>All exited workers with reasons</td></tr>
+  </table>
+
+  <h3>How to Export Any Report</h3>
+  <ol class="steps">
+    <li>Click <strong>Reports</strong> in the left sidebar.</li>
+    <li>Click <strong>Export Excel</strong> on the report you need.</li>
+    <li>The Excel file will download to your Downloads folder.</li>
+    <li>Open the file in Microsoft Excel.</li>
+  </ol>
+
+  <div class="note">Reports respect your unit access. SVN-II HR will only see SVN-II data in reports.</div>
+</div>
+
+<!-- ==================== 11. IMPORT DATA ==================== -->
+<div class="page-break section" id="s11">
+  <h2>11. Import Data from Excel</h2>
+  <p>You can import worker data from an Excel file. The system will add new workers and skip duplicates.</p>
+
+  <div class="screenshot">
+    <img src="screenshots/12-import.png" alt="Import Data">
+    <div class="caption">Figure 10: Import Data screen</div>
+  </div>
+
+  <h3>How to Import</h3>
+  <ol class="steps">
+    <li>Click <strong>Import Data</strong> in the left sidebar.</li>
+    <li>Enter the <strong>full file path</strong> of the Excel file on the server computer (e.g., <code>D:\data\workers.xlsx</code>).</li>
+    <li>Click <strong>Preview Import</strong>.</li>
+    <li>The system will show: New Workers, Duplicates, Invalid Records, Final Total.</li>
+    <li>Review the preview carefully.</li>
+    <li>Click <strong>Confirm Import</strong> to add the new workers.</li>
+  </ol>
+
+  <div class="warning">Import uses the <strong>merge</strong> approach: new workers are added, existing workers (same Worker Code) are skipped. Your existing data is never overwritten.</div>
+
+  <div class="note">The Excel file must contain a sheet named "MASTER_Workers" or "Workers". Column names should match: Worker_Code, Name, Unit, Department, etc.</div>
+</div>
+
+<!-- ==================== 12. LOGOUT ==================== -->
+<div class="page-break section" id="s12">
+  <h2>12. Logout</h2>
+  <p>Always log out when you are done, especially on shared computers.</p>
+
+  <h3>Steps to Logout</h3>
+  <ol class="steps">
+    <li>Click the <strong>Logout</strong> button (🚪 icon) in the top-right corner of the header.</li>
+    <li>You will be returned to the login screen.</li>
+    <li>Close the browser tab if you are done.</li>
+  </ol>
+
+  <div class="warning">Always logout before leaving your computer unattended. Your session stays active for 24 hours if you don't logout.</div>
+</div>
+
+<!-- ==================== 13. DO'S & DON'TS ==================== -->
+<div class="page-break section" id="s13">
+  <h2>13. HR Do's &amp; Don'ts</h2>
+  
+  <h3>✅ Do's</h3>
+  <ul>
+    <li>✅ <strong>Always use Wage History</strong> to record wage changes — never overwrite directly.</li>
+    <li>✅ <strong>Check Effective From date</strong> carefully before saving wage revisions.</li>
+    <li>✅ <strong>Verify attendance</strong> before finalizing monthly records.</li>
+    <li>✅ <strong>Check leave entries</strong> for accuracy — ensure correct dates and leave type.</li>
+    <li>✅ <strong>Record worker exit properly</strong> with exit date and reason.</li>
+    <li>✅ <strong>Export and save</strong> important reports regularly.</li>
+    <li>✅ <strong>Keep your password secure</strong> — do not share with anyone.</li>
+    <li>✅ <strong>Logout</strong> when you are done, especially on shared computers.</li>
+  </ul>
+
+  <h3>❌ Don'ts</h3>
+  <ul>
+    <li>❌ <strong>Do not share</strong> your login credentials.</li>
+    <li>❌ <strong>Do not delete</strong> worker records unnecessarily — use Deactivate instead.</li>
+    <li>❌ <strong>Do not overwrite</strong> wages directly in Worker Master — use Wage History.</li>
+    <li>❌ <strong>Do not apply leave</strong> for contractor workers — leave is only for company-roll workers.</li>
+    <li>❌ <strong>Do not forget</strong> to record exit date when a worker leaves.</li>
+    <li>❌ <strong>Do not skip</strong> the preview step when importing Excel data.</li>
+  </ul>
+</div>
+
+<!-- ==================== 14. TROUBLESHOOTING ==================== -->
+<div class="page-break section" id="s14">
+  <h2>14. Troubleshooting</h2>
+
+  <table>
+    <tr><th style="width:30%">Problem</th><th>Solution</th></tr>
+    <tr>
+      <td><strong>Page not opening</strong><br><em>ERR_CONNECTION_TIMED_OUT</em></td>
+      <td>Check if the server computer is ON. Check if your computer is connected to the company network. Try typing the URL again: <code>http://192.168.1.31:3001</code></td>
+    </tr>
+    <tr>
+      <td><strong>Login failed</strong><br><em>Invalid credentials</em></td>
+      <td>Check your username and password. Passwords are case-sensitive. Contact Super Admin if you forgot your password.</td>
+    </tr>
+    <tr>
+      <td><strong>Failed to fetch</strong></td>
+      <td>The server may be temporarily busy. Wait 10 seconds and try again. If the problem persists, contact IT.</td>
+    </tr>
+    <tr>
+      <td><strong>Server unavailable</strong></td>
+      <td>The server computer may have restarted. Wait 2-3 minutes for the server to start. If still not working, contact IT.</td>
+    </tr>
+    <tr>
+      <td><strong>Report not loading</strong></td>
+      <td>Try refreshing the page (press F5). If the report still doesn't load, reduce the filter range (smaller date range).</td>
+    </tr>
+    <tr>
+      <td><strong>Excel export not working</strong></td>
+      <td>Check if your browser is blocking downloads. Look for a download bar at the bottom of the browser. Try a different browser (Chrome/Edge).</td>
+    </tr>
+    <tr>
+      <td><strong>Worker Code already exists</strong></td>
+      <td>This worker code is already in the system. Use a different code or search for the existing worker.</td>
+    </tr>
+    <tr>
+      <td><strong>Insufficient leave balance</strong></td>
+      <td>The worker does not have enough remaining leave days. Check their balance before applying.</td>
+    </tr>
+  </table>
+
+  <div class="tip">If none of the above solutions work, take a screenshot of the error and send it to your IT administrator.</div>
+</div>
+
+<!-- ==================== 15. QUICK REFERENCE ==================== -->
+<div class="page-break section" id="s15">
+  <h2>15. Quick Reference Card</h2>
+  
+  <div class="quick-ref">
+    <h2>Daily Workflow — Quick Steps</h2>
+    <div class="flow">
+      <div class="flow-item">1. Open Chrome</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item">2. Type URL</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item">3. Login</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item">4. Dashboard</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item">5. Do Your Work</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item">6. Logout</div>
+    </div>
+  </div>
+
+  <h3>Login Credentials</h3>
+  <table>
+    <tr><th>Unit</th><th>HR Username</th><th>Password</th></tr>
+    <tr><td>SVN-I</td><td>hr_svn1</td><td>Work@2026</td></tr>
+    <tr><td>SVN-II</td><td>hr_svn2</td><td>Work@2026</td></tr>
+    <tr><td>Sakar-I</td><td>hr_sakar1</td><td>Work@2026</td></tr>
+    <tr><td>Sakar-III</td><td>hr_sakar3</td><td>Work@2026</td></tr>
+  </table>
+
+  <div class="warning">Change your password after first login! Contact Super Admin for password change.</div>
+
+  <h3>Key Keyboard Shortcuts</h3>
+  <table>
+    <tr><th>Action</th><th>How</th></tr>
+    <tr><td>Refresh page</td><td>F5</td></tr>
+    <tr><td>Bookmark page</td><td>Ctrl + D</td></tr>
+    <tr><td>Open new tab</td><td>Ctrl + T</td></tr>
+  </table>
+
+  <h3>HR Daily Checklist</h3>
+  <ul class="checklist">
+    <li>Open Workforce ERP and login</li>
+    <li>Check Dashboard for any alerts</li>
+    <li>Review and update attendance for the day</li>
+    <li>Process any pending leave requests</li>
+    <li>Add new workers if any joinings</li>
+    <li>Record exits for workers who have left</li>
+    <li>Export any required reports</li>
+    <li>Logout when done</li>
+  </ul>
+
+  <div style="text-align:center; margin-top:40px; padding:20px; background:#f1f5f9; border-radius:8px;">
+    <p style="font-size:14px; color:#666;">For technical support, contact your IT administrator or Super Admin.</p>
+    <p style="font-size:12px; color:#999; margin-top:10px;">Workforce ERP v2.0 — August 2026</p>
+  </div>
+</div>
+
+</body>
+</html>

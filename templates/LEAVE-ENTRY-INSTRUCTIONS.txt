@@ -1,0 +1,77 @@
+╔══════════════════════════════════════════════════════════════╗
+║         VETAN ERP — LEAVE ENTRY INSTRUCTIONS                ║
+║         HR Team ke liye Step-by-Step Guide                  ║
+╚══════════════════════════════════════════════════════════════╝
+
+STEP 1: CSV FILE KHOLE
+──────────────────────
+- leave-entry-template.csv ko Excel mein khole
+- Har row mein ek employee ka data hai
+
+STEP 2: MONTH SELECT KARE
+─────────────────────────
+- File ka naam badal den: leave-apr-2026.csv
+- Ya leave-may-2026.csv
+- Ya leave-jun-2026.csv
+- Ya leave-jul-2026.csv
+
+STEP 3: LEAVE DAYS DALE
+───────────────────────
+Column headers:
+- PL     = Privilege Leave (Paid Leave)
+- CL     = Casual Leave
+- SL     = Sick Leave
+- CompOff = Compensatory Off (Sunday/PH pe kaam kiya tha)
+
+Example:
+Employee_Code,PL,CL,SL,CompOff
+SV1ST0001,1,0,0,0     ← Manoj ne 1 PL liya
+SV1ST0002,0,1,1,0     ← Manoj K ne 1 CL + 1 SL liya
+SV1ST0003,0,0,0,0     ← Sanjay ne koi leave nahi liya
+
+STEP 4: FILE SAVE KARE
+───────────────────────
+- CSV format mein save kare
+- File name: leave-[month]-[year].csv
+  Example: leave-apr-2026.csv
+
+STEP 5: FILE SHARE KARE
+───────────────────────
+- File ko Vishnu ko email kare
+- Ya directly ERP mein upload kare
+
+╔══════════════════════════════════════════════════════════════╗
+║  IMPORTANT RULES                                             ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  1. Sirf leave days daale (0 se zyada)                       ║
+║  2. Jis din leave nahi liya usme 0 daale                      ║
+║  3. Employee Code galat mat daale                            ║
+║  4. PL/CL/SL/CompOff alag alag column mein daale             ║
+║  5. Total leave = PL + CL + SL + CompOff                     ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+LEAVE TYPES:
+────────────
+PL  = Privilege Leave (Annual Leave, Paid)
+CL  = Casual Leave (Personal Work, Paid)
+SL  = Sick Leave (Medical, Paid)
+CompOff = Compensatory Off (Sunday/PH pe kaam kiya to milta hai)
+
+BALANCE CHECK:
+──────────────
+- PL Opening: 18 days (Apr-26)
+- CL Opening: 6 days (Apr-26)
+- SL Opening: 6 days (Apr-26)
+- CompOff: Auto calculate (Sunday/PH pe kaam karne pe +1)
+
+EXAMPLE — APRIL 2026:
+─────────────────────
+Employee_Code,PL,CL,SL,CompOff
+SV1ST0001,1,0,0,0      → Manoj: 1 PL used, Balance: PL 17
+SV1ST0002,0,1,1,0      → Manoj K: 1 CL + 1 SL used
+SV1ST0003,2,0,0,1      → Sanjay: 2 PL + 1 CompOff used
+SV1ST0006,0,0,0,0      → Chhaya: No leave
+SV1ST0007,0,0,2,0      → Alpesh: 2 SL used
+...

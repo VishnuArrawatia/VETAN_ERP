@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker ERP - Offline Database</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .tab-active { background: #2563eb; color: white; }
+        .tab-inactive { background: white; color: #374151; border: 1px solid #e5e7eb; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+        th { background: #f9fafb; font-weight: 600; position: sticky; top: 0; }
+        tr:hover { background: #f3f4f6; }
+        .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 500; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .input { border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; width: 100%; }
+        .select { border: 1px solid #d1d5db; padding: 8px 12px; border-radius: 8px; }
+        .card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-card { padding: 16px; border-radius: 12px; }
+        .preview-new { background: #d1fae5; }
+        .preview-duplicate { background: #fee2e2; }
+        .preview-invalid { background: #fef3c7; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="app">
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 shadow-lg">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">👷 Worker ERP</h1>
+                    <p class="text-blue-200 text-sm">Offline Database Mode</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm">Workers: <span id="workerCount" class="font-bold">0</span></p>
+                    <p class="text-xs text-blue-300">SQLite Database</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Import Section -->
+        <div class="max-w-7xl mx-auto p-4">
+            <div class="card mb-4">
+                <h2 class="text-lg font-bold mb-2">📁 Import Excel File</h2>
+                <p class="text-gray-600 text-sm mb-3">Import workers from Excel. Data will be MERGED with existing records.</p>
+                <div class="flex gap-4 items-center">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls,.xlsm" class="flex-1">
+                    <button onclick="previewImport()" class="btn btn-primary">🔍 Preview Import</button>
+                    <button onclick="executeImport()" id="btnImport" class="btn btn-success" disabled>✅ Confirm Import</button>
+                </div>
+                <div id="importStatus" class="mt-3 text-sm"></div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex gap-2 mb-4 flex-wrap">
+                <button onclick="showTab('dashboard')" id="tab-dashboard" class="px-4 py-2 rounded-lg tab-active">📊 Dashboard</button>
+                <button onclick="showTab('workers')" id="tab-workers" class="px-4 py-2 rounded-lg tab-inactive">👷 Workers</button>
+                <button onclick="showTab('import')" id="tab-import" class="px-4 py-2 rounded-lg tab-inactive">📥 Import History</button>
+                <button onclick="showTab('backup')" id="tab-backup" class="px-4 py-2 rounded-lg tab-inactive">💾 Backup/Restore</button>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div id="content-dashboard" class="tab-content">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="stat-card bg-blue-50 border border-blue-200">
+                        <p class="text-sm text-gray-600">Total Workers</p>
+                        <p class="text-3xl font-bold text-blue-600" id="stat-total">0</p>
+                    </div>
+                    <div class="stat-card bg-green-50 border border-green-200">
+                        <p class="text-sm text-gray-600">Active</p>
+                        <p class="text-3xl font-bold text-green-600" id="stat-active">0</p>
+                    </div>
+                    <div class="stat-card bg-red-50 border border-red-200">
+                        <p class="text-sm text-gray-600">Inactive</p>
+                        <p class="text-3xl font-bold text-red-600" id="stat-inactive">0</p>
+                    </div>
+                    <div class="stat-card bg-purple-50 border border-purple-200">
+                        <p class="text-sm text-gray-600">Total CTC</p>
+                        <p class="text-3xl font-bold text-purple-600" id="stat-ctc">₹0</p>
+                    </div>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="card">
+                        <h3 class="font-bold mb-3">🏭 Unit-wise Workers</h3>
+                        <div id="unitStats"></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-3">📊 Department-wise</h3>
+                        <div id="deptStats"></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-3">👷 Contractor-wise</h3>
+                        <div id="contractorStats"></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-3">💰 PF/ESIC Status</h3>
+                        <div id="pfStats"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workers Tab -->
+            <div id="content-workers" class="tab-content hidden">
+                <div class="card mb-4">
+                    <div class="flex flex-wrap gap-4 items-center">
+                        <input type="text" id="searchInput" placeholder="Search by ID, Name, Father's Name..." class="input flex-1 min-w-[200px]" oninput="filterWorkers()">
+                        <select id="filterUnit" class="select" onchange="filterWorkers()">
+                            <option value="">All Units</option>
+                        </select>
+                        <select id="filterDept" class="select" onchange="filterWorkers()">
+                            <option value="">All Departments</option>
+                        </select>
+                        <select id="filterStatus" class="select" onchange="filterWorkers()">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        <button onclick="openAddModal()" class="btn btn-primary">+ Add Worker</button>
+                        <button onclick="exportToExcel()" class="btn btn-success">📥 Export Excel</button>
+                    </div>
+                </div>
+                <div class="card overflow-x-auto" style="max-height: 600px; overflow-y: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Father Name</th>
+                                <th>Unit</th>
+                                <th>Department</th>
+                                <th>Type</th>
+                                <th>Source</th>
+                                <th>Wage</th>
+                                <th>PF</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workersTable"></tbody>
+                    </table>
+                </div>
+                <div class="flex justify-between items-center mt-4">
+                    <span id="paginationInfo" class="text-sm text-gray-600"></span>
+                    <div class="flex gap-2">
+                        <button onclick="prevPage()" id="btnPrev" class="btn btn-secondary">← Previous</button>
+                        <button onclick="nextPage()" id="btnNext" class="btn btn-secondary">Next →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import History Tab -->
+            <div id="content-import" class="tab-content hidden">
+                <div class="card">
+                    <h3 class="font-bold mb-4">📋 Import History</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Filename</th>
+                                <th>Total</th>
+                                <th>New</th>
+                                <th>Updated</th>
+                                <th>Duplicates</th>
+                                <th>Errors</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="importHistory"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Backup/Restore Tab -->
+            <div id="content-backup" class="tab-content hidden">
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="card">
+                        <h3 class="font-bold mb-4">💾 Create Backup</h3>
+                        <p class="text-gray-600 text-sm mb-4">Backup database and Excel file</p>
+                        <button onclick="createBackup()" class="btn btn-primary">Create Backup</button>
+                        <div id="backupStatus" class="mt-3 text-sm"></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-4">📂 Available Backups</h3>
+                        <div id="backupList" class="max-h-64 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="workerModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-xl font-bold" id="modalTitle">Add Worker</h2>
+                <button onclick="closeModal()" class="text-2xl">&times;</button>
+            </div>
+            <div class="p-4">
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Worker Code *</label>
+                        <input type="text" id="workerCode" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Name *</label>
+                        <input type="text" id="workerName" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Father/Husband Name</label>
+                        <input type="text" id="fatherName" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Gender</label>
+                        <select id="gender" class="select w-full">
+                            <option value="M">Male</option>
+                            <option value="F">Female</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Unit *</label>
+                        <select id="unit" class="select w-full">
+                            <option value="SVN-I">SVN-I</option>
+                            <option value="SVN-II">SVN-II</option>
+                            <option value="Sakar-I">Sakar-I</option>
+                            <option value="Sakar-III">Sakar-III</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Department *</label>
+                        <input type="text" id="department" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Type</label>
+                        <select id="type" class="select w-full">
+                            <option value="Company">Company</option>
+                            <option value="Contractor-PF">Contractor-PF</option>
+                            <option value="Contractor-Non-PF">Contractor-Non-PF</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Source/Contractor</label>
+                        <input type="text" id="source" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">DOJ</label>
+                        <input type="date" id="doj" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Total Wage (₹)</label>
+                        <input type="number" id="totalWage" class="input">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">PF Flag</label>
+                        <select id="pfFlag" class="select w-full">
+                            <option value="NO">NO</option>
+                            <option value="YES">YES</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">ESIC Flag</label>
+                        <select id="esicFlag" class="select w-full">
+                            <option value="NO">NO</option>
+                            <option value="YES">YES</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
+                    <button onclick="saveWorker()" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Preview Modal -->
+    <div id="previewModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-xl font-bold">📋 Import Preview</h2>
+                <button onclick="closePreviewModal()" class="text-2xl">&times;</button>
+            </div>
+            <div class="p-4" id="previewContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL - change to server URL when using backend
+        const API_BASE = 'http://localhost:3001/api';
+        
+        // State
+        let currentPage = 1;
+        let totalPages = 1;
+        let previewData = null;
+        let importFilePath = null;
+
+        // ============ TAB SWITCHING ============
+        function showTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('tab-inactive');
+            });
+            
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.remove('tab-inactive');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+
+            // Load data for tab
+            if (tab === 'dashboard') loadDashboard();
+            if (tab === 'workers') loadWorkers();
+            if (tab === 'import') loadImportHistory();
+            if (tab === 'backup') loadBackups();
+        }
+
+        // ============ DASHBOARD ============
+        async function loadDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/dashboard`);
+                const data = await res.json();
+                
+                document.getElementById('stat-total').textContent = data.totalWorkers;
+                document.getElementById('stat-active').textContent = data.activeWorkers;
+                document.getElementById('stat-inactive').textContent = data.inactiveWorkers;
+                document.getElementById('stat-ctc').textContent = `₹${(data.totalCTC / 100000).toFixed(1)}L`;
+                document.getElementById('workerCount').textContent = data.activeWorkers;
+
+                // Unit stats
+                document.getElementById('unitStats').innerHTML = data.unitWise.map(u => `
+                    <div class="flex justify-between py-2 border-b">
+                        <span>${u.unit || 'Unknown'}</span>
+                        <span class="font-bold">${u.count}</span>
+                    </div>
+                `).join('');
+
+                // Department stats
+                document.getElementById('deptStats').innerHTML = data.departmentWise.slice(0, 10).map(d => `
+                    <div class="flex justify-between py-2 border-b">
+                        <span>${d.department || 'Unknown'}</span>
+                        <span class="font-bold">${d.count}</span>
+                    </div>
+                `).join('');
+
+                // Contractor stats
+                document.getElementById('contractorStats').innerHTML = data.contractorWise.slice(0, 10).map(c => `
+                    <div class="flex justify-between py-2 border-b">
+                        <span>${c.source || 'Company Direct'}</span>
+                        <span class="font-bold">${c.count}</span>
+                    </div>
+                `).join('');
+
+                // PF stats
+                document.getElementById('pfStats').innerHTML = data.pfStats.map(p => `
+                    <div class="flex justify-between py-2 border-b">
+                        <span>PF ${p.pf_flag}</span>
+                        <span class="font-bold">${p.count}</span>
+                    </div>
+                `).join('') + data.esicStats.map(e => `
+                    <div class="flex justify-between py-2 border-b">
+                        <span>ESIC ${e.esic_flag}</span>
+                        <span class="font-bold">${e.count}</span>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+            }
+        }
+
+        // ============ WORKERS ============
+        async function loadWorkers(page = 1) {
+            try {
+                const search = document.getElementById('searchInput').value;
+                const unit = document.getElementById('filterUnit').value;
+                const dept = document.getElementById('filterDept').value;
+                const status = document.getElementById('filterStatus').value;
+
+                const params = new URLSearchParams({
+                    page, limit: 50, search, unit, department: dept, status
+                });
+
+                const res = await fetch(`${API_BASE}/workers?${params}`);
+                const data = await res.json();
+                
+                currentPage = data.pagination.page;
+                totalPages = data.pagination.totalPages;
+
+                document.getElementById('workersTable').innerHTML = data.workers.map(w => `
+                    <tr>
+                        <td class="font-medium">${w.worker_code}</td>
+                        <td>${w.name}</td>
+                        <td>${w.father_name || '-'}</td>
+                        <td>${w.unit}</td>
+                        <td>${w.department}</td>
+                        <td>${w.type}</td>
+                        <td>${w.source || '-'}</td>
+                        <td>₹${w.total_wage}</td>
+                        <td>${w.pf_flag}</td>
+                        <td><span class="px-2 py-1 rounded text-xs ${w.active_status ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${w.active_status ? 'Active' : 'Inactive'}</span></td>
+                        <td>
+                            <button onclick='editWorker(${JSON.stringify(w).replace(/'/g, "\\'")})' class="text-blue-600 hover:underline">Edit</button>
+                            <button onclick="deleteWorker('${w.worker_code}')" class="text-red-600 hover:underline ml-2">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('paginationInfo').textContent = 
+                    `Showing ${(currentPage - 1) * 50 + 1} to ${Math.min(currentPage * 50, data.pagination.total)} of ${data.pagination.total} workers`;
+                
+                document.getElementById('btnPrev').disabled = currentPage <= 1;
+                document.getElementById('btnNext').disabled = currentPage >= totalPages;
+
+                // Populate filters
+                loadFilters();
+            } catch (error) {
+                console.error('Failed to load workers:', error);
+            }
+        }
+
+        async function loadFilters() {
+            try {
+                const res = await fetch(`${API_BASE}/workers?limit=1000`);
+                const data = await res.json();
+                
+                const units = [...new Set(data.workers.map(w => w.unit))].filter(Boolean);
+                const depts = [...new Set(data.workers.map(w => w.department))].filter(Boolean);
+                
+                const unitFilter = document.getElementById('filterUnit');
+                const currentUnit = unitFilter.value;
+                unitFilter.innerHTML = '<option value="">All Units</option>' + 
+                    units.map(u => `<option value="${u}" ${u === currentUnit ? 'selected' : ''}>${u}</option>`).join('');
+
+                const deptFilter = document.getElementById('filterDept');
+                const currentDept = deptFilter.value;
+                deptFilter.innerHTML = '<option value="">All Departments</option>' + 
+                    depts.map(d => `<option value="${d}" ${d === currentDept ? 'selected' : ''}>${d}</option>`).join('');
+            } catch (error) {
+                console.error('Failed to load filters:', error);
+            }
+        }
+
+        function filterWorkers() {
+            loadWorkers(1);
+        }
+
+        function prevPage() {
+            if (currentPage > 1) loadWorkers(currentPage - 1);
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) loadWorkers(currentPage + 1);
+        }
+
+        // ============ WORKER CRUD ============
+        let editWorkerCode = null;
+
+        function openAddModal() {
+            editWorkerCode = null;
+            document.getElementById('modalTitle').textContent = 'Add Worker';
+            document.getElementById('workerCode').value = '';
+            document.getElementById('workerCode').disabled = false;
+            document.getElementById('workerName').value = '';
+            document.getElementById('fatherName').value = '';
+            document.getElementById('gender').value = 'M';
+            document.getElementById('unit').value = 'SVN-I';
+            document.getElementById('department').value = '';
+            document.getElementById('type').value = 'Company';
+            document.getElementById('source').value = '';
+            document.getElementById('doj').value = '';
+            document.getElementById('totalWage').value = '';
+            document.getElementById('pfFlag').value = 'NO';
+            document.getElementById('esicFlag').value = 'NO';
+            document.getElementById('workerModal').classList.add('active');
+        }
+
+        function editWorker(worker) {
+            editWorkerCode = worker.worker_code;
+            document.getElementById('modalTitle').textContent = 'Edit Worker';
+            document.getElementById('workerCode').value = worker.worker_code;
+            document.getElementById('workerCode').disabled = true;
+            document.getElementById('workerName').value = worker.name;
+            document.getElementById('fatherName').value = worker.father_name || '';
+            document.getElementById('gender').value = worker.gender || 'M';
+            document.getElementById('unit').value = worker.unit || 'SVN-I';
+            document.getElementById('department').value = worker.department || '';
+            document.getElementById('type').value = worker.type || 'Company';
+            document.getElementById('source').value = worker.source || '';
+            document.getElementById('doj').value = worker.doj || '';
+            document.getElementById('totalWage').value = worker.total_wage || '';
+            document.getElementById('pfFlag').value = worker.pf_flag || 'NO';
+            document.getElementById('esicFlag').value = worker.esic_flag || 'NO';
+            document.getElementById('workerModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('workerModal').classList.remove('active');
+        }
+
+        async function saveWorker() {
+            const code = document.getElementById('workerCode').value;
+            const name = document.getElementById('workerName').value;
+            
+            if (!code || !name) {
+                alert('Worker Code and Name are required');
+                return;
+            }
+
+            const worker = {
+                worker_code: code,
+                name: name,
+                father_name: document.getElementById('fatherName').value,
+                gender: document.getElementById('gender').value,
+                unit: document.getElementById('unit').value,
+                department: document.getElementById('department').value,
+                type: document.getElementById('type').value,
+                source: document.getElementById('source').value,
+                doj: document.getElementById('doj').value,
+                total_wage: parseFloat(document.getElementById('totalWage').value) || 0,
+                pf_flag: document.getElementById('pfFlag').value,
+                esic_flag: document.getElementById('esicFlag').value,
+                active_status: 1
+            };
+
+            try {
+                const url = editWorkerCode ? `${API_BASE}/workers/${editWorkerCode}` : `${API_BASE}/workers`;
+                const method = editWorkerCode ? 'PUT' : 'POST';
+                
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(worker)
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    closeModal();
+                    loadWorkers(currentPage);
+                    loadDashboard();
+                } else {
+                    alert(data.error || 'Failed to save worker');
+                }
+            } catch (error) {
+                alert('Failed to save worker: ' + error.message);
+            }
+        }
+
+        async function deleteWorker(code) {
+            if (!confirm('Deactivate this worker?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/workers/${code}`, { method: 'DELETE' });
+                loadWorkers(currentPage);
+                loadDashboard();
+            } catch (error) {
+                alert('Failed to delete worker');
+            }
+        }
+
+        // ============ IMPORT ============
+        async function previewImport() {
+            const fileInput = document.getElementById('excelFile');
+            if (!fileInput.files.length) {
+                alert('Please select an Excel file');
+                return;
+            }
+
+            // Read file and send to server
+            const file = fileInput.files[0];
+            
+            // For standalone mode, we'll read locally
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const sheetName = workbook.SheetNames.find(s => s.toUpperCase().includes('MASTER') || s.toUpperCase().includes('WORKER'));
+                    if (!sheetName) {
+                        alert('MASTER_Workers sheet not found');
+                        return;
+                    }
+
+                    const sheet = workbook.Sheets[sheetName];
+                    const excelData = XLSX.utils.sheet_to_json(sheet);
+
+                    // Get existing workers from server
+                    const res = await fetch(`${API_BASE}/workers?limit=10000`);
+                    const existingData = await res.json();
+                    const existingCodes = new Set(existingData.workers.map(w => w.worker_code));
+
+                    // Preview
+                    const preview = {
+                        totalRecords: excelData.length,
+                        newWorkers: [],
+                        duplicateWorkers: [],
+                        invalidRecords: []
+                    };
+
+                    const seenCodes = new Set();
+                    excelData.forEach((row, index) => {
+                        const workerCode = row.Worker_Code || row.worker_code || '';
+                        const name = row.Name || row.name || '';
+
+                        if (!workerCode || !name) {
+                            preview.invalidRecords.push({
+                                row: index + 2,
+                                worker_code: workerCode,
+                                name: name,
+                                reason: !workerCode ? 'Missing Worker Code' : 'Missing Name'
+                            });
+                            return;
+                        }
+
+                        if (existingCodes.has(workerCode)) {
+                            preview.duplicateWorkers.push({
+                                row: index + 2,
+                                worker_code: workerCode,
+                                name: name,
+                                unit: row.Unit || row.unit || ''
+                            });
+                        } else if (seenCodes.has(workerCode)) {
+                            preview.duplicateWorkers.push({
+                                row: index + 2,
+                                worker_code: workerCode,
+                                name: name,
+                                unit: row.Unit || row.unit || '',
+                                reason: 'Duplicate in file'
+                            });
+                        } else {
+                            preview.newWorkers.push({
+                                row: index + 2,
+                                worker_code: workerCode,
+                                name: name,
+                                unit: row.Unit || row.unit || '',
+                                department: row.Department || row.department || ''
+                            });
+                            seenCodes.add(workerCode);
+                        }
+                    });
+
+                    previewData = preview;
+                    importFilePath = file.name;
+
+                    // Show preview modal
+                    showPreviewModal(preview, existingData.pagination.total);
+                } catch (error) {
+                    alert('Error reading file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function showPreviewModal(preview, existingCount) {
+            const content = document.getElementById('previewContent');
+            content.innerHTML = `
+                <div class="mb-4">
+                    <h3 class="font-bold text-lg mb-2">Import Summary</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="stat-card bg-blue-50">
+                            <p class="text-sm text-gray-600">Existing Workers</p>
+                            <p class="text-2xl font-bold text-blue-600">${existingCount}</p>
+                        </div>
+                        <div class="stat-card bg-green-50 preview-new">
+                            <p class="text-sm text-gray-600">New Workers</p>
+                            <p class="text-2xl font-bold text-green-600">${preview.newWorkers.length}</p>
+                        </div>
+                        <div class="stat-card bg-red-50 preview-duplicate">
+                            <p class="text-sm text-gray-600">Duplicates</p>
+                            <p class="text-2xl font-bold text-red-600">${preview.duplicateWorkers.length}</p>
+                        </div>
+                        <div class="stat-card bg-yellow-50 preview-invalid">
+                            <p class="text-sm text-gray-600">Invalid</p>
+                            <p class="text-2xl font-bold text-yellow-600">${preview.invalidRecords.length}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <p class="font-bold">After Import: ${existingCount + preview.newWorkers.length} workers</p>
+                    </div>
+                </div>
+
+                ${preview.newWorkers.length > 0 ? `
+                <div class="mb-4">
+                    <h4 class="font-bold text-green-700 mb-2">✅ New Workers (will be added)</h4>
+                    <div class="max-h-48 overflow-y-auto border rounded">
+                        <table class="text-sm">
+                            <thead><tr class="bg-green-50"><th>Row</th><th>Code</th><th>Name</th><th>Unit</th><th>Department</th></tr></thead>
+                            <tbody>
+                                ${preview.newWorkers.slice(0, 20).map(w => `
+                                    <tr><td>${w.row}</td><td>${w.worker_code}</td><td>${w.name}</td><td>${w.unit}</td><td>${w.department}</td></tr>
+                                `).join('')}
+                                ${preview.newWorkers.length > 20 ? `<tr><td colspan="5" class="text-center text-gray-500">... and ${preview.newWorkers.length - 20} more</td></tr>` : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                ` : ''}
+
+                ${preview.duplicateWorkers.length > 0 ? `
+                <div class="mb-4">
+                    <h4 class="font-bold text-red-700 mb-2">⚠️ Duplicates (will be skipped)</h4>
+                    <div class="max-h-48 overflow-y-auto border rounded">
+                        <table class="text-sm">
+                            <thead><tr class="bg-red-50"><th>Row</th><th>Code</th><th>Name</th><th>Unit</th></tr></thead>
+                            <tbody>
+                                ${preview.duplicateWorkers.slice(0, 20).map(w => `
+                                    <tr><td>${w.row}</td><td>${w.worker_code}</td><td>${w.name}</td><td>${w.unit}</td></tr>
+                                `).join('')}
+                                ${preview.duplicateWorkers.length > 20 ? `<tr><td colspan="4" class="text-center text-gray-500">... and ${preview.duplicateWorkers.length - 20} more</td></tr>` : ''}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                ` : ''}
+
+                ${preview.invalidRecords.length > 0 ? `
+                <div class="mb-4">
+                    <h4 class="font-bold text-yellow-700 mb-2">❌ Invalid Records (will be skipped)</h4>
+                    <div class="max-h-48 overflow-y-auto border rounded">
+                        <table class="text-sm">
+                            <thead><tr class="bg-yellow-50"><th>Row</th><th>Code</th><th>Name</th><th>Reason</th></tr></thead>
+                            <tbody>
+                                ${preview.invalidRecords.map(w => `
+                                    <tr><td>${w.row}</td><td>${w.worker_code}</td><td>${w.name}</td><td>${w.reason}</td></tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="flex justify-end gap-4 mt-6">
+                    <button onclick="closePreviewModal()" class="btn btn-secondary">Cancel</button>
+                    <button onclick="confirmImport()" class="btn btn-success">✅ Confirm Import</button>
+                </div>
+            `;
+            document.getElementById('previewModal').classList.add('active');
+        }
+
+        function closePreviewModal() {
+            document.getElementById('previewModal').classList.remove('active');
+        }
+
+        async function confirmImport() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const sheetName = workbook.SheetNames.find(s => s.toUpperCase().includes('MASTER') || s.toUpperCase().includes('WORKER'));
+                    const sheet = workbook.Sheets[sheetName];
+                    const excelData = XLSX.utils.sheet_to_json(sheet);
+
+                    // Import each new worker
+                    let imported = 0;
+                    let errors = 0;
+
+                    for (const row of excelData) {
+                        const workerCode = row.Worker_Code || row.worker_code || '';
+                        const name = row.Name || row.name || '';
+
+                        if (!workerCode || !name) {
+                            errors++;
+                            continue;
+                        }
+
+                        // Check if exists
+                        const checkRes = await fetch(`${API_BASE}/workers/${workerCode}`);
+                        if (checkRes.ok) {
+                            continue; // Skip duplicates
+                        }
+
+                        const worker = {
+                            worker_code: workerCode,
+                            name: name,
+                            father_name: row.Father_Name || row.father_name || '',
+                            gender: row.Gender || row.gender || 'M',
+                            unit: row.Unit || row.unit || '',
+                            type: row.Type || row.type || '',
+                            source: row.Source || row.source || '',
+                            department: row.Department || row.department || '',
+                            doj: row.DOJ || row.doj || '',
+                            total_wage: row.Total_Wage || row.total_wage || row.total_wage_day || 0,
+                            ctc: row.CTC || row.ctc || 0,
+                            pf_flag: row.PF_Flag || row.pf_flag || 'NO',
+                            esic_flag: row.ESIC_Flag || row.esic_flag || 'NO',
+                            basic_wage: row.Basic_Wage || row.basic_wage || row.basic_rate_day || 0,
+                            hra: row.HRA || row.hra || row.hra_rate_day || 0,
+                            transport: row.Transport || row.transport || row.transport_mode || '',
+                            transport_by: row.Transport_By || row.transport_by || '',
+                            active_status: 1
+                        };
+
+                        const res = await fetch(`${API_BASE}/workers`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(worker)
+                        });
+
+                        if (res.ok) imported++;
+                        else errors++;
+                    }
+
+                    closePreviewModal();
+                    alert(`Import completed!\n\nNew workers imported: ${imported}\nErrors: ${errors}`);
+                    loadWorkers(1);
+                    loadDashboard();
+                } catch (error) {
+                    alert('Import failed: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function executeImport() {
+            // This button is now handled by confirmImport in preview modal
+            alert('Please click "Preview Import" first, then "Confirm Import"');
+        }
+
+        // ============ IMPORT HISTORY ============
+        async function loadImportHistory() {
+            try {
+                const res = await fetch(`${API_BASE}/import/history`);
+                const history = await res.json();
+                
+                document.getElementById('importHistory').innerHTML = history.map(h => `
+                    <tr>
+                        <td>${new Date(h.import_date).toLocaleString()}</td>
+                        <td>${h.filename}</td>
+                        <td>${h.total_records}</td>
+                        <td class="text-green-600">${h.new_records}</td>
+                        <td class="text-blue-600">${h.updated_records}</td>
+                        <td class="text-yellow-600">${h.duplicate_records}</td>
+                        <td class="text-red-600">${h.error_records}</td>
+                        <td><span class="px-2 py-1 rounded bg-green-100 text-green-700">${h.status}</span></td>
+                    </tr>
+                `).join('') || '<tr><td colspan="8" class="text-center text-gray-500">No import history</td></tr>';
+            } catch (error) {
+                console.error('Failed to load import history:', error);
+            }
+        }
+
+        // ============ BACKUP/RESTORE ============
+        async function createBackup() {
+            try {
+                const res = await fetch(`${API_BASE}/backup`, { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.success) {
+                    document.getElementById('backupStatus').innerHTML = `
+                        <p class="text-green-600">✅ Backup created successfully!</p>
+                        <p>Database: ${data.backupFile}</p>
+                        <p>Excel: ${data.excelFile}</p>
+                        <p>Workers: ${data.workerCount}</p>
+                    `;
+                    loadBackups();
+                }
+            } catch (error) {
+                document.getElementById('backupStatus').innerHTML = `<p class="text-red-600">❌ Backup failed</p>`;
+            }
+        }
+
+        async function loadBackups() {
+            try {
+                const res = await fetch(`${API_BASE}/backups`);
+                const backups = await res.json();
+                
+                document.getElementById('backupList').innerHTML = backups.map(b => `
+                    <div class="flex justify-between items-center py-2 border-b">
+                        <div>
+                            <p class="font-medium">${b.name}</p>
+                            <p class="text-xs text-gray-500">${new Date(b.date).toLocaleString()}</p>
+                        </div>
+                        <span class="text-sm text-gray-500">${(b.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                `).join('') || '<p class="text-gray-500">No backups yet</p>';
+            } catch (error) {
+                console.error('Failed to load backups:', error);
+            }
+        }
+
+        // ============ EXPORT ============
+        async function exportToExcel() {
+            try {
+                const res = await fetch(`${API_BASE}/export/workers`);
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'workers_export.xlsx';
+                a.click();
+            } catch (error) {
+                alert('Export failed');
+            }
+        }
+
+        // ============ INITIALIZE ============
+        document.addEventListener('DOMContentLoaded', () => {
+            showTab('dashboard');
+        });
+    </script>
+</body>
+</html>

@@ -216,7 +216,7 @@ export default function PayrollInputManagementView({
     const totalDamage = monthSlips.reduce((sum, s) => sum + (s.damage_deduction || 0), 0);
     const totalCustom = monthSlips.reduce((sum, s) => sum + (s.custom_deductions || 0), 0);
 
-    const totalOtherDeductions = totalCanteen + totalUniform + totalNotice + totalMobile + totalDamage + totalCustom;
+    const totalOtherDeductions = totalCustom;
     const grandTotalDeductions = monthSlips.reduce((sum, s) => sum + (s.total_deductions || 0), 0);
     const totalNetPayable = monthSlips.reduce((sum, s) => sum + (s.net_salary || 0), 0);
 
@@ -786,7 +786,7 @@ export default function PayrollInputManagementView({
             <Sparkles size={16} className="text-indigo-600 shrink-0" />
             <div>
               <strong>Auto Calculated (Read-only):</strong> Attendance, Base, HRA, Statutory PF, ESIC, PT, Loan EMI. <br />
-              <strong>HR Monthly Variable Inputs:</strong> TDS, Other Recovery, Canteen, Uniform, Notice, Damage, Bonus, Incentives, Reimbursements.
+              <strong>HR Monthly Variable Inputs:</strong> TDS, Other Deduction, Advance, Bonus, Incentives, Reimbursements.
             </div>
           </div>
 
@@ -804,8 +804,7 @@ export default function PayrollInputManagementView({
                   {/* Editable Deductions */}
                   <th className="p-3 text-center bg-rose-50 border-l border-rose-200 text-rose-900 min-w-[90px]">TDS (₹)</th>
                   <th className="p-3 text-center bg-rose-50 text-rose-900 min-w-[90px]">Other Ded. (₹)</th>
-                  <th className="p-3 text-center bg-rose-50 text-rose-900 min-w-[80px]">Canteen (₹)</th>
-                  <th className="p-3 text-center bg-rose-50 text-rose-900 min-w-[80px]">Uniform (₹)</th>
+
                   <th className="p-3 text-center bg-rose-50 text-rose-900 min-w-[80px]">Advance (₹)</th>
                   
                   {/* Editable Additions */}
@@ -828,8 +827,8 @@ export default function PayrollInputManagementView({
                   // Calculated total deductions preview
                   const tdsVal = Number(rowInputs.tds ?? slip.tds ?? 0);
                   const otherVal = Number(rowInputs.custom_deductions ?? slip.custom_deductions ?? 0);
-                  const canteenVal = Number(rowInputs.canteen_deduction ?? slip.canteen_deduction ?? 0);
-                  const uniformVal = Number(rowInputs.uniform_deduction ?? slip.uniform_deduction ?? 0);
+                  const canteenVal = 0;
+                  const uniformVal = 0;
                   const advVal = Number(rowInputs.salary_advance ?? slip.salary_advance ?? 0);
 
                   const bonusVal = Number(rowInputs.bonus_incentive ?? slip.bonus_incentive ?? 0);
@@ -898,28 +897,6 @@ export default function PayrollInputManagementView({
                           onChange={(e) => handleCellChange(slip.id, 'custom_deductions', e.target.value)}
                           disabled={isPayrollLocked}
                           className="w-full text-center p-1 bg-white border border-slate-300 rounded text-rose-950 font-bold focus:outline-none focus:border-rose-600"
-                        />
-                      </td>
-
-                      {/* Editable Inputs: Canteen */}
-                      <td className="p-1 text-center bg-rose-50/30">
-                        <input
-                          type="number"
-                          value={rowInputs.canteen_deduction ?? 0}
-                          onChange={(e) => handleCellChange(slip.id, 'canteen_deduction', e.target.value)}
-                          disabled={isPayrollLocked}
-                          className="w-full text-center p-1 bg-white border border-slate-300 rounded text-rose-950 focus:outline-none focus:border-rose-600"
-                        />
-                      </td>
-
-                      {/* Editable Inputs: Uniform */}
-                      <td className="p-1 text-center bg-rose-50/30">
-                        <input
-                          type="number"
-                          value={rowInputs.uniform_deduction ?? 0}
-                          onChange={(e) => handleCellChange(slip.id, 'uniform_deduction', e.target.value)}
-                          disabled={isPayrollLocked}
-                          className="w-full text-center p-1 bg-white border border-slate-300 rounded text-rose-950 focus:outline-none focus:border-rose-600"
                         />
                       </td>
 
@@ -1397,10 +1374,7 @@ export default function PayrollInputManagementView({
                   { Category: 'Loan EMI Recovery', Amount: aggregates.totalLoan },
                   { Category: 'Salary Advance Recovery', Amount: aggregates.totalAdvance },
                   { Category: 'Income Tax TDS', Amount: aggregates.totalTds },
-                  { Category: 'Canteen Charges', Amount: aggregates.totalCanteen },
-                  { Category: 'Uniform Charges', Amount: aggregates.totalUniform },
-                  { Category: 'Notice Period Recovery', Amount: aggregates.totalNotice },
-                  { Category: 'Mobile Charges', Amount: aggregates.totalMobile },
+
                   { Category: 'Damage Recovery', Amount: aggregates.totalDamage },
                   { Category: 'Other Custom Recoveries', Amount: aggregates.totalCustom },
                   { Category: 'GRAND TOTAL DEDUCTIONS', Amount: aggregates.grandTotalDeductions }

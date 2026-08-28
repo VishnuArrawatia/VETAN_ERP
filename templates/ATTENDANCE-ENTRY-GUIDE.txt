@@ -1,0 +1,79 @@
+╔══════════════════════════════════════════════════════════════╗
+║     VETAN ERP — ATTENDANCE ENTRY GUIDE (HR ke liye)         ║
+╚══════════════════════════════════════════════════════════════╝
+
+KAISE KARNA HAI — STEP BY STEP:
+════════════════════════════════
+
+STEP 1: Apni Excel file khole
+─────────────────────────────
+- Jo aapki actual attendance sheet hai (jaise screenshot mein dikhaya)
+- Usko CSV format mein save kare
+
+STEP 2: File ka naam rakhe
+──────────────────────────
+attendance-apr-2026.csv    (April ke liye)
+attendance-may-2026.csv    (May ke liye)
+attendance-jun-2026.csv    (June ke liye)
+attendance-jul-2026.csv    (July ke liye)
+
+STEP 3: Ye columns bharein
+──────────────────────────
+Column Name      | Kya daalna hai
+─────────────────┼─────────────────────────────────
+Emp.Code         | Employee Code (jaise SK1ST0001)
+Name             | Employee ka naam
+Unit             | SVN-1, SVN-II, Sakar-I, Sakar-III
+Present          | Kitne din Present tha (23, 24, 25...)
+Absent           | Kitne din Absent tha (0, 1, 2...)
+W/O              | Weekly Off (Sunday) (4, 5...)
+Paid_Holy_Days   | Paid Holiday (1, 2...)
+Leave            | Kitne din Leave par tha (0, 1, 2...)
+LWP              | Leave Without Pay (0, 1...)
+Month_Days       | Mahine ke din (30 ya 31)
+Paid_Days        | Paid Days = Present + Leave + W/O + PH
+Leave_Utilised   | PL kitna use hua (0, 1, 2...)
+C-Off_Utilised   | CompOff kitna use hua (0, 1...)
+C-Off_Availed    | CompOff kitna availed (0, 1...)
+
+STEP 4: File save kare aur share kare
+──────────────────────────────────────
+- CSV format mein save kare
+- Email kare ya upload kare
+
+╔══════════════════════════════════════════════════════════════╗
+║  EXAMPLE — SK1ST0001 (Mangesh Gurav)                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  Present: 23  | Absent: 0  | W/O: 4  | PH: 1               ║
+║  Leave: 2     | LWP: 0     | Month: 30  | Paid: 30         ║
+║  Leave Used: 0 | C-Off Used: 1 | C-Off Availed: 1          ║
+║                                                              ║
+║  Matlab: Mangesh 23 din present, 4 Sunday, 1 PH,            ║
+║          2 din leave par tha. CompOff 1 din use kiya.        ║
+╚══════════════════════════════════════════════════════════════╝
+
+IMPORTANT FORMULA:
+──────────────────
+Paid Days = Present + Leave + Weekly Off + Paid Holiday
+           (jo log paid leave par the unka count)
+
+Total Days = Present + Absent + Weekly Off + PH + Leave + LWP
+            (mahine ke sab din)
+
+╔══════════════════════════════════════════════════════════════╗
+║  LEAVE TYPES                                                ║
+╠══════════════════════════════════════════════════════════════╣
+║  PL  = Privilege Leave (Annual Leave, Paid)                  ║
+║  CL  = Casual Leave (Personal Work, Paid)                    ║
+║  SL  = Sick Leave (Medical, Paid)                            ║
+║  CompOff = Compensatory Off (Sunday/PH pe kaam kiya)        ║
+║  LWP = Leave Without Pay (Salary kategi)                     ║
+╚══════════════════════════════════════════════════════════════╝
+
+TIPS:
+─────
+1. Jo leave nahi liya usme 0 daalein
+2. Half day leave bhi daal sakte hain (1.5, 0.5)
+3. Employee Code galat mat daalein
+4. Unit sahi daalein (SVN-1, SVN-II, Sakar-I, Sakar-III)
+5. File CSV format mein save karein

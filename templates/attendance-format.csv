@@ -1,0 +1,8 @@
+Emp.Code,Name,Unit,Present,Absent,W/O,Paid_Holy_Days,PL,CL,SL,CompOff,Leave,LWP,Month_Days,Paid_Days
+SK1ST0001,Mangesh Dagdu Gurav,Sakar-I,23,0,4,1,0,1,1,0,2,0,30,30
+SK1ST0004,Kalpesh Kantilal Patel,Sakar-I,20,0,4,1,2,2,1,0,5,0,30,30
+SK1ST0005,Amitkumar Harkishandas Lad,Sakar-I,24,0,4,1,0,0,1,0,1,0,30,30
+SK1ST0006,Riken Hasmukhbhai Mahyavanshi,Sakar-I,25,0,4,1,0,0,0,0,0,0,30,30
+SV1ST0002,Manoj Kumar Yadav,SVN-1,25,0,4,1,0,0,0,0,0,1,30,30
+SV1ST0014,Nitish Son Of Jot Kumar,SVN-1,22,0,4,1,0,0,3,0,3,0,30,30
+SV1ST0025,Dattatray Rajaram Datkhile,SVN-1,20,0,4,1,3,0,0,1.5,4.5,0,30,30

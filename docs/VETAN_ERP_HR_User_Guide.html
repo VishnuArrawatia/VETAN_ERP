@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VETAN ERP — HR User Guide</title>
+  <style>
+    @page { margin: 1.5cm; size: A4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a2e; background: #f8fafc; line-height: 1.6; }
+    
+    /* Cover Page */
+    .cover { 
+      background: linear-gradient(135deg, #065f46 0%, #047857 50%, #10b981 100%); 
+      color: white; text-align: center; padding: 80px 40px; 
+      page-break-after: always; min-height: 100vh;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    .cover h1 { font-size: 48px; font-weight: 900; letter-spacing: -1px; margin-bottom: 10px; }
+    .cover .subtitle { font-size: 22px; opacity: 0.9; margin-bottom: 40px; }
+    .cover .company { font-size: 16px; opacity: 0.7; margin-top: 40px; }
+    .cover .version { font-size: 14px; opacity: 0.6; margin-top: 10px; }
+    .cover .badge { background: rgba(255,255,255,0.2); padding: 8px 24px; border-radius: 20px; font-size: 14px; margin-top: 20px; display: inline-block; }
+    
+    /* Content */
+    .content { max-width: 900px; margin: 0 auto; padding: 20px 40px; }
+    
+    /* TOC */
+    .toc { page-break-after: always; padding: 40px; }
+    .toc h2 { font-size: 28px; color: #065f46; margin-bottom: 30px; border-bottom: 3px solid #10b981; padding-bottom: 10px; }
+    .toc-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dotted #d1d5db; font-size: 15px; }
+    .toc-item .num { color: #065f46; font-weight: 700; margin-right: 12px; }
+    .toc-item .title { flex: 1; }
+    .toc-item .page { color: #6b7280; }
+    
+    /* Section Headers */
+    h2.section-title { 
+      font-size: 24px; color: #065f46; margin: 40px 0 20px; 
+      border-left: 5px solid #10b981; padding-left: 16px;
+      page-break-before: always;
+    }
+    h2.section-title:first-of-type { page-break-before: auto; }
+    h3 { font-size: 18px; color: #374151; margin: 24px 0 12px; }
+    h4 { font-size: 15px; color: #4b5563; margin: 16px 0 8px; }
+    
+    /* Step Boxes */
+    .step-box { 
+      background: white; border: 1px solid #e5e7eb; border-radius: 12px; 
+      padding: 20px 24px; margin: 16px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .step-box.highlight { border-left: 4px solid #10b981; background: #f0fdf4; }
+    .step-box.warning { border-left: 4px solid #f59e0b; background: #fffbeb; }
+    .step-box.danger { border-left: 4px solid #ef4444; background: #fef2f2; }
+    .step-box.info { border-left: 4px solid #3b82f6; background: #eff6ff; }
+    
+    /* Steps */
+    .steps { counter-reset: step-counter; }
+    .step { 
+      display: flex; gap: 16px; margin: 14px 0; align-items: flex-start;
+    }
+    .step-num { 
+      counter-increment: step-counter; 
+      background: #065f46; color: white; 
+      width: 32px; height: 32px; border-radius: 50%; 
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; flex-shrink: 0;
+    }
+    .step-num::before { content: counter(step-counter); }
+    .step-text { flex: 1; font-size: 14px; padding-top: 4px; }
+    
+    /* UI Mockups */
+    .ui-mockup {
+      background: #1e293b; color: #e2e8f0; border-radius: 12px;
+      padding: 20px 24px; margin: 16px 0; font-family: 'Courier New', monospace;
+      font-size: 13px; line-height: 1.8; overflow-x: auto;
+    }
+    .ui-mockup .green { color: #4ade80; }
+    .ui-mockup .yellow { color: #facc15; }
+    .ui-mockup .blue { color: #60a5fa; }
+    .ui-mockup .red { color: #f87171; }
+    .ui-mockup .white { color: #f1f5f9; font-weight: bold; }
+    .ui-mockup .gray { color: #94a3b8; }
+    .ui-mockup .arrow { color: #f59e0b; }
+    
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+    th { background: #065f46; color: white; padding: 10px 14px; text-align: left; font-weight: 600; }
+    td { padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+    tr:nth-child(even) { background: #f8fafc; }
+    tr:hover { background: #f0fdf4; }
+    
+    /* Callouts */
+    .callout { 
+      padding: 14px 18px; border-radius: 8px; margin: 12px 0; font-size: 13px;
+    }
+    .callout-tip { background: #ecfdf5; border: 1px solid #86efac; color: #166534; }
+    .callout-warn { background: #fefce8; border: 1px solid #fde047; color: #854d0e; }
+    .callout-danger { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+    .callout strong { display: block; margin-bottom: 4px; }
+    
+    /* Code */
+    code { background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: #065f46; }
+    
+    /* Buttons visual */
+    .btn-mock { 
+      display: inline-block; padding: 8px 16px; border-radius: 8px; 
+      font-size: 13px; font-weight: 600; margin: 4px; cursor: default;
+    }
+    .btn-green { background: #059669; color: white; }
+    .btn-blue { background: #2563eb; color: white; }
+    .btn-red { background: #dc2626; color: white; }
+    .btn-gray { background: #6b7280; color: white; }
+    .btn-outline { background: white; border: 1px solid #d1d5db; color: #374151; }
+    
+    /* Login Card Mockup */
+    .login-mockup {
+      background: white; border: 2px solid #e5e7eb; border-radius: 16px;
+      max-width: 400px; margin: 20px auto; padding: 32px; text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .login-mockup .logo { font-size: 28px; font-weight: 900; color: #065f46; margin-bottom: 4px; }
+    .login-mockup .sub { font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+    .login-mockup input {
+      width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 14px; margin-bottom: 12px; background: #f9fafb;
+    }
+    .login-mockup .login-btn {
+      width: 100%; padding: 12px; background: #059669; color: white; 
+      border: none; border-radius: 8px; font-size: 15px; font-weight: 700;
+    }
+    
+    /* Page breaks */
+    .page-break { page-break-before: always; }
+    
+    /* Print */
+    @media print {
+      body { background: white; }
+      .cover { min-height: auto; padding: 60px 40px; }
+      .page-break { page-break-before: always; }
+      h2.section-title { page-break-before: always; }
+      h2.section-title:first-of-type { page-break-before: auto; }
+    }
+
+    /* Footer */
+    .footer { text-align: center; padding: 40px; color: #9ca3af; font-size: 12px; border-top: 1px solid #e5e7eb; margin-top: 60px; }
+
+    ul, ol { padding-left: 24px; margin: 8px 0; }
+    li { margin: 6px 0; font-size: 14px; }
+    p { margin: 8px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <div style="font-size: 64px; margin-bottom: 20px;">🏢</div>
+  <h1>VETAN ERP</h1>
+  <div class="subtitle">HR User Guide</div>
+  <div class="badge">📋 Step-by-Step Instructions with Visual Guides</div>
+  <div class="company">SVN Group — SVN Opto Electronics Pvt Ltd &amp; Sakar Electricals &amp; Electronics Pvt Ltd</div>
+  <div class="version">Version 2.0 &nbsp;|&nbsp; August 2026 &nbsp;|&nbsp; Confidential — For HR Team Only</div>
+</div>
+
+<!-- ==================== TABLE OF CONTENTS ==================== -->
+<div class="toc">
+  <h2>📑 Table of Contents</h2>
+  <div class="toc-item"><span><span class="num">1</span><span class="title">How to Open VETAN ERP</span></span></div>
+  <div class="toc-item"><span><span class="num">2</span><span class="title">Login — HR / Admin</span></span></div>
+  <div class="toc-item"><span><span class="num">3</span><span class="title">Dashboard Overview</span></span></div>
+  <div class="toc-item"><span><span class="num">4</span><span class="title">Employee Master — Add / Edit / Search</span></span></div>
+  <div class="toc-item"><span><span class="num">5</span><span class="title">Attendance Register</span></span></div>
+  <div class="toc-item"><span><span class="num">6</span><span class="title">Leave Management</span></span></div>
+  <div class="toc-item"><span><span class="num">7</span><span class="title">Factory Gate Pass</span></span></div>
+  <div class="toc-item"><span><span class="num">8</span><span class="title">Payroll Processor</span></span></div>
+  <div class="toc-item"><span><span class="num">9</span><span class="title">Salary Revision</span></span></div>
+  <div class="toc-item"><span><span class="num">10</span><span class="title">Loan Management</span></span></div>
+  <div class="toc-item"><span><span class="num">11</span><span class="title">Reports &amp; Analytics</span></span></div>
+  <div class="toc-item"><span><span class="num">12</span><span class="title">HR Letters Hub</span></span></div>
+  <div class="toc-item"><span><span class="num">13</span><span class="title">Settings &amp; Master Data</span></span></div>
+  <div class="toc-item"><span><span class="num">14</span><span class="title">Employee ESS — Self Service Portal</span></span></div>
+  <div class="toc-item"><span><span class="num">15</span><span class="title">Password Rules &amp; Security</span></span></div>
+  <div class="toc-item"><span><span class="num">16</span><span class="title">Phone Installation (PWA)</span></span></div>
+  <div class="toc-item"><span><span class="num">17</span><span class="title">Troubleshooting</span></span></div>
+  <div class="toc-item"><span><span class="num">18</span><span class="title">Quick Reference Card</span></span></div>
+</div>
+
+<!-- ==================== SECTION 1: HOW TO OPEN ==================== -->
+<div class="content">
+
+<h2 class="section-title">1. How to Open VETAN ERP</h2>
+
+<div class="step-box highlight">
+  <strong>🌐 ERP Link (Bookmark this!)</strong>
+  <p style="font-size: 20px; font-weight: 700; color: #065f46; margin-top: 8px;">
+    https://vetan-svn.vercel.app
+  </p>
+</div>
+
+<h3>On Computer (Windows/Mac):</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Open <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> browser</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">In the address bar, type: <code>https://vetan-svn.vercel.app</code></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Press <strong>Enter</strong> — The login page will open</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Bookmark it:</strong> Press <code>Ctrl + D</code> to save as bookmark for quick access</div></div>
+</div>
+
+<h3>On Phone (Android/iPhone):</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Open <strong>Chrome</strong> (Android) or <strong>Safari</strong> (iPhone)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Type: <code>https://vetan-svn.vercel.app</code></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Tap <strong>⋮ (3 dots)</strong> → <strong>"Add to Home Screen"</strong> → <strong>"Add"</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">A <strong>VETAN ERP</strong> app icon will appear on your home screen</div></div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>💡 Tip:</strong> Phone pe install karne ke baad browser bar nahi dikhega — full screen app jaisa lagega!
+</div>
+
+<!-- ==================== SECTION 2: LOGIN ==================== -->
+<h2 class="section-title">2. Login — HR / Admin</h2>
+
+<div class="login-mockup">
+  <div class="logo">VETAN ERP</div>
+  <div class="sub">SVN Group — Human Resource Management</div>
+  <div style="text-align: left; margin-bottom: 12px;">
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <div style="flex:1; padding: 10px; background: #059669; color: white; border-radius: 8px; text-align: center; font-weight: 600; font-size: 13px;">👤 Employee ESS</div>
+      <div style="flex:1; padding: 10px; background: #f3f4f6; color: #6b7280; border-radius: 8px; text-align: center; font-weight: 600; font-size: 13px;">🔒 HR / Admin</div>
+    </div>
+    <label style="font-size: 12px; color: #6b7280; font-weight: 600;">USERNAME</label>
+    <input type="text" placeholder="Enter your username" style="margin-top: 4px;">
+    <label style="font-size: 12px; color: #6b7280; font-weight: 600;">PASSWORD</label>
+    <input type="password" placeholder="Enter your password" style="margin-top: 4px;">
+    <div class="login-btn" style="margin-top: 8px;">Login →</div>
+  </div>
+  <div style="font-size: 11px; color: #9ca3af; margin-top: 12px;">First-time login? Your password is your Employee Code.</div>
+</div>
+
+<h3>Step-by-Step Login:</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">On the login page, click the <strong>"HR / Admin"</strong> tab (right side)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Enter your <strong>Username</strong> (provided by Super Admin)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Enter your <strong>Password</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Click <strong>"Login →"</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">You will see the Dashboard with your unit's data</div></div>
+</div>
+
+<h3>HR Login Credentials:</h3>
+<table>
+  <tr><th>HR Person</th><th>Company</th><th>Username</th><th>Password</th></tr>
+  <tr><td>Vishnu (Super Admin)</td><td>All Companies</td><td><code>vishnu</code></td><td><code>Varrawatia</code></td></tr>
+  <tr><td>Vijendra</td><td>SVN-1</td><td><code>vijendra</code></td><td><code>vijendra</code></td></tr>
+  <tr><td>Manisha Sapate</td><td>SVN-II</td><td><code>manisha_s</code></td><td><code>manisha_s</code></td></tr>
+  <tr><td>Manisha</td><td>Sakar-I</td><td><code>manisha</code></td><td><code>manisha</code></td></tr>
+  <tr><td>Indraprakash</td><td>Sakar-III</td><td><code>indraprakash</code></td><td><code>indraprakash</code></td></tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>⚠️ Important:</strong> Each HR can ONLY see data for their assigned company. SVN-1 HR cannot see SVN-II data.
+</div>
+
+<!-- ==================== SECTION 3: DASHBOARD ==================== -->
+<h2 class="section-title">3. Dashboard Overview</h2>
+
+<p>After login, you see the <strong>Dashboard</strong> — the main home screen. It shows:</p>
+
+<div class="ui-mockup">
+<span class="white">═══════════════════════════════════════════════════════════</span>
+<span class="white">  DASHBOARD SUMMARY</span>           <span class="yellow">Financial Year: [FY 2026-27 ▼]</span>
+<span class="white">═══════════════════════════════════════════════════════════</span>
+
+<span class="green">┌──────────┐</span> <span class="green">┌──────────┐</span> <span class="green">┌──────────┐</span> <span class="green">┌──────────┐</span>
+<span class="green">│  TOTAL   │</span> <span class="green">│  ACTIVE  │</span> <span class="green">│ INACTIVE │</span> <span class="green">│ TOTAL CTC│</span>
+<span class="green">│   100    │</span> <span class="green">│    98    │</span> <span class="green">│     2    │</span> <span class="green">│ ₹1.2 Cr  │</span>
+<span class="green">└──────────┘</span> <span class="green">└──────────┘</span> <span class="green">└──────────┘</span> <span class="green">└──────────┘</span>
+
+<span class="white">Unit-wise Workforce Summary</span>
+┌─────────┬────────┬────────┬─────────┬────────┐
+│ Company │ Total  │ Active │ Inactive│  Dept  │
+├─────────┼────────┼────────┼─────────┼────────┤
+│ SVN-1   │   42   │   42   │    0    │   8    │
+│ SVN-II  │   26   │   26   │    0    │   6    │
+│ Sakar-I │   15   │   14   │    1    │   5    │
+│ Sakar-III│  17   │   16   │    1    │   4    │
+└─────────┴────────┴────────┴─────────┴────────┘
+
+<span class="white">Unit-wise & Month-wise Worker Cost — FY 2026-27</span>
+┌────────┬───────────┬───┬────────┬──────────┬───┬────────┐
+│ Month  │  SVN-II   │ # │  Avg   │ Sakar-III│ # │  Avg   │
+├────────┼───────────┼───┼────────┼──────────┼───┼────────┤
+│ Apr'26 │ ₹22,82,364│210│₹10,868 │ ₹15,24,955│153│ ₹9,967│
+│ May'26 │ ₹25,34,934│213│₹11,901 │ ₹15,51,770│149│₹10,415│
+│ Jun'26 │ ₹24,17,198│213│₹11,348 │ ₹13,62,330│148│ ₹9,205│
+│ Jul'26 │    ...    │   │        │    ...    │   │        │
+└────────┴───────────┴───┴────────┴──────────┴───┴────────┘
+</div>
+
+<h3>What each section shows:</h3>
+<table>
+  <tr><th>Card</th><th>Meaning</th></tr>
+  <tr><td><strong>Total Workers</strong></td><td>Sabhi employees ka total count</td></tr>
+  <tr><td><strong>Active Workers</strong></td><td>Currently working employees (exited employees excluded)</td></tr>
+  <tr><td><strong>Inactive Workers</strong></td><td>Exited/resigned employees</td></tr>
+  <tr><td><strong>Total CTC</strong></td><td>Sabhi active employees ka total cost to company (monthly)</td></tr>
+  <tr><td><strong>FY Selector</strong></td><td>Financial Year choose karo — Apr to Mar order mein data dikhega</td></tr>
+</table>
+
+<div class="callout callout-tip">
+  <strong>💡 Tip:</strong> Dashboard automatically shows data for YOUR company only (unless you are Super Admin).
+</div>
+
+<!-- ==================== SECTION 4: EMPLOYEE MASTER ==================== -->
+<h2 class="section-title">4. Employee Master — Add / Edit / Search</h2>
+
+<p>Employee Master mein sabhi employees ka complete record hota hai.</p>
+
+<h3>4.1 Open Employee Master</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Left sidebar mein <strong>"Employee Master"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Sabhi employees ki list dikhegi</div></div>
+</div>
+
+<div class="ui-mockup">
+<span class="white">═══════════════════════════════════════════════════</span>
+<span class="white">  EMPLOYEE MASTER</span>
+<span class="white">═══════════════════════════════════════════════════</span>
+
+<span class="gray">🔍 Search by name, ID, department...</span>  <span class="btn-mock btn-green" style="color: white;">+ Add Employee</span>  <span class="btn-mock btn-blue" style="color: white;">📥 Import Excel</span>  <span class="btn-mock btn-outline">📤 Export Excel</span>
+
+┌────────┬───────────────────┬──────────┬──────────────┬────────┬────────┐
+│ ID     │ Name              │ Company  │ Department   │ Status │ Salary │
+├────────┼───────────────────┼──────────┼──────────────┼────────┼────────┤
+│SK1ST001│ Amit Kumar        │ Sakar-I  │ Production   │ ACTIVE │ ₹8,500 │
+│SK1ST002│ Ravi Shankar      │ Sakar-I  │ Quality      │ ACTIVE │ ₹9,200 │
+│SV1ST001│ Manoj K. Gupta    │ SVN-1    │ Accounts     │ ACTIVE │₹23,220 │
+│SV1ST002│ Manoj K. Yadav    │ SVN-1    │ Production   │ ACTIVE │₹11,000 │
+└────────┴───────────────────┴──────────┴──────────────┴────────┴────────┘
+</div>
+
+<h3>4.2 Search Employee</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Search box</strong> mein Employee ID ya Name type karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Results automatically filter ho jayenge</div></div>
+</div>
+
+<h3>4.3 Add New Employee</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">"Employee Master" page pe <span class="btn-mock btn-green" style="color:white; font-size: 12px;">+ Add Employee</span> button pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Form khulega — saari details fill karo:
+    <ul>
+      <li><strong>Employee ID</strong> — Unique ID (e.g., SK1ST0050)</li>
+      <li><strong>Name</strong> — Full name as per records</li>
+      <li><strong>Company</strong> — Select SVN-1 / SVN-II / Sakar-I / Sakar-III</li>
+      <li><strong>Department</strong> — Production / Quality / Accounts etc.</li>
+      <li><strong>Designation</strong> — Worker / Staff / Officer</li>
+      <li><strong>Date of Joining</strong> — Start date</li>
+      <li><strong>Phone</strong> — Mobile number</li>
+      <li><strong>Salary</strong> — CTC / Basic salary</li>
+      <li><strong>Bank Details</strong> — Account number, IFSC</li>
+      <li><strong>Aadhaar Number</strong> — For identity</li>
+    </ul>
+  </div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Save"</strong> pe click karo — Employee add ho jayega</div></div>
+</div>
+
+<h3>4.4 Edit Employee</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee list mein us employee ke row pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Edit form khulega — changes karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Save Changes"</strong> pe click karo</div></div>
+</div>
+
+<div class="callout callout-danger">
+  <strong>⛔ Warning:</strong> Employee ID change mat karo — ye unique hona chahiye. Duplicate ID allowed nahi hai.
+</div>
+
+<!-- ==================== SECTION 5: ATTENDANCE ==================== -->
+<h2 class="section-title">5. Attendance Register</h2>
+
+<p>Daily attendance mark karo ya update karo.</p>
+
+<h3>5.1 Open Attendance</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Attendance Register"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Month aur Year select karo (dropdown se)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Company select karo (SVN-1, SVN-II, etc.)</div></div>
+</div>
+
+<h3>5.2 Mark Attendance</h3>
+<div class="ui-mockup">
+<span class="white">══════════════════════════════════════════════════════════════════</span>
+<span class="white">  ATTENDANCE REGISTER — July 2026 — SVN-1</span>
+<span class="white">══════════════════════════════════════════════════════════════════</span>
+
+<span class="yellow">Month: [July ▼]</span>  <span class="yellow">Year: [2026 ▼]</span>  <span class="yellow">Company: [SVN-1 ▼]</span>
+
+┌────────┬────────────────────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+│ ID     │ Name               │ 1   │ 2   │ 3   │ 4   │ 5   │ 6   │ 7   │
+├────────┼────────────────────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
+│SV1ST001│ Manoj K. Gupta     │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="red"> A  </span> │ <span class="green"> P  </span> │ <span class="gray"> -  </span> │ <span class="gray"> -  </span> │
+│SV1ST002│ Manoj K. Yadav     │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="yellow"> L  </span> │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="gray"> -  </span> │ <span class="gray"> -  </span> │
+│SV1ST003│ Sanjay Yadav       │ <span class="green"> P  </span> │ <span class="blue">WO  </span> │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="green"> P  </span> │ <span class="gray"> -  </span> │ <span class="gray"> -  </span> │
+└────────┴────────────────────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+
+<span class="gray">P = Present  |  A = Absent  |  L = Leave  |  WO = Weekly Off  |  H = Holiday</span>
+<span class="gray">PH = Paid Holiday  |  HD = Half Day  |  MP = Miss Punch  |  CO = Comp Off</span>
+</div>
+
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee ke row mein date ke cell pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Status select karo: <strong>P</strong> (Present), <strong>A</strong> (Absent), <strong>L</strong> (Leave), <strong>WO</strong> (Weekly Off), <strong>H</strong> (Holiday)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Agar <strong>In Time</strong> aur <strong>Out Time</strong> dena ho toh wo bhi enter karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Saari entries karne ke baad <strong>"Save Attendance"</strong> pe click karo</div></div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>💡 Tip:</strong> Ek baar mein poora month ka attendance mark kar sakte ho. Daily mark karna zaroori nahi hai.
+</div>
+
+<!-- ==================== SECTION 6: LEAVE MANAGEMENT ==================== -->
+<h2 class="section-title">6. Leave Management</h2>
+
+<h3>6.1 Open Leave Management</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Leave Management"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Sabhi employees ka leave balance dikhega</div></div>
+</div>
+
+<h3>6.2 Leave Balance Table</h3>
+<div class="ui-mockup">
+┌────────┬───────────────────┬──────┬──────┬──────┬──────┐
+│ ID     │ Name              │  CL  │  PL  │  SL  │Total │
+├────────┼───────────────────┼──────┼──────┼──────┼──────┤
+│SV1ST001│ Manoj K. Gupta    │  4   │  14  │  4   │  22  │
+│SV1ST002│ Manoj K. Yadav    │  6   │  16  │  6   │  28  │
+│SV1ST003│ Sanjay Yadav      │  5   │  15  │  5   │  25  │
+└────────┴───────────────────┴──────┴──────┴──────┴──────┘
+
+<span class="gray">CL = Casual Leave | PL = Privilege Leave | SL = Sick Leave</span>
+</div>
+
+<h3>6.3 Apply/Record Leave</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee search karo (ID ya Name se)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Leave type select karo: <strong>CL / PL / SL</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Leave date(s) select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Reason likho (optional)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Apply Leave"</strong> pe click karo</div></div>
+</div>
+
+<div class="callout callout-info">
+  <strong>ℹ️ Note:</strong> Leave balance automatically update hota hai. Remaining leave = Total - Taken.
+</div>
+
+<!-- ==================== SECTION 7: GATE PASS ==================== -->
+<h2 class="section-title">7. Factory Gate Pass</h2>
+
+<p>Employee ka gate pass manage karo — entry/exit tracking ke liye.</p>
+
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Factory Gate Pass"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Gate pass type choose karo: <strong>In / Out</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Time aur reason enter karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Save"</strong> pe click karo</div></div>
+</div>
+
+<!-- ==================== SECTION 8: PAYROLL ==================== -->
+<h2 class="section-title">8. Payroll Processor</h2>
+
+<p>Monthly payroll process karo — salary calculation, deductions, net pay.</p>
+
+<h3>8.1 Process Payroll</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Payroll Processor"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Month aur Year select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Company select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Calculate Payroll"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">System automatically calculate karega:
+    <ul>
+      <li>Basic Salary</li>
+      <li>HRA (House Rent Allowance)</li>
+      <li>Conveyance Allowance</li>
+      <li>Medical Allowance</li>
+      <li>Special Allowance</li>
+      <li>Education Allowance</li>
+      <li><strong>Gross Salary</strong></li>
+      <li>PF Deduction</li>
+      <li>ESIC Deduction</li>
+      <li>Professional Tax</li>
+      <li><strong>Net Pay</strong></li>
+    </ul>
+  </div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Review karo, phir <strong>"Save Payroll"</strong> pe click karo</div></div>
+</div>
+
+<h3>8.2 Pay Slip</h3>
+<div class="ui-mockup">
+<span class="white">══════════════════════════════════════════════════</span>
+<span class="white">           PAY SLIP — July 2026</span>
+<span class="white">══════════════════════════════════════════════════</span>
+<span class="gray">  Company: SVN Opto Electronics Pvt Ltd</span>
+<span class="gray">  Employee: SV1ST0046 — Ravindra Patel</span>
+<span class="gray">  Department: Accounts & Finance</span>
+<span class="gray">  Days Present: 25 | Days Worked: 25</span>
+<span class="white">──────────────────────────────────────────────────</span>
+<span class="green">  EARNINGS:</span>                     <span class="red">DEDUCTIONS:</span>
+<span class="green">  Basic:      ₹23,220</span>          <span class="red">PF:          ₹1,800</span>
+<span class="green">  HRA:         ₹7,740</span>          <span class="red">ESIC:          ₹0</span>
+<span class="green">  Conveyance:  ₹3,870</span>          <span class="red">Prof Tax:     ₹200</span>
+<span class="green">  Medical:     ₹1,935</span>          <span class="red">TDS:            ₹0</span>
+<span class="green">  Special:     ₹5,610</span>
+<span class="green">  Edu:         ₹1,935</span>
+<span class="green">  Bonus:       ₹1,934</span>
+<span class="white">──────────────────────────────────────────────────</span>
+<span class="white">  GROSS:      ₹46,244</span>          <span class="red">TOTAL:       ₹2,000</span>
+<span class="white">──────────────────────────────────────────────────</span>
+<span class="white">  ★ NET PAY:   ₹44,244 ★</span>
+</div>
+
+<!-- ==================== SECTION 9: SALARY REVISION ==================== -->
+<h2 class="section-title">9. Salary Revision</h2>
+
+<h3>9.1 Revise Salary</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Salary Revision"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee search karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Current salary automatically dikhega</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Naya salary enter karo:
+    <ul>
+      <li><strong>Effective From</strong> — Kab se applicable hoga</li>
+      <li><strong>New Basic Salary</strong> — Naya basic amount</li>
+      <li><strong>HRA %</strong> — House Rent Allowance percentage</li>
+      <li><strong>Reason</strong> — Revision ka reason (Annual increment, Promotion etc.)</li>
+    </ul>
+  </div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Save Revision"</strong> pe click karo</div></div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>💡 Tip:</strong> Purani salary history safe rahegi — aap history mein dekh sakte ho kab kya revision hua. Kuch delete nahi hota.
+</div>
+
+<h3>9.2 May & November Increment</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Salary Revision page mein <strong>"May Increment"</strong> ya <strong>"November Increment"</strong> tab select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Saare eligible employees ki list dikhegi</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Naya % increment type karo (e.g., 10%)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Apply Increment"</strong> pe click karo — sab pe automatically lag jayega</div></div>
+</div>
+
+<!-- ==================== SECTION 10: LOAN MANAGEMENT ==================== -->
+<h2 class="section-title">10. Loan Management</h2>
+
+<h3>10.1 Add New Loan</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Loan Management"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">"New Loan" tab pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Loan details fill karo:
+    <ul>
+      <li><strong>Loan Type</strong> — Personal / Emergency / Advance</li>
+      <li><strong>Loan Amount</strong> — Total kitna loan</li>
+      <li><strong>EMI Amount</strong> — Monthly kitna katna hai</li>
+      <li><strong>Start Month</strong> — Kab se EMI start hogi</li>
+    </ul>
+  </div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Save Loan"</strong> pe click karo</div></div>
+</div>
+
+<h3>10.2 View Loan Ledger</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">"Ledger" tab pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Poori loan history dikhegi — kitna loan liya, kitna kat gaya, kitna baaki hai</div></div>
+</div>
+
+<div class="ui-mockup">
+<span class="white">LOAN LEDGER — SV1ST0046 (Ravindra Patel)</span>
+┌────────┬──────────┬──────────┬──────────┬──────────┐
+│ Month  │ Loan Amt │   EMI    │ Deducted │ Balance  │
+├────────┼──────────┼──────────┼──────────┼──────────┤
+│ Jul'26 │ ₹10,000  │ ₹2,000   │ ₹2,000   │ ₹8,000   │
+│ Aug'26 │          │ ₹2,000   │ ₹2,000   │ ₹6,000   │
+│ Sep'26 │          │ ₹2,000   │ ₹2,000   │ ₹4,000   │
+│ Oct'26 │          │ ₹2,000   │ ₹2,000   │ ₹2,000   │
+│ Nov'26 │          │ ₹2,000   │ ₹2,000   │ ₹0 ✅    │
+└────────┴──────────┴──────────┴──────────┴──────────┘
+</div>
+
+<!-- ==================== SECTION 11: REPORTS ==================== -->
+<h2 class="section-title">11. Reports &amp; Analytics</h2>
+
+<h3>Available Reports:</h3>
+<table>
+  <tr><th>#</th><th>Report Name</th><th>What it Shows</th></tr>
+  <tr><td>1</td><td><strong>Employee Master Report</strong></td><td>Sabhi employees ki complete list with details</td></tr>
+  <tr><td>2</td><td><strong>Monthly Attendance Report</strong></td><td>Month-wise attendance summary — Present/Absent/Leave counts</td></tr>
+  <tr><td>3</td><td><strong>Payroll Register</strong></td><td>Month-wise salary register — Gross, Deductions, Net Pay</td></tr>
+  <tr><td>4</td><td><strong>Leave Balance Report</strong></td><td>Sabhi employees ka leave balance</td></tr>
+  <tr><td>5</td><td><strong>Loan Outstanding Report</strong></td><td>Active loans and outstanding amounts</td></tr>
+  <tr><td>6</td><td><strong>PF Report</strong></td><td>PF deduction summary</td></tr>
+  <tr><td>7</td><td><strong>ESIC Report</strong></td><td>ESIC deduction summary</td></tr>
+  <tr><td>8</td><td><strong>Company-wise Summary</strong></td><td>All companies ka comparative report</td></tr>
+</table>
+
+<h3>11.1 How to Generate Report:</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"Reports &amp; Analytics"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Report type select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Filters lagao: <strong>Month, Year, Company, Department</strong></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Generate Report"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Report screen pe dikhega</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Excel mein export karna ho toh <span class="btn-mock btn-green" style="color:white; font-size:11px;">📥 Export Excel</span> pe click karo</div></div>
+</div>
+
+<!-- ==================== SECTION 12: HR LETTERS ==================== -->
+<h2 class="section-title">12. HR Letters Hub</h2>
+
+<p>Generate karo official HR letters:</p>
+
+<table>
+  <tr><th>Letter Type</th><th>When to Use</th></tr>
+  <tr><td><strong>Appointment Letter</strong></td><td>Naye employee ko joining pe dena</td></tr>
+  <tr><td><strong>Salary Slip</strong></td><td>Employee ko salary slip dena</td></tr>
+  <tr><td><strong>Experience Certificate</strong></td><td>Employee ke resignation pe dena</td></tr>
+  <tr><td><strong>Relieving Letter</strong></td><td>Employee ko properly relieve karne pe</td></tr>
+  <tr><td><strong>Address Proof Letter</strong></td><td>Employee ke address proof ke liye</td></tr>
+</table>
+
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">Sidebar mein <strong>"HR Letters Hub"</strong> pe click karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Letter type select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Employee select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Letter automatically generate ho jayega</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Print ya PDF download karo</div></div>
+</div>
+
+<!-- ==================== SECTION 13: SETTINGS ==================== -->
+<h2 class="section-title">13. Settings &amp; Master Data</h2>
+
+<p>Settings mein system configuration hota hai:</p>
+
+<table>
+  <tr><th>Setting</th><th>What You Can Do</th></tr>
+  <tr><td><strong>Company Master</strong></td><td>Company details add/edit — Name, Address, PF/ESIC numbers, Logo</td></tr>
+  <tr><td><strong>HOD Master</strong></td><td>Head of Department manage karo — Kaun kiska HOD hai</td></tr>
+  <tr><td><strong>Shift Master</strong></td><td>Shift timings define karo — General, Morning, Night shifts</td></tr>
+  <tr><td><strong>User Management</strong></td><td>HR/Reviewer users add/edit — Username, Password, Role, Unit assign</td></tr>
+  <tr><td><strong>Audit Log</strong></td><td>Sabhi changes ki history — Kisne kab kya kiya</td></tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>⚠️ Note:</strong> Settings mein changes sirf <strong>Super Admin</strong> kar sakta hai. HR users ke paas Settings access nahi hota.
+</div>
+
+<!-- ==================== SECTION 14: EMPLOYEE ESS ==================== -->
+<h2 class="section-title">14. Employee ESS — Self Service Portal</h2>
+
+<p>Employees apna data khud dekh sakte hain — Attendance, Leave, Payslip.</p>
+
+<h3>14.1 Employee Login</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text">ERP kholo — <code>https://vetan-svn.vercel.app</code></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Employee ESS"</strong> tab pe click karo (default selected hota hai)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Employee ID</strong> type karo (e.g., SV1ST0046)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Password</strong> type karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Login"</strong> pe click karo</div></div>
+</div>
+
+<h3>14.2 Employee Password Rules:</h3>
+<div class="ui-mockup">
+<span class="white">SVN Employees:</span>  Phone last 4 digit + Birth Year = Password
+<span class="gray">Example: Ravindra Patel — Phone: 7575009911, DOB: 1995</span>
+<span class="green">Password: 99111995</span>
+
+<span class="white">Sakar Employees:</span>  Sabka same default password
+<span class="green">Password: 00001995</span>
+</div>
+
+<h3>14.3 What Employee Can See:</h3>
+<table>
+  <tr><th>Tab</th><th>Content</th></tr>
+  <tr><td><strong>Dashboard</strong></td><td>Quick summary — Attendance, Leave balance, Recent payslip</td></tr>
+  <tr><td><strong>Profile</strong></td><td>Apna complete profile — Name, Phone, Bank, Salary, Department</td></tr>
+  <tr><td><strong>Pay Slips</strong></td><td>Monthly pay slips download karo</td></tr>
+  <tr><td><strong>Leaves</strong></td><td>Leave balance aur leave history</td></tr>
+  <tr><td><strong>Form 16</strong></td><td>Tax certificate download karo</td></tr>
+  <tr><td><strong>Security</strong></td><td>Password change karo</td></tr>
+</table>
+
+<div class="callout callout-danger">
+  <strong>⛔ Employee CANNOT:</strong> Add/Edit/Delete kisi bhi data ko. Sirf apna data dekh sakta hai.
+</div>
+
+<!-- ==================== SECTION 15: PASSWORD ==================== -->
+<h2 class="section-title">15. Password Rules &amp; Security</h2>
+
+<h3>HR Passwords:</h3>
+<table>
+  <tr><th>User Type</th><th>Password Rule</th></tr>
+  <tr><td><strong>Super Admin</strong></td><td>Custom password set by Super Admin</td></tr>
+  <tr><td><strong>HR</strong></td><td>Username = default password (can be changed)</td></tr>
+  <tr><td><strong>Reviewer</strong></td><td>Username = default password (can be changed)</td></tr>
+</table>
+
+<h3>Employee Passwords:</h3>
+<table>
+  <tr><th>Company</th><th>First-time Password</th></tr>
+  <tr><td><strong>SVN-1 / SVN-II</strong></td><td>Phone last 4 digit + Birth Year (e.g., <code>99111995</code>)</td></tr>
+  <tr><td><strong>Sakar-I / Sakar-III</strong></td><td><code>00001995</code> (common for all)</td></tr>
+</table>
+
+<div class="callout callout-warn">
+  <strong>⚠️ First Login:</strong> Jab employee pehli baar login karega, system automatically <strong>"Change Password"</strong> page dikhayega. Naya password set karna zaroori hai!
+</div>
+
+<div class="callout callout-danger">
+  <strong>⛔ SECURITY:</strong> Passwords kabhi publicly share mat karo. WhatsApp pe sirf HR team ko personally bhejo.
+</div>
+
+<!-- ==================== SECTION 16: PHONE INSTALL ==================== -->
+<h2 class="section-title">16. Phone Installation (PWA — App Jaisa)</h2>
+
+<h3>Android Phone (Chrome Browser):</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Chrome</strong> kholo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Address bar mein type karo: <code>https://vetan-svn.vercel.app</code></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">ERP khulega — login karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>⋮ (3 dots)</strong> menu pe tap karo (top right corner)</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Install app"</strong> ya <strong>"Add to Home screen"</strong> select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Install"</strong> pe tap karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Home screen pe <strong>"VETAN ERP"</strong> icon ban jayega!</div></div>
+</div>
+
+<h3>iPhone (Safari Browser):</h3>
+<div class="steps">
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Safari</strong> kholo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Address bar mein type karo: <code>https://vetan-svn.vercel.app</code></div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>Share button</strong> (⬆️ box icon) pe tap karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Add to Home Screen"</strong> select karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text"><strong>"Add"</strong> pe tap karo</div></div>
+  <div class="step"><div class="step-num"></div><div class="step-text">Home screen pe <strong>"VETAN ERP"</strong> icon ban jayega!</div></div>
+</div>
+
+<div class="callout callout-tip">
+  <strong>💡 Phone pe install karne ke baad:</strong>
+  <ul style="margin-top: 8px;">
+    <li>Full screen dikhega (browser bar nahi aayega)</li>
+    <li>Company name aur logo dikhega</li>
+    <li>Fast open hoga — jaise koi app ho</li>
+    <li>Internet chahiye — data Supabase cloud se aata hai</li>
+  </ul>
+</div>
+
+<!-- ==================== SECTION 17: TROUBLESHOOTING ==================== -->
+<h2 class="section-title">17. Troubleshooting — Common Problems &amp; Solutions</h2>
+
+<table>
+  <tr><th>Problem</th><th>Solution</th></tr>
+  <tr>
+    <td><strong>ERP khul nahi raha / "Site can't be reached"</strong></td>
+    <td>
+      <ol>
+        <li>Internet check karo — WiFi ya Data ON hai?</li>
+        <li>Link check karo: <code>https://vetan-svn.vercel.app</code></li>
+        <li>Browser restart karo (Chrome close → wapas kholo)</li>
+        <li>Phone pe: Settings → Apps → Chrome → Clear Cache</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>"Authentication service unavailable"</strong></td>
+    <td>
+      <ol>
+        <li>Internet connection slow hai — thoda wait karo</li>
+        <li>Page reload karo (F5 ya pull-to-refresh)</li>
+        <li>Agar 1-2 minute mein nahi hota — Vishnu ko batao</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>"Employee not found"</strong></td>
+    <td>
+      <ol>
+        <li>Employee ID sahi hai? (Check: SV1ST0046, SK1ST0033)</li>
+        <li>Capital/Lower case matter nahi karta</li>
+        <li>Spaces check karo start/end mein</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>"Incorrect Password"</strong></td>
+    <td>
+      <ol>
+        <li>SVN employees: Phone ke last 4 digit + Birth Year (e.g., 99111995)</li>
+        <li>Sakar employees: 00001995</li>
+        <li>Agar password change kiya hai toh naya password use karo</li>
+        <li>Reset ke liye Vishnu se contact karo</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Data dikha fir gayab ho gaya</strong></td>
+    <td>
+      <ol>
+        <li>Data Supabase cloud pe save hota hai — safe hai</li>
+        <li>Page reload karo — wapas aa jayega</li>
+        <li>Internet check karo</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Attendance save nahi ho raha</strong></td>
+    <td>
+      <ol>
+        <li>Saari required fields fill kiye?</li>
+        <li>Month/Year sahi select kiya?</li>
+        <li>Page reload karo aur dubara try karo</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>Payroll calculation galat aa raha hai</strong></td>
+    <td>
+      <ol>
+        <li>Attendance sahi mark ki hai? (Present days check karo)</li>
+        <li>Salary structure sahi hai? (Employee Master mein check karo)</li>
+        <li>Company sahi select kiya?</li>
+      </ol>
+    </td>
+  </tr>
+  <tr>
+    <td><strong>"Failed to fetch"</strong></td>
+    <td>
+      <ol>
+        <li>Internet connection check karo</li>
+        <li>VPN ya proxy use kar rahe ho? OFF karo</li>
+        <li>Browser ka cache clear karo</li>
+        <li>Dusra browser try karo (Chrome → Edge)</li>
+      </ol>
+    </td>
+  </tr>
+</table>
+
+<div class="callout callout-info">
+  <strong>📞 Kisi bhi serious problem ke liye contact karo:</strong><br>
+  Vishnu Arrawatia — Super Admin
+</div>
+
+<!-- ==================== SECTION 18: QUICK REFERENCE ==================== -->
+<h2 class="section-title">18. Quick Reference Card (One Page)</h2>
+
+<div class="step-box highlight" style="background: #f0fdf4;">
+  <h3 style="color: #065f46; margin-bottom: 16px;">🚀 VETAN ERP — Quick Reference</h3>
+  
+  <table style="margin: 0;">
+    <tr><th style="width: 30%;">Action</th><th>Steps</th></tr>
+    <tr><td><strong>🌐 Open ERP</strong></td><td>Chrome → <code>https://vetan-svn.vercel.app</code></td></tr>
+    <tr><td><strong>🔑 HR Login</strong></td><td>HR/Admin tab → Username → Password → Login</td></tr>
+    <tr><td><strong>👨‍💼 Employee ESS</strong></td><td>Employee tab → Employee ID → Password → Login</td></tr>
+    <tr><td><strong>📊 Dashboard</strong></td><td>Auto-loads after login — Summary cards + Cost table</td></tr>
+    <tr><td><strong>👥 Add Employee</strong></td><td>Employee Master → + Add Employee → Fill form → Save</td></tr>
+    <tr><td><strong>🔍 Search Employee</strong></td><td>Employee Master → Search box → Type name/ID</td></tr>
+    <tr><td><strong>📋 Mark Attendance</strong></td><td>Attendance Register → Select Month → Mark P/A/L → Save</td></tr>
+    <tr><td><strong>🏖️ Apply Leave</strong></td><td>Leave Management → Employee → Type → Date → Apply</td></tr>
+    <tr><td><strong>💰 Process Payroll</strong></td><td>Payroll Processor → Month → Company → Calculate → Save</td></tr>
+    <tr><td><strong>📈 Salary Revision</strong></td><td>Salary Revision → Employee → New Salary → Effective Date → Save</td></tr>
+    <tr><td><strong>🏦 Add Loan</strong></td><td>Loan Management → New Loan → Employee → Amount → Save</td></tr>
+    <tr><td><strong>📊 Generate Report</strong></td><td>Reports → Type → Filters → Generate → Export Excel</td></tr>
+    <tr><td><strong>📱 Install on Phone</strong></td><td>Chrome → Open link → ⋮ → Install app</td></tr>
+    <tr><td><strong>🔄 Data backup</strong></td><td>Data auto-saves to cloud. Manual backup: Settings → Backup</td></tr>
+  </table>
+</div>
+
+<div class="step-box warning">
+  <h4>📞 Support Contact</h4>
+  <p><strong>Super Admin:</strong> Vishnu Arrawatia</p>
+  <p>For any issues: Login problems, Password reset, Data errors, System issues — contact Vishnu.</p>
+</div>
+
+<div class="footer">
+  <p><strong>VETAN ERP — HR User Guide</strong></p>
+  <p>SVN Group — SVN Opto Electronics Pvt Ltd &amp; Sakar Electricals &amp; Electronics Pvt Ltd</p>
+  <p>Version 2.0 | August 2026 | Confidential — For HR Team Only</p>
+  <p style="margin-top: 8px;">Prepared by: Vishnu Arrawatia | ERP Platform: VETAN ERP on Vercel + Supabase</p>
+</div>
+
+</div><!-- end content -->
+</body>
+</html>
