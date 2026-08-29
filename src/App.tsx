@@ -2489,12 +2489,12 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-3">
             {(activeHR.role === 'SUPER_HR' || activeHR.role === 'MANAGEMENT') ? (
               <>
-                <span className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1">
-                  <ShieldCheck size={12} />
-                  Simulate HR Login Power:
-                </span>
+                <div className="flex items-center bg-slate-900 text-white px-3 py-1.5 rounded-xl gap-2">
+                  <ShieldCheck size={13} className="text-emerald-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Admin</span>
+                </div>
 
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex gap-1 flex-wrap">
                   {SIMULATED_HR_USERS.map((usr) => {
                     const isActive = activeHR.id === usr.id;
                     return (
@@ -2508,29 +2508,46 @@ export default function App() {
                             setActiveCompany(usr.company_rights[0]);
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer select-none flex items-center gap-1.5 ${isActive ? 'bg-slate-900 text-white shadow-xs' : 'bg-gray-100 hover:bg-gray-200 text-slate-700'}`}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer select-none flex items-center gap-1.5 border ${isActive ? 'bg-slate-900 text-white border-slate-700 shadow-md' : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200 hover:border-slate-300'}`}
                       >
                         {(usr as any).photo ? (
-                          <img src={(usr as any).photo} alt={usr.name} className="w-5 h-5 rounded-full object-cover ring-1 ring-white/20" />
-                        ) : null}
-                        <span>{usr.name}</span>
-                        <span className="text-[9px] opacity-75 font-mono">({usr.role === 'SUPER_HR' ? 'Super' : 'Unit'})</span>
+                          <img src={(usr as any).photo} alt={usr.name} className="w-5 h-5 rounded-full object-cover ring-1 ring-white/30" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500">{usr.name.charAt(0)}</div>
+                        )}
+                        <span className="leading-tight">{usr.name.split(' ').slice(0, 2).join(' ')}</span>
+                        <span className={`text-[8px] px-1 py-0.5 rounded font-mono ${isActive ? 'bg-white/20 text-white/80' : 'bg-slate-100 text-slate-400'}`}>{usr.role === 'SUPER_HR' ? 'SA' : 'HR'}</span>
                       </button>
                     );
                   })}
                 </div>
               </>
             ) : (
-              <div className="flex items-center gap-2">
-                {(activeHR as any).photo && (
-                  <img src={(activeHR as any).photo} alt={activeHR.name} className="w-7 h-7 rounded-full object-cover ring-2 ring-emerald-400 shadow-sm" />
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+                {(activeHR as any).photo ? (
+                  <img src={(activeHR as any).photo} alt={activeHR.name} className="w-6 h-6 rounded-full object-cover ring-2 ring-emerald-400 shadow-sm" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-emerald-200 flex items-center justify-center text-[9px] font-bold text-emerald-700">{activeHR.name.charAt(0)}</div>
                 )}
-                <span className="px-3 py-1.5 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold border border-emerald-100 flex items-center gap-1.5">
-                  <ShieldCheck size={13} />
-                  Logged in as: <strong className="font-extrabold">{activeHR.name}</strong> ({activeHR.title})
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-extrabold text-emerald-900 leading-tight">{activeHR.name}</span>
+                  <span className="text-[9px] text-emerald-600 font-medium">{activeHR.title}</span>
+                </div>
               </div>
             )}
+
+            <button
+              onClick={() => {
+                fetchEmployees();
+                fetchPayrollRuns();
+                fetchLoans();
+              }}
+              title="Refresh Data"
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100 transition cursor-pointer flex items-center gap-1 ml-auto md:ml-2"
+            >
+              <RefreshCw size={12} />
+              Refresh
+            </button>
 
             <button
               onClick={() => {
@@ -2540,10 +2557,10 @@ export default function App() {
                 setLoggedInEmployee(null);
                 setCurrentSessionMode('LOGIN');
               }}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-100 transition cursor-pointer flex items-center gap-1.5 ml-auto md:ml-2"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-100 transition cursor-pointer flex items-center gap-1.5"
             >
               <LogOut size={12} />
-              Exit Workspace
+              Exit
             </button>
           </div>
 
