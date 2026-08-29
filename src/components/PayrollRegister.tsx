@@ -791,7 +791,7 @@ export default function PayrollRegister({
               <tr className="bg-gray-50 border-b select-none font-display text-gray-500">
                 <th className="p-4.5 text-xs font-semibold">Staff Name / Ref</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Earned Basic (A)</th>
-                <th className="p-4.5 text-xs font-semibold text-right">HRA / DA / SpAllow (B)</th>
+                <th className="p-4.5 text-xs font-semibold text-right">Allowances (B)</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Gross Earnings (A+B)</th>
                 <th className="p-4.5 text-xs font-semibold text-center">EPF (12%) / ESIC</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Net Take-Home Pay</th>
@@ -833,10 +833,11 @@ export default function PayrollRegister({
                           ).toLocaleString('en-IN')}
                         </span>
                         <span className="text-[9px] text-gray-400 block font-mono">
-                          HRA: {s.earned_hra} | DA: {s.earned_da}
-                          {s.earned_edu_allowance ? ` | Edu: ${s.earned_edu_allowance}` : ''}
-                          {s.earned_medical_allowance ? ` | Med: ${s.earned_medical_allowance}` : ''}
-                          {s.earned_conveyance_allowance ? ` | Conv: ${s.earned_conveyance_allowance}` : ''}
+                          HRA: {s.earned_hra.toLocaleString('en-IN')}
+                          {s.earned_edu_allowance ? ` | Edu: ${s.earned_edu_allowance.toLocaleString('en-IN')}` : ''}
+                          {s.earned_medical_allowance ? ` | Med: ${s.earned_medical_allowance.toLocaleString('en-IN')}` : ''}
+                          {s.earned_conveyance_allowance ? ` | Conv: ${s.earned_conveyance_allowance.toLocaleString('en-IN')}` : ''}
+                          {s.earned_special_allowance ? ` | Spl: ${s.earned_special_allowance.toLocaleString('en-IN')}` : ''}
                         </span>
                       </div>
                     </td>
