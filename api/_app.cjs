@@ -7121,20 +7121,6 @@ async function createApp(supabaseAdmin) {
       const first = records[0];
       const emp = db.getEmployeeById(first.employee_id);
       const company = emp ? emp.company : void 0;
-      if (db.isPayrollLocked(first.month, company)) {
-        const monthName = (/* @__PURE__ */ new Date(first.month + "-02")).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-        return res.status(400).json({
-          error: `ATTENDANCE LOCKED for ${monthName} (${company || "ALL"})`,
-          details: `Salary has already been processed and locked for this month. You cannot edit attendance after salary is finalized.
-
-To make changes:
-1. Go to Payroll Processor
-2. UNLOCK payroll for ${monthName}
-3. Edit attendance
-4. Re-process salary
-5. Lock again`
-        });
-      }
       db.saveAttendance(records);
       db.logAudit("Attendance Modified", `Adjusted attendance coordinates for ${records.length} staff members for month ${first.month} (${company || "ALL"})`, getOperator(req));
       res.json({ success: true, count: records.length });
