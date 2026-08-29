@@ -2253,7 +2253,7 @@ HR Department`;
     res.json(slips);
   });
 
-  app.put('/api/payslips/:id', (req, res) => {
+  app.put('/api/payslips/:id', async (req, res) => {
     try {
       const { id } = req.params;
       const { pf, esic, pt, tds, loan, advance, custom } = req.body;
@@ -2281,6 +2281,9 @@ HR Department`;
       if (!updated) {
         return res.status(500).json({ error: 'Failed to update payslip' });
       }
+
+      // CRITICAL: Await Supabase persist before responding
+      await db.persistDataSync();
 
       db.logAudit('Payslip Deduction Adjusted', `Adjusted payroll deductions for employee ${slip.employee_name} (${slip.month})`, getOperator(req));
       res.json({ success: true, slip: updated });
