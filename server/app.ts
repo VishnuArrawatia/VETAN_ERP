@@ -39,19 +39,37 @@ export async function createApp(supabaseAdmin?: any) {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  // FIX 2: Persist-error warning interceptor
-  // If Supabase persist failed, add a warning header + body field so HR sees the error
+  // FIX: Auto-flush middleware — for ALL write requests (POST/PUT/DELETE/PATCH),
+  // await Supabase persist BEFORE sending the response.
+  // This prevents data loss on Vercel cold starts where the serverless function
+  // dies before the fire-and-forget persistData() completes.
   app.use((req, res, next) => {
-    const originalJson = res.json.bind(res);
-    res.json = function(body: any) {
-      if (db && db.lastPersistError && req.method !== 'GET') {
-        res.setHeader('X-Persist-Warning', 'Data may not have been saved to cloud. Check server logs.');
-        if (typeof body === 'object' && body !== null && !body.persistWarning) {
-          body.persistWarning = 'WARNING: Cloud save may have failed. Your changes are saved locally but may not persist across server restarts. Please verify.';
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+      const originalJson = res.json.bind(res);
+      const originalSend = res.send.bind(res);
+      
+      const flushAndSend = async (sendFn: Function, body: any) => {
+        try {
+          // Await any pending Supabase writes before responding
+          if (db && typeof db.flushPendingWrites === 'function') {
+            await db.flushPendingWrites();
+          }
+        } catch (e: any) {
+          console.error('[FlushMiddleware] flushPendingWrites failed:', e?.message);
         }
-      }
-      return originalJson(body);
-    };
+        // Add persist warning if cloud save failed
+        if (db && db.lastPersistError && typeof body === 'object' && body !== null) {
+          body.persistWarning = 'Cloud save may have failed. Verify your data.';
+        }
+        return sendFn(body);
+      };
+
+      res.json = function(body: any) {
+        // Schedule flush + send asynchronously (don't block)
+        flushAndSend(originalJson, body);
+        return res as any;
+      } as any;
+    }
     next();
   });
 
@@ -1522,7 +1540,7 @@ export async function createApp(supabaseAdmin?: any) {
   });
 
   // Update Leave Opening Balance (Super Admin only)
-  app.put('/api/employees/:id/leave-opening', (req, res) => {
+  app.put('/api/employees/:id/leave-opening', async (req, res) => {
     try {
       const operatorRole = getOperatorRole(req);
       if (operatorRole !== 'SUPER_HR') {
@@ -1542,7 +1560,7 @@ export async function createApp(supabaseAdmin?: any) {
         [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, id]);
 
       db.logAudit('Leave Opening Updated', `Updated leave opening for ${emp.name} (PL:${emp.leave_balance_pl}, CL:${emp.leave_balance_cl}, SL:${emp.leave_balance_sl}, C-Off:${emp.leave_balance_compoff || 0})`, getOperator(req));
-      db.persistData();
+      await db.persistDataSync();
       res.json({ success: true, employee: { id: emp.id, leave_balance_pl: emp.leave_balance_pl, leave_balance_cl: emp.leave_balance_cl, leave_balance_sl: emp.leave_balance_sl, leave_balance_compoff: emp.leave_balance_compoff || 0 } });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -2429,7 +2447,7 @@ HR Department`;
     }
   });
 
-  app.post('/api/payroll-runs/close', (req, res) => {
+  app.post('/api/payroll-runs/close', async (req, res) => {
     try {
       const { month, company, action } = req.body;
       if (!month) return res.status(400).json({ error: 'Month is required' });
@@ -2440,7 +2458,7 @@ HR Department`;
         if (!run) return res.status(404).json({ error: 'Payroll run not found' });
         run.status = 'DRAFT';
         (db as any).dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
-        (db as any).persistData();
+        await db.persistDataSync();
         db.logAudit('Payroll Unlocked', `Unlocked payroll for ${month} (${company || 'ALL'})`, getOperator(req));
         return res.json({ success: true });
       }
@@ -2486,7 +2504,7 @@ HR Department`;
   });
 
   // Bulk mark all payslips for a month as PAID
-  app.post('/api/payslips/mark-all-paid', (req, res) => {
+  app.post('/api/payslips/mark-all-paid', async (req, res) => {
     try {
       const { month, company } = req.body;
       const payDate = new Date().toISOString().split('T')[0];
@@ -2500,7 +2518,7 @@ HR Department`;
           }
         }
       });
-      db.persistData();
+      await db.persistDataSync();
       db.logAudit('Bulk Salary Paid', `Marked ${count} payslips as PAID for month ${month}`, getOperator(req));
       res.json({ success: true, count, paymentDate: payDate });
     } catch (e: any) {

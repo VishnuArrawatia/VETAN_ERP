@@ -4712,6 +4712,9 @@ Sakar & SVN Group`;
     return { ok: false, error: 'All retries exhausted' };
   }
 
+  /** Track pending Supabase persist so API handlers can await it. */
+  private _pendingPersist: Promise<any> | null = null;
+
   private persistData() {
     // 1. Local JSON file (existing behavior for local dev)
     try {
@@ -4721,15 +4724,26 @@ Sakar & SVN Group`;
       console.error('Failed to persist data to JSON:', e);
     }
 
-    // 2. Supabase push with retry (fire-and-forget but retries)
+    // 2. Supabase push — tracked so flushPendingWrites() can await it
     if (this.supabaseAdmin && !this.loadedFromSeed) {
-      this._persistToSupabaseWithRetry(3).then(result => {
+      this._pendingPersist = this._persistToSupabaseWithRetry(3).then(result => {
+        this._pendingPersist = null;
         if (!result.ok) {
           console.error('[Supabase] persistData FAILED after retries:', result.error);
         }
+        return result;
       });
     } else if (this.loadedFromSeed && this.supabaseAdmin) {
       console.warn('[Supabase] persistData BLOCKED — data was loaded from seed, not pushing to prevent data loss.');
+    }
+  }
+
+  /** Await any pending Supabase write — call at end of API handlers. */
+  public async flushPendingWrites(): Promise<void> {
+    if (this._pendingPersist) {
+      try {
+        await this._pendingPersist;
+      } catch { /* already logged */ }
     }
   }
 

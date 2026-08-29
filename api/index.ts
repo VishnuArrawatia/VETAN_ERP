@@ -145,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           run.status = 'DRAFT';
           if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
           if (typeof dbRef.persistData === 'function') dbRef.persistData();
+          if (typeof dbRef.flushPendingWrites === 'function') await dbRef.flushPendingWrites();
           return res.json({ success: true, action: 'unlocked' });
         }
       } catch (e: any) {

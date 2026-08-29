@@ -24359,6 +24359,8 @@ var PayrollDatabase = class {
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
+    /** Track pending Supabase persist so API handlers can await it. */
+    this._pendingPersist = null;
     /** Track when we last loaded from Supabase to avoid stale reloads. */
     this.lastLoadedAt = "";
     /**
@@ -28504,13 +28506,24 @@ Sakar & SVN Group`;
       console.error("Failed to persist data to JSON:", e);
     }
     if (this.supabaseAdmin && !this.loadedFromSeed) {
-      this._persistToSupabaseWithRetry(3).then((result) => {
+      this._pendingPersist = this._persistToSupabaseWithRetry(3).then((result) => {
+        this._pendingPersist = null;
         if (!result.ok) {
           console.error("[Supabase] persistData FAILED after retries:", result.error);
         }
+        return result;
       });
     } else if (this.loadedFromSeed && this.supabaseAdmin) {
       console.warn("[Supabase] persistData BLOCKED \u2014 data was loaded from seed, not pushing to prevent data loss.");
+    }
+  }
+  /** Await any pending Supabase write — call at end of API handlers. */
+  async flushPendingWrites() {
+    if (this._pendingPersist) {
+      try {
+        await this._pendingPersist;
+      } catch {
+      }
     }
   }
   /**
@@ -29387,16 +29400,27 @@ async function createApp(supabaseAdmin) {
   app.use(import_express.default.json({ limit: "50mb" }));
   app.use(import_express.default.urlencoded({ limit: "50mb", extended: true }));
   app.use((req, res, next) => {
-    const originalJson = res.json.bind(res);
-    res.json = function(body) {
-      if (db && db.lastPersistError && req.method !== "GET") {
-        res.setHeader("X-Persist-Warning", "Data may not have been saved to cloud. Check server logs.");
-        if (typeof body === "object" && body !== null && !body.persistWarning) {
-          body.persistWarning = "WARNING: Cloud save may have failed. Your changes are saved locally but may not persist across server restarts. Please verify.";
+    if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+      const originalJson = res.json.bind(res);
+      const originalSend = res.send.bind(res);
+      const flushAndSend = async (sendFn, body) => {
+        try {
+          if (db && typeof db.flushPendingWrites === "function") {
+            await db.flushPendingWrites();
+          }
+        } catch (e) {
+          console.error("[FlushMiddleware] flushPendingWrites failed:", e?.message);
         }
-      }
-      return originalJson(body);
-    };
+        if (db && db.lastPersistError && typeof body === "object" && body !== null) {
+          body.persistWarning = "Cloud save may have failed. Verify your data.";
+        }
+        return sendFn(body);
+      };
+      res.json = function(body) {
+        flushAndSend(originalJson, body);
+        return res;
+      };
+    }
     next();
   });
   app.use((req, res, next) => {
@@ -30664,7 +30688,7 @@ To make changes:
       res.status(500).json({ error: e.message });
     }
   });
-  app.put("/api/employees/:id/leave-opening", (req, res) => {
+  app.put("/api/employees/:id/leave-opening", async (req, res) => {
     try {
       const operatorRole = getOperatorRole(req);
       if (operatorRole !== "SUPER_HR") {
@@ -30683,7 +30707,7 @@ To make changes:
         [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, id]
       );
       db.logAudit("Leave Opening Updated", `Updated leave opening for ${emp.name} (PL:${emp.leave_balance_pl}, CL:${emp.leave_balance_cl}, SL:${emp.leave_balance_sl}, C-Off:${emp.leave_balance_compoff || 0})`, getOperator(req));
-      db.persistData();
+      await db.persistDataSync();
       res.json({ success: true, employee: { id: emp.id, leave_balance_pl: emp.leave_balance_pl, leave_balance_cl: emp.leave_balance_cl, leave_balance_sl: emp.leave_balance_sl, leave_balance_compoff: emp.leave_balance_compoff || 0 } });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -31423,7 +31447,7 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
-  app.post("/api/payroll-runs/close", (req, res) => {
+  app.post("/api/payroll-runs/close", async (req, res) => {
     try {
       const { month, company, action } = req.body;
       if (!month) return res.status(400).json({ error: "Month is required" });
@@ -31433,7 +31457,7 @@ HR Department`;
         if (!run) return res.status(404).json({ error: "Payroll run not found" });
         run.status = "DRAFT";
         db.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
-        db.persistData();
+        await db.persistDataSync();
         db.logAudit("Payroll Unlocked", `Unlocked payroll for ${month} (${company || "ALL"})`, getOperator(req));
         return res.json({ success: true });
       }
@@ -31471,7 +31495,7 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
-  app.post("/api/payslips/mark-all-paid", (req, res) => {
+  app.post("/api/payslips/mark-all-paid", async (req, res) => {
     try {
       const { month, company } = req.body;
       const payDate = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
@@ -31485,7 +31509,7 @@ HR Department`;
           }
         }
       });
-      db.persistData();
+      await db.persistDataSync();
       db.logAudit("Bulk Salary Paid", `Marked ${count} payslips as PAID for month ${month}`, getOperator(req));
       res.json({ success: true, count, paymentDate: payDate });
     } catch (e) {
