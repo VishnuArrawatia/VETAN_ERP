@@ -614,6 +614,71 @@ export default function AttendanceSheet({
     setValidationErrors(errors);
   };
 
+  // Save attendance WITHOUT locking — HR can edit later
+  const handleSaveOnly = async () => {
+    if (validationErrors.length > 0) {
+      setErrorMsg('Cannot save attendance — please fix all validation errors first.');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccess(false);
+    try {
+      const mappedPayload: Attendance[] = parsedRecords.map(rec => ({
+        id: `ATT-${rec.Worker_Code}-${currentMonth}`,
+        employee_id: rec.Worker_Code,
+        month: currentMonth,
+        total_days: daysInMonth,
+        working_days: rec.Present + rec.Weekly_Off + rec.Paid_Holiday + rec.Leave,
+        lop_days: rec.Absent + rec.LWP,
+        overtime_hours: rec.OT_Hours,
+        present: rec.Present,
+        absent: rec.Absent,
+        weekly_off: rec.Weekly_Off,
+        paid_holiday: rec.Paid_Holiday,
+        leave: rec.Leave,
+        lwp: rec.LWP,
+        ot_hours: rec.OT_Hours,
+        leave_pl: rec.Leave_PL,
+        leave_cl: rec.Leave_CL,
+        leave_sl: rec.Leave_SL,
+        compoff_used: rec.CompOff_Used,
+        is_locked: false
+      }));
+      const res = await onSaveAttendance(mappedPayload);
+      // Save leave utilization
+      const leaveEntries = parsedRecords
+        .filter(rec => (rec.Leave_PL + rec.Leave_CL + rec.Leave_SL + rec.CompOff_Used) > 0)
+        .map(rec => ({
+          employee_id: rec.Worker_Code,
+          pl_days: rec.Leave_PL,
+          cl_days: rec.Leave_CL,
+          sl_days: rec.Leave_SL,
+          compoff_days: rec.CompOff_Used
+        }));
+      if (leaveEntries.length > 0) {
+        try {
+          await fetch('/api/leave-utilization-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ month: currentMonth, company: activeCompany, entries: leaveEntries })
+          });
+        } catch (e) { console.error('Leave utilization save error:', e); }
+      }
+      if (res) {
+        setSuccess(true);
+        loadExistingAttendance(currentMonth);
+        setTimeout(() => setSuccess(false), 3000);
+      } else {
+        setErrorMsg('Failed to save attendance. Check if payroll is locked.');
+      }
+    } catch (err: any) {
+      setErrorMsg('Network error: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Save the verification grid to server
   const handleCommitAttendance = async () => {      if (validationErrors.length > 0) {
       setErrorMsg('Cannot save attendance — please fix all validation errors first. Check the red highlighted rows below.');
@@ -1214,12 +1279,24 @@ export default function AttendanceSheet({
                 </div>
               )}
 
-              <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
+              <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto justify-end flex-wrap">
                 <button
                   onClick={handleReset}
                   className="px-3 py-1.5 border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 text-xs font-semibold rounded-lg transition cursor-pointer"
                 >
                   Discard & Re-upload
+                </button>
+                <button
+                  onClick={handleSaveOnly}
+                  disabled={saving || validationErrors.length > 0}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition cursor-pointer ${
+                    validationErrors.length > 0 
+                      ? 'bg-gray-300 cursor-not-allowed opacity-50'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  <Save size={13} />
+                  {saving ? 'Saving...' : 'Save Attendance'}
                 </button>
                 <button
                   onClick={handleCommitAttendance}
@@ -1231,7 +1308,7 @@ export default function AttendanceSheet({
                   }`}
                 >
                   <Save size={13} />
-                  {saving ? 'Saving...' : 'Commit & lock'}
+                  {saving ? 'Saving...' : 'Commit & Lock'}
                 </button>
               </div>
             </div>
