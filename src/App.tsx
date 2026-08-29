@@ -7282,31 +7282,25 @@ export default function App() {
                         <span className="font-mono">₹{activePayslipDetail.earned_hra.toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    {activePayslipDetail.earned_da !== undefined && activePayslipDetail.earned_da > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Dearness Allowance (DA):</span>
-                        <span className="font-mono">₹{activePayslipDetail.earned_da.toLocaleString('en-IN')}</span>
-                      </div>
-                    )}
-                    {activePayslipDetail.earned_special_allowance !== undefined && activePayslipDetail.earned_special_allowance > 0 && (
+                    {activePayslipDetail.earned_special_allowance > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Special Allowances:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_special_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    {activePayslipDetail.earned_edu_allowance !== undefined && activePayslipDetail.earned_edu_allowance > 0 && (
+                    {activePayslipDetail.earned_edu_allowance > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Education Allowance:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_edu_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    {activePayslipDetail.earned_medical_allowance !== undefined && activePayslipDetail.earned_medical_allowance > 0 && (
+                    {activePayslipDetail.earned_medical_allowance > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Medical Allowance:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_medical_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    {activePayslipDetail.earned_conveyance_allowance !== undefined && activePayslipDetail.earned_conveyance_allowance > 0 && (
+                    {activePayslipDetail.earned_conveyance_allowance > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-500">Conveyance Allowance:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_conveyance_allowance.toLocaleString('en-IN')}</span>

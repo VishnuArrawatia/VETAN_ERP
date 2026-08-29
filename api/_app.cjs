@@ -26203,6 +26203,9 @@ var PayrollDatabase = class {
       salary_hra_percent: 40,
       salary_da_percent: 0,
       salary_special_percent: 15,
+      salary_edu_percent: 2,
+      salary_medical_percent: 5,
+      salary_conveyance_percent: 8,
       pf_opt_in_default: true,
       pf_employer_rate: 12,
       esic_opt_in_threshold: 21e3,
@@ -26226,9 +26229,9 @@ var PayrollDatabase = class {
     const rate_hra = isHidden("hra") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * (sets.salary_hra_percent / 100)) : emp.hra ?? 0;
     const rate_special = isHidden("special_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * (sets.salary_special_percent / 100)) : emp.special_allowance ?? 0;
     const rate_da = 0;
-    const rate_edu = isHidden("edu_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * 0.02) : emp.edu_allowance || 0;
-    const rate_medical = isHidden("medical_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * 0.05) : emp.medical_allowance || 0;
-    const rate_conveyance = isHidden("conveyance_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * 0.08) : emp.conveyance_allowance || 0;
+    const rate_edu = isHidden("edu_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * (sets.salary_edu_percent || 2) / 100) : emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : Math.round(base * (sets.salary_edu_percent || 2) / 100);
+    const rate_medical = isHidden("medical_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * (sets.salary_medical_percent || 5) / 100) : emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : Math.round(base * (sets.salary_medical_percent || 5) / 100);
+    const rate_conveyance = isHidden("conveyance_allowance") ? 0 : emp.salary_structure_type === "PERCENTAGE" ? Math.round(base * (sets.salary_conveyance_percent || 8) / 100) : emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : Math.round(base * (sets.salary_conveyance_percent || 8) / 100);
     const rate_bonus = Math.round(base * 0.0833);
     const gross = base + rate_hra + rate_special + rate_da + rate_edu + rate_medical + rate_conveyance;
     const employer_pf = emp.pf_opt_in ? Math.round(base * (sets.pf_employer_rate / 100)) : 0;
@@ -27511,9 +27514,9 @@ var PayrollDatabase = class {
     const rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : emp.hra ?? 0;
     const rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : emp.special_allowance ?? 0;
     const rate_da = 0;
-    const rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * 0.02) : emp.edu_allowance || 0;
-    const rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * 0.05) : emp.medical_allowance || 0;
-    const rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * 0.08) : emp.conveyance_allowance || 0;
+    const rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100);
+    const rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100);
+    const rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100);
     const rate_bonus = Math.round(rate_base * 0.0833);
     const earned_base = Math.round(rate_base * proration);
     const earned_hra = Math.round(rate_hra * proration);
