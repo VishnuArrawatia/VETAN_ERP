@@ -4052,19 +4052,9 @@ export class PayrollDatabase {
     for (const emp of targets) {
       let att = this.data.attendance.find(a => a.employee_id === emp.id && a.month === month);
       if (!att) {
-        att = {
-          id: `ATT-${emp.id}-${month}`,
-          employee_id: emp.id,
-          month,
-          total_days: 30,
-          working_days: 30,
-          lop_days: 0,
-          overtime_hours: 0
-        };
-        this.data.attendance.push(att);
-        this.dbSqlite.run(`INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours]
-        );
+        // No attendance record = No salary for this employee
+        console.log(`[Payroll] SKIP ${emp.id} (${emp.name}) — No attendance record for ${month}`);
+        continue;
       }
 
       const slip = this.calculateSingleSlip(emp, att, month);

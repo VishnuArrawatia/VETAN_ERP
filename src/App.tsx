@@ -91,6 +91,7 @@ import HODMasterView from './components/HODMasterView';
 import ShiftMasterView from './components/ShiftMasterView';
 import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
+import BulkSalaryRevisionUpload from './components/BulkSalaryRevisionUpload';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
 // import WorkforceModule from './components/WorkforceModule'; // TODO: Commit WorkforceModule.tsx first
@@ -3296,6 +3297,16 @@ export default function App() {
                       employees={employees}
                       activeCompany={activeCompany}
                       activeHRName={activeHR ? activeHR.name : 'Group HR Director'}
+                      onSuccess={() => {
+                        fetchEmployees();
+                        fetchRevisions();
+                      }}
+                    />
+
+                    {/* Bulk Salary Revision via CSV */}
+                    <BulkSalaryRevisionUpload
+                      employees={employees}
+                      activeCompany={activeCompany}
                       onSuccess={() => {
                         fetchEmployees();
                         fetchRevisions();

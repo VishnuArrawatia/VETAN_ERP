@@ -3712,6 +3712,80 @@ HR Department`;
     });
   });
 
+  // --- MONTH-END RECONCILIATION REPORT ---
+  app.get('/api/reconciliation/:month', (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company } = req.query as { company?: string };
+      const allowed = getAllowedCompanies(req);
+
+      let employees = db.getEmployees(company && company !== 'ALL' ? company : undefined);
+      if (allowed) employees = employees.filter(e => allowed.includes(e.company));
+      const activeEmps = employees.filter(e => e.status === 'ACTIVE');
+
+      const attendance = db.data.attendance.filter(a => a.month === month);
+      const payslips = db.getPayslipsByMonth(month, company && company !== 'ALL' ? company : undefined);
+      const leaves = (db.data.leave_applications || []).filter(l => l.month === month);
+      const loans = (db.data.loans || []).filter(l => l.status === 'ACTIVE');
+
+      const empWithAttendance = new Set(attendance.map(a => a.employee_id));
+      const empWithPayslip = new Set(payslips.map(p => p.employee_id));
+      const empWithLeave = new Set(leaves.map(l => l.employee_id));
+
+      const missingAttendance = activeEmps.filter(e => !empWithAttendance.has(e.id));
+      const salaryWithoutAttendance = activeEmps.filter(e => empWithPayslip.has(e.id) && !empWithAttendance.has(e.id));
+
+      const totalGross = payslips.reduce((sum, p) => sum + (p.gross_salary || 0), 0);
+      const totalDeductions = payslips.reduce((sum, p) => sum + (p.total_deductions || 0), 0);
+      const totalNet = payslips.reduce((sum, p) => sum + (p.net_salary || 0), 0);
+      const totalPF = payslips.reduce((sum, p) => sum + (p.pf_deduction || 0), 0);
+      const totalESIC = payslips.reduce((sum, p) => sum + (p.esic_deduction || 0), 0);
+      const totalPT = payslips.reduce((sum, p) => sum + (p.professional_tax || 0), 0);
+      const totalTDS = payslips.reduce((sum, p) => sum + (p.tds || 0), 0);
+      const totalLoan = payslips.reduce((sum, p) => sum + (p.loan_deduction || 0), 0);
+      const totalAdvance = payslips.reduce((sum, p) => sum + (p.salary_advance || 0), 0);
+
+      const unitBreakdown: Record<string, any> = {};
+      for (const slip of payslips) {
+        const emp = db.getEmployeeById(slip.employee_id);
+        const unit = emp?.company || 'Unknown';
+        if (!unitBreakdown[unit]) unitBreakdown[unit] = { count: 0, gross: 0, net: 0, deductions: 0 };
+        unitBreakdown[unit].count++;
+        unitBreakdown[unit].gross += slip.gross_salary || 0;
+        unitBreakdown[unit].net += slip.net_salary || 0;
+        unitBreakdown[unit].deductions += slip.total_deductions || 0;
+      }
+
+      const locked = db.isPayrollLocked(month, company);
+
+      res.json({
+        month,
+        company: company || 'ALL',
+        is_locked: locked,
+        total_active_employees: activeEmps.length,
+        employees_with_attendance: empWithAttendance.size,
+        employees_with_payslip: empWithPayslip.size,
+        employees_with_leave: empWithLeave.size,
+        active_loans: loans.length,
+        missing_attendance_count: missingAttendance.length,
+        missing_attendance_employees: missingAttendance.map(e => ({ id: e.id, name: e.name, unit: e.company })),
+        salary_without_attendance: salaryWithoutAttendance.length,
+        total_gross: totalGross,
+        total_deductions: totalDeductions,
+        total_net: totalNet,
+        total_pf: totalPF,
+        total_esic: totalESIC,
+        total_pt: totalPT,
+        total_tds: totalTDS,
+        total_loan: totalLoan,
+        total_advance: totalAdvance,
+        unit_breakdown: unitBreakdown
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Expose db instance for Vercel handler to call reloadFromSupabase()
   (app as any).locals = (app as any).locals || {};
   (app as any).locals.db = db;
