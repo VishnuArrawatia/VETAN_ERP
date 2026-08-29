@@ -3737,7 +3737,14 @@ export class PayrollDatabase {
     const prevAdvance = prevSlip?.salary_advance || 0;
 
     let loan_deduction = 0;
-    const activeLoans = (this.data.loans || []).filter(l => l.employee_id === emp.id && (l.status === 'ACTIVE' || !l.status || l.status === 'NONE'));
+    const activeLoans = (this.data.loans || []).filter(l => {
+      if (l.employee_id !== emp.id) return false;
+      if (l.status !== 'ACTIVE' && l.status !== 'NONE' && l.status !== undefined && l.status !== null) return false;
+      // FIX: Only deduct loan from its start month onwards
+      const loanStart = l.emi_start_month || l.opening_date?.substring(0, 7) || '2026-04';
+      if (loanStart > month) return false;
+      return true;
+    });
     for (const l of activeLoans) {
       const skipped = Array.isArray(l.skipped_months) ? l.skipped_months : [];
       if (skipped.includes(month)) {
