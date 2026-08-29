@@ -82,7 +82,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: false,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -127,7 +127,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: false,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -172,7 +172,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: false,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -217,7 +217,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: true,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -262,7 +262,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: true,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -307,7 +307,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: false,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -352,7 +352,7 @@ const SEED_EMPLOYEES: Employee[] = [
     da: 0,
     pf_opt_in: true,
     esic_opt_in: false,
-    professional_tax_opt_in: true,
+    professional_tax_opt_in: false,
     leave_balance_pl: 18,
     leave_balance_cl: 6,
     leave_balance_sl: 6,
@@ -2369,7 +2369,13 @@ export class PayrollDatabase {
     }
 
     this.data.employees[idx] = { ...this.data.employees[idx], ...mergedPartial };
-    
+
+    // Normalize boolean fields (API may send 0/1 or true/false)
+    const emp = this.data.employees[idx];
+    emp.pf_opt_in = emp.pf_opt_in === 1 || emp.pf_opt_in === true;
+    emp.esic_opt_in = emp.esic_opt_in === 1 || emp.esic_opt_in === true;
+    emp.professional_tax_opt_in = emp.professional_tax_opt_in === 1 || emp.professional_tax_opt_in === true;
+
     // Auto-calculate CTC on update
     this.data.employees[idx].ctc_salary = this.computeCtcForEmployee(this.data.employees[idx]);
 

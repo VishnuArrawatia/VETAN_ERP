@@ -1928,7 +1928,7 @@ export default function App() {
   const handleToggleStatutoryOptIn = async (employeeId: string, field: 'pf_opt_in' | 'esic_opt_in' | 'professional_tax_opt_in', currentValue: boolean) => {
     try {
       const payload = {
-        [field]: !currentValue ? 1 : 0
+        [field]: !currentValue
       };
       const res = await fetch(`/api/employees/${employeeId}`, {
         method: 'PUT',

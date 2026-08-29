@@ -64,9 +64,22 @@ export async function createApp(supabaseAdmin?: any) {
         return sendFn(body);
       };
 
+      // Override res.json to WAIT for Supabase persist before sending response
       res.json = function(body: any) {
-        // Schedule flush + send asynchronously (don't block)
-        flushAndSend(originalJson, body);
+        // Run flush + send as a chained async flow
+        (async () => {
+          try {
+            if (db && typeof db.flushPendingWrites === 'function') {
+              await db.flushPendingWrites();
+            }
+          } catch (e: any) {
+            console.error('[FlushMiddleware] flushPendingWrites failed:', e?.message);
+          }
+          if (db && db.lastPersistError && typeof body === 'object' && body !== null) {
+            body.persistWarning = 'Cloud save may have failed. Verify your data.';
+          }
+          originalJson(body);
+        })();
         return res as any;
       } as any;
     }
