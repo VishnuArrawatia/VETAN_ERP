@@ -2272,8 +2272,20 @@ HR Department`;
       }
 
       const empCompany = db.getEmployeeById(slip.employee_id)?.company;
-      if (db.isPayrollLocked(slip.month, empCompany)) {
-        return res.status(400).json({ error: 'Payroll month is locked. No edits are allowed.' });
+      // When payroll is locked, allow attendance edits (pay_days/lop_days) but block salary changes
+      const isLocked = db.isPayrollLocked(slip.month, empCompany);
+      if (isLocked) {
+        const hasSalaryChanges = req.body.pf !== undefined || req.body.pf_deduction !== undefined ||
+          req.body.esic !== undefined || req.body.esic_deduction !== undefined ||
+          req.body.pt !== undefined || req.body.professional_tax !== undefined ||
+          req.body.tds !== undefined || req.body.loan !== undefined || req.body.loan_deduction !== undefined ||
+          req.body.advance !== undefined || req.body.salary_advance !== undefined ||
+          req.body.custom !== undefined || req.body.custom_deductions !== undefined ||
+          req.body.rate_base_salary !== undefined;
+        if (hasSalaryChanges) {
+          return res.status(400).json({ error: 'Payroll month is locked. Salary edits are not allowed. You can still edit attendance (Pay Days / LOP Days).' });
+        }
+        // Attendance-only edit allowed even when locked
       }
 
       const updated = db.updatePayslipFullVariableInputs(id, req.body);
@@ -2300,9 +2312,7 @@ HR Department`;
         return res.status(400).json({ error: 'Month and records array required' });
       }
 
-      if (db.isPayrollLocked(month, company)) {
-        return res.status(400).json({ error: 'Payroll month is locked. No edits are allowed.' });
-      }
+      const isLocked = db.isPayrollLocked(month, company);
 
       const updatedSlips: any[] = [];
       const errors: string[] = [];
@@ -2322,11 +2332,20 @@ HR Department`;
         }
 
         if (slipId) {
-          const resSlip = db.updatePayslipFullVariableInputs(slipId, rec);
-          if (resSlip) {
-            updatedSlips.push(resSlip);
+          // When locked, only allow attendance data (pay_days/lop_days)
+          if (isLocked) {
+            const attendanceOnly = { pay_days: rec.pay_days, lop_days: rec.lop_days };
+            if (attendanceOnly.pay_days !== undefined || attendanceOnly.lop_days !== undefined) {
+              const resSlip = db.updatePayslipFullVariableInputs(slipId, attendanceOnly);
+              if (resSlip) updatedSlips.push(resSlip);
+            }
           } else {
-            errors.push(`Payslip not found for ID: ${slipId}`);
+            const resSlip = db.updatePayslipFullVariableInputs(slipId, rec);
+            if (resSlip) {
+              updatedSlips.push(resSlip);
+            } else {
+              errors.push(`Payslip not found for ID: ${slipId}`);
+            }
           }
         }
       }

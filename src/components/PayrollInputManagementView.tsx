@@ -776,7 +776,7 @@ export default function PayrollInputManagementView({
 
               <button
                 onClick={handleSaveBulkInputs}
-                disabled={savingInputs || isPayrollLocked}
+                disabled={savingInputs}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Save size={14} />
@@ -884,7 +884,6 @@ export default function PayrollInputManagementView({
                           <input type="number" min={0} max={31}
                             value={rowInputs.pay_days ?? slip.pay_days ?? 30}
                             onChange={(e) => handleCellChange(slip.id, 'pay_days', e.target.value)}
-                            disabled={isPayrollLocked}
                             className="w-10 text-center text-[11px] font-bold text-emerald-800 border border-emerald-200 rounded px-1 py-0.5 bg-white focus:ring-1 focus:ring-emerald-400"
                             title="Pay Days"
                           />
@@ -892,7 +891,6 @@ export default function PayrollInputManagementView({
                           <input type="number" min={0} max={31}
                             value={rowInputs.lop_days ?? slip.lop_days ?? 0}
                             onChange={(e) => handleCellChange(slip.id, 'lop_days', e.target.value)}
-                            disabled={isPayrollLocked}
                             className="w-10 text-center text-[11px] font-bold text-rose-600 border border-rose-200 rounded px-1 py-0.5 bg-white focus:ring-1 focus:ring-rose-400"
                             title="LOP Days"
                           />

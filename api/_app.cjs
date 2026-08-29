@@ -7813,8 +7813,12 @@ HR Department`;
         }
       }
       const empCompany = db.getEmployeeById(slip.employee_id)?.company;
-      if (db.isPayrollLocked(slip.month, empCompany)) {
-        return res.status(400).json({ error: "Payroll month is locked. No edits are allowed." });
+      const isLocked = db.isPayrollLocked(slip.month, empCompany);
+      if (isLocked) {
+        const hasSalaryChanges = req.body.pf !== void 0 || req.body.pf_deduction !== void 0 || req.body.esic !== void 0 || req.body.esic_deduction !== void 0 || req.body.pt !== void 0 || req.body.professional_tax !== void 0 || req.body.tds !== void 0 || req.body.loan !== void 0 || req.body.loan_deduction !== void 0 || req.body.advance !== void 0 || req.body.salary_advance !== void 0 || req.body.custom !== void 0 || req.body.custom_deductions !== void 0 || req.body.rate_base_salary !== void 0;
+        if (hasSalaryChanges) {
+          return res.status(400).json({ error: "Payroll month is locked. Salary edits are not allowed. You can still edit attendance (Pay Days / LOP Days)." });
+        }
       }
       const updated = db.updatePayslipFullVariableInputs(id, req.body);
       if (!updated) {
@@ -7833,9 +7837,7 @@ HR Department`;
       if (!month || !Array.isArray(records)) {
         return res.status(400).json({ error: "Month and records array required" });
       }
-      if (db.isPayrollLocked(month, company)) {
-        return res.status(400).json({ error: "Payroll month is locked. No edits are allowed." });
-      }
+      const isLocked = db.isPayrollLocked(month, company);
       const updatedSlips = [];
       const errors = [];
       for (const rec of records) {
@@ -7852,11 +7854,19 @@ HR Department`;
           }
         }
         if (slipId) {
-          const resSlip = db.updatePayslipFullVariableInputs(slipId, rec);
-          if (resSlip) {
-            updatedSlips.push(resSlip);
+          if (isLocked) {
+            const attendanceOnly = { pay_days: rec.pay_days, lop_days: rec.lop_days };
+            if (attendanceOnly.pay_days !== void 0 || attendanceOnly.lop_days !== void 0) {
+              const resSlip = db.updatePayslipFullVariableInputs(slipId, attendanceOnly);
+              if (resSlip) updatedSlips.push(resSlip);
+            }
           } else {
-            errors.push(`Payslip not found for ID: ${slipId}`);
+            const resSlip = db.updatePayslipFullVariableInputs(slipId, rec);
+            if (resSlip) {
+              updatedSlips.push(resSlip);
+            } else {
+              errors.push(`Payslip not found for ID: ${slipId}`);
+            }
           }
         }
       }
