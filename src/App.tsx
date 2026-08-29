@@ -1450,9 +1450,9 @@ export default function App() {
       setEditHra(employee.hra !== undefined ? employee.hra : Math.round(employee.base_salary * 0.40));
       setEditDa(0);
       setEditSpecialAllowance(employee.special_allowance !== undefined ? employee.special_allowance : Math.round(employee.base_salary * 0.15));
-      setEditEduAllowance(employee.edu_allowance !== undefined ? employee.edu_allowance : 0);
-      setEditMedicalAllowance(employee.medical_allowance !== undefined ? employee.medical_allowance : 0);
-      setEditConveyanceAllowance(employee.conveyance_allowance !== undefined ? employee.conveyance_allowance : 0);
+      setEditEduAllowance(employee.edu_allowance || Math.round(employee.base_salary * 0.02));
+      setEditMedicalAllowance(employee.medical_allowance || Math.round(employee.base_salary * 0.05));
+      setEditConveyanceAllowance(employee.conveyance_allowance || Math.round(employee.base_salary * 0.08));
       setEditSalaryStructureType(employee.salary_structure_type || 'PERCENTAGE');
       setEditHiddenHeads(employee.hidden_salary_heads ? employee.hidden_salary_heads.split(',').filter(Boolean) : []);
       setEditSalaryMode('manual');

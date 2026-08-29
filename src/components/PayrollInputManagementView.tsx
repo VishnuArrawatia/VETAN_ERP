@@ -863,7 +863,7 @@ export default function PayrollInputManagementView({
                   const reimbVal = Number(rowInputs.reimbursement ?? slip.reimbursement ?? 0);
                   const specVal = Number(rowInputs.special_allowance_addition ?? slip.special_allowance_addition ?? 0);
 
-                  const baseGross = (slip.earned_base_salary || 0) + (slip.earned_hra || 0) + (slip.earned_special_allowance || 0) + (slip.overtime_pay || 0);
+                  const baseGross = (slip.earned_base_salary || 0) + (slip.earned_hra || 0) + (slip.earned_special_allowance || 0) + (slip.earned_edu_allowance || 0) + (slip.earned_medical_allowance || 0) + (slip.earned_conveyance_allowance || 0);
                   const totalGrossPreview = baseGross + bonusVal + perfVal + reimbVal + specVal;
 
                   const statDeductions = (slip.pf_deduction || 0) + (slip.esic_deduction || 0) + (slip.professional_tax || 0) + (slip.loan_deduction || 0);
@@ -1513,7 +1513,9 @@ export default function PayrollInputManagementView({
                   <div>Basic: ₹{editingSlip.earned_base_salary?.toLocaleString('en-IN')}</div>
                   <div>HRA: ₹{editingSlip.earned_hra?.toLocaleString('en-IN')}</div>
                   <div>Special: ₹{editingSlip.earned_special_allowance?.toLocaleString('en-IN')}</div>
-                  <div>Overtime: ₹{editingSlip.overtime_pay?.toLocaleString('en-IN')}</div>
+                  {(editingSlip.earned_edu_allowance || 0) > 0 && <div>Edu: ₹{editingSlip.earned_edu_allowance?.toLocaleString('en-IN')}</div>}
+                  {(editingSlip.earned_medical_allowance || 0) > 0 && <div>Med: ₹{editingSlip.earned_medical_allowance?.toLocaleString('en-IN')}</div>}
+                  {(editingSlip.earned_conveyance_allowance || 0) > 0 && <div>Conv: ₹{editingSlip.earned_conveyance_allowance?.toLocaleString('en-IN')}</div>}
                 </div>
               </div>
 

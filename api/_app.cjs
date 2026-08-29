@@ -27532,7 +27532,7 @@ var PayrollDatabase = class {
     const lopDays = att.lop_days || totalDays - payDays;
     const gross_rate_full = rate_base + rate_hra + rate_special + rate_edu + rate_medical + rate_conveyance;
     const lop_deduction = Math.round(gross_rate_full * (lopDays / totalDays));
-    const gross_salary = earned_base + earned_hra + earned_special + earned_edu + earned_medical + earned_conveyance + overtime_pay;
+    const gross_salary = earned_base + earned_hra + earned_special + earned_edu + earned_medical + earned_conveyance;
     let pf_deduction = 0;
     let employer_pf = 0;
     if (emp.pf_opt_in) {
@@ -27765,7 +27765,7 @@ var PayrollDatabase = class {
     s.arrear_payment = inputs.arrear_payment !== void 0 ? Number(inputs.arrear_payment) : s.arrear_payment || 0;
     s.other_earnings = inputs.other_earnings !== void 0 ? Number(inputs.other_earnings) : s.other_earnings || 0;
     s.remarks = inputs.remarks !== void 0 ? String(inputs.remarks) : s.remarks || "";
-    const baseGross = s.earned_base_salary + s.earned_hra + s.earned_special_allowance + (s.earned_edu_allowance || 0) + (s.earned_medical_allowance || 0) + (s.earned_conveyance_allowance || 0) + s.overtime_pay;
+    const baseGross = s.earned_base_salary + s.earned_hra + s.earned_special_allowance + (s.earned_edu_allowance || 0) + (s.earned_medical_allowance || 0) + (s.earned_conveyance_allowance || 0);
     const varEarnings = (s.bonus_incentive || 0) + (s.performance_incentive || 0) + (s.attendance_incentive || 0) + (s.production_incentive || 0) + (s.reimbursement || 0) + (s.special_allowance_addition || 0) + (s.arrear_payment || 0) + (s.other_earnings || 0);
     s.gross_salary = baseGross + varEarnings;
     const varDeductions = (s.custom_deductions || 0) + (s.canteen_deduction || 0) + (s.uniform_deduction || 0) + (s.notice_deduction || 0) + (s.mobile_deduction || 0) + (s.damage_deduction || 0) + (s.salary_advance || 0);
