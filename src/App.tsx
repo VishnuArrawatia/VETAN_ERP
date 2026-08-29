@@ -1594,7 +1594,9 @@ export default function App() {
 
       // Force fresh fetch for payslips with cache-busting
       const cacheBust = Date.now();
-      const dataSlips = await fetchJsonWithOfflineFallback(`/api/payslips/month/${activeMonth}?company=${companyParam}&_t=${cacheBust}`, (store) => {
+      const payslipUrl = `/api/payslips/month/${activeMonth}?company=${companyParam}&_t=${cacheBust}`;
+      console.log(`[Payroll] Fetching payslips: ${payslipUrl}`);
+      const dataSlips = await fetchJsonWithOfflineFallback(payslipUrl, (store) => {
         const slips = store.payslips || [];
         return slips.filter((s: any) => {
           const monthOk = !activeMonth || s.month === activeMonth || s.payroll_month === activeMonth;
@@ -1602,6 +1604,7 @@ export default function App() {
           return monthOk && companyOk;
         });
       });
+      console.log(`[Payroll] Received ${dataSlips?.length || 0} slips for ${companyParam}`);
       setMonthlySlips(dataSlips);
 
       const dataAtt = await fetchJsonWithOfflineFallback(`/api/attendance?month=${activeMonth}&company=${companyParam}`, (store) => {

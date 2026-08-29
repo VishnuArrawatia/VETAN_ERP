@@ -182,15 +182,29 @@ export async function fetchJsonWithOfflineFallback<T = any>(
   apiUrl: string,
   offlinePick: (store: OfflineStore) => T
 ): Promise<T> {
-  try {
-    const res = await fetch(apiUrl);
-    const text = await res.text();
-    if (res.ok && looksLikeJson(text)) {
-      return JSON.parse(text) as T;
+  // Try API up to 2 times (handles Vercel cold starts)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(apiUrl, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timeout);
+      const text = await res.text();
+      if (res.ok && looksLikeJson(text)) {
+        return JSON.parse(text) as T;
+      }
+      // If server returned HTML (e.g. SPA rewrite caught API call), retry
+      if (!res.ok || !looksLikeJson(text)) {
+        console.warn(`[Store] API ${apiUrl} returned ${res.status} (attempt ${attempt}/2), retrying...`);
+        if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
+      }
+    } catch (e) {
+      console.warn(`[Store] API ${apiUrl} fetch failed (attempt ${attempt}/2):`, e);
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 2000)); continue; }
     }
-  } catch {
-    // fall through
   }
+  // Final fallback: offline store
+  console.warn(`[Store] Falling back to offline store for ${apiUrl}`);
   const store = await loadOfflineStore();
   return offlinePick(store);
 }
