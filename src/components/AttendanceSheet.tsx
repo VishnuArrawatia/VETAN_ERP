@@ -1279,6 +1279,20 @@ export default function AttendanceSheet({
                 </div>
               )}
 
+              {isLocked && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl">
+                  <Lock size={12} className="text-amber-600" />
+                  <span className="text-[10px] font-bold text-amber-800">Attendance Locked</span>
+                  <button
+                    onClick={() => handleLockToggle(false)}
+                    disabled={saving}
+                    className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                  >
+                    <Unlock size={10} className="inline mr-1" />Unlock
+                  </button>
+                </div>
+              )}
+
               <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto justify-end flex-wrap">
                 <button
                   onClick={handleReset}

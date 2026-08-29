@@ -6992,9 +6992,6 @@ async function createApp(supabaseAdmin) {
         return res.status(404).json({ error: "Employee not found" });
       }
       const month = date.substring(0, 7);
-      if (db.isPayrollLocked(month, emp.company)) {
-        return res.status(400).json({ error: "Payroll month is locked. Manual adjustments are disabled." });
-      }
       const records = db.getEmployeeAttendance(employee_id);
       let record = records.find((r) => r.month === month);
       if (!record) {

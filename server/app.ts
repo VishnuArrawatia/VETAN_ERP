@@ -1299,11 +1299,8 @@ export async function createApp(supabaseAdmin?: any) {
         return res.status(404).json({ error: 'Employee not found' });
       }
 
-      // Verify if payroll month is locked
+      // Attendance can ALWAYS be edited — payroll lock does not block attendance entry
       const month = date.substring(0, 7); // YYYY-MM
-      if (db.isPayrollLocked(month, emp.company)) {
-        return res.status(400).json({ error: 'Payroll month is locked. Manual adjustments are disabled.' });
-      }
 
       // Retrieve or provision matching attendance coordinates for that month
       const records = db.getEmployeeAttendance(employee_id);
