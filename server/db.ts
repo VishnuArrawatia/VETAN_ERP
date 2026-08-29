@@ -3983,7 +3983,7 @@ export class PayrollDatabase {
         tds: es.tds,
         custom_deductions: es.custom_deductions,
         salary_advance: es.salary_advance,
-        loan_deduction: es.loan_deduction,
+        // NOTE: loan_deduction is AUTO-CALCULATED from Loan Register - do NOT preserve
         bonus_incentive: es.bonus_incentive,
         performance_incentive: es.performance_incentive,
         attendance_incentive: es.attendance_incentive,
