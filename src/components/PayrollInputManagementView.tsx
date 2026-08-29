@@ -87,6 +87,31 @@ export default function PayrollInputManagementView({
   // Local Editable Inputs Grid Map (Key: slipId)
   const [gridData, setGridData] = useState<Record<string, Record<string, any>>>({});
 
+  // Direct API fallback — if props.slips is empty, load from API directly
+  const [localSlips, setLocalSlips] = useState<Payslip[]>([]);
+  const effectiveSlips = (slips && slips.length > 0) ? slips : localSlips;
+
+  useEffect(() => {
+    if (slips && slips.length > 0) return;
+    const loadDirect = async () => {
+      try {
+        const cacheBust = Date.now();
+        const url = `/api/payslips/month/${activeMonth}?company=${activeCompany || 'ALL'}&_t=${cacheBust}`;
+        console.log('[PayrollView] Direct API load:', url);
+        const res = await fetch(url);
+        if (res.ok) {
+          const text = await res.text();
+          if (text.startsWith('[')) {
+            const data = JSON.parse(text);
+            console.log('[PayrollView] Direct load got', data.length, 'slips');
+            setLocalSlips(data);
+          }
+        }
+      } catch (e) { console.error('[PayrollView] Direct load failed:', e); }
+    };
+    loadDirect();
+  }, [slips, activeMonth, activeCompany]);
+
   // Freeze / Unlock Modal
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockPin, setUnlockPin] = useState('');
@@ -111,7 +136,7 @@ export default function PayrollInputManagementView({
 
   // Sync gridData when slips change
   useEffect(() => {
-    const monthSlips = slips.filter(s => s.month === activeMonth);
+    const monthSlips = effectiveSlips.filter(s => s.month === activeMonth);
     const initialGrid: Record<string, Record<string, any>> = {};
     monthSlips.forEach(s => {
       initialGrid[s.id] = {
@@ -135,7 +160,7 @@ export default function PayrollInputManagementView({
       };
     });
     setGridData(initialGrid);
-  }, [slips, activeMonth]);
+  }, [effectiveSlips, activeMonth]);
 
   // List of Units & Departments
   const unitsList = useMemo(() => {
@@ -150,7 +175,7 @@ export default function PayrollInputManagementView({
 
   // Active Month Slips filtered
   const filteredSlips = useMemo(() => {
-    let list = slips.filter(s => s.month === activeMonth);
+    let list = effectiveSlips.filter(s => s.month === activeMonth);
 
     if (selectedUnit !== 'ALL') {
       list = list.filter(s => {
@@ -177,7 +202,7 @@ export default function PayrollInputManagementView({
     }
 
     return list;
-  }, [slips, activeMonth, selectedUnit, selectedDept, searchQuery, employees]);
+  }, [effectiveSlips, activeMonth, selectedUnit, selectedDept, searchQuery, employees]);
 
   // Is Payroll Locked for selected unit & month?
   const isPayrollLocked = useMemo(() => {
@@ -189,7 +214,7 @@ export default function PayrollInputManagementView({
 
   // Dashboard Aggregates
   const aggregates = useMemo(() => {
-    const monthSlips = slips.filter(s => s.month === activeMonth && (selectedUnit === 'ALL' || employees.find(e => e.id === s.employee_id)?.company === selectedUnit));
+    const monthSlips = effectiveSlips.filter(s => s.month === activeMonth && (selectedUnit === 'ALL' || employees.find(e => e.id === s.employee_id)?.company === selectedUnit));
     
     const activeEmps = employees.filter(e => e.status === 'ACTIVE' && (selectedUnit === 'ALL' || e.company === selectedUnit));
     const totalEmps = activeEmps.length;
@@ -245,7 +270,7 @@ export default function PayrollInputManagementView({
       grandTotalDeductions,
       totalNetPayable
     };
-  }, [slips, activeMonth, selectedUnit, employees]);
+  }, [effectiveSlips, activeMonth, selectedUnit, employees]);
 
   // Handle local cell input change in bulk grid
   const handleCellChange = (slipId: string, field: string, val: string | number) => {

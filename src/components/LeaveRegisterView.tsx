@@ -57,6 +57,8 @@ export default function LeaveRegisterView({
   const [bulkSL, setBulkSL] = useState(6);
   const [bulkCompOff, setBulkCompOff] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [bulkEdits, setBulkEdits] = useState<Record<string, {pl: number, cl: number, sl: number, compoff: number}>>({});
   
   // Custom print ref
   const printRef = useRef<HTMLDivElement>(null);
@@ -282,36 +284,91 @@ export default function LeaveRegisterView({
     }
   };
 
-  // Save bulk opening balance for ALL employees
+  // Save bulk opening balance — either default for all or individual edits
   const saveBulkOpeningBalance = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/leave-opening-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          default_balance: {
-            pl: Number(bulkPL),
-            cl: Number(bulkCL),
-            sl: Number(bulkSL),
-            compoff: Number(bulkCompOff)
-          }
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Opening Balance updated for ${data.updated} employees!`);
-        setBulkModalOpen(false);
-        window.location.reload();
+      // Check if any individual edits were made
+      const hasEdits = Object.keys(bulkEdits).length > 0;
+      if (hasEdits) {
+        // Save each employee individually
+        let saved = 0, failed = 0;
+        for (const [empId, vals] of Object.entries(bulkEdits)) {
+          try {
+            const res = await fetch(`/api/employees/${empId}/leave-opening`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                leave_balance_pl: vals.pl,
+                leave_balance_cl: vals.cl,
+                leave_balance_sl: vals.sl,
+                leave_balance_compoff: vals.compodoff || 0
+              })
+            });
+            const data = await res.json();
+            if (data.success) saved++; else failed++;
+          } catch { failed++; }
+        }
+        alert(`Opening Balance updated! Saved: ${saved}, Failed: ${failed}`);
       } else {
-        alert('Error: ' + (data.error || 'Failed to update'));
+        // Use default values for ALL employees
+        const res = await fetch('/api/leave-opening-bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            default_balance: {
+              pl: Number(bulkPL),
+              cl: Number(bulkCL),
+              sl: Number(bulkSL),
+              compoff: Number(bulkCompOff)
+            }
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Opening Balance updated for ${data.updated} employees!`);
+        } else {
+          alert('Error: ' + (data.error || 'Failed to update'));
+        }
       }
+      setBulkModalOpen(false);
+      setBulkEdits({});
+      window.location.reload();
     } catch (e: any) {
       alert('Error: ' + e.message);
     } finally {
       setSaving(false);
     }
   };
+
+  // Update individual employee edit in bulk modal
+  const updateBulkEdit = (empId: string, field: 'pl' | 'cl' | 'sl' | 'compoff', value: number) => {
+    setBulkEdits(prev => ({
+      ...prev,
+      [empId]: { ...prev[empId], [field]: value }
+    }));
+  };
+
+  // Apply default values to all visible employees
+  const applyDefaultToAll = () => {
+    const edits: Record<string, {pl: number, cl: number, sl: number, compoff: number}> = {};
+    filteredEmployees.forEach(emp => {
+      edits[emp.id] = { pl: bulkPL, cl: bulkCL, sl: bulkSL, compoff: bulkCompOff };
+    });
+    setBulkEdits(edits);
+    alert('Default values applied to all employees. Click Save to confirm.');
+  };
+
+  // Filter employees for bulk modal
+  const bulkFilteredEmployees = useMemo(() => {
+    if (!bulkSearch.trim()) return filteredEmployees;
+    const q = bulkSearch.toLowerCase();
+    return filteredEmployees.filter(e =>
+      e.name.toLowerCase().includes(q) ||
+      e.id.toLowerCase().includes(q) ||
+      e.department.toLowerCase().includes(q)
+    );
+  }, [filteredEmployees, bulkSearch]);
 
   return (
     <div className="space-y-6">
@@ -754,55 +811,125 @@ export default function LeaveRegisterView({
       )}
 
       {/* ═══════════════════════════════════════════════════ */}
-      {/* BULK OPENING BALANCE MODAL (All Employees) */}
+      {/* EMPLOYEE-WISE OPENING BALANCE EDITOR */}
       {/* ═══════════════════════════════════════════════════ */}
       {bulkModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="bg-emerald-700 p-4 text-white flex items-center justify-between">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-xl overflow-hidden flex flex-col">
+            <div className="bg-emerald-700 p-4 text-white flex items-center justify-between shrink-0">
               <div>
-                <h4 className="font-bold text-sm">Set Opening Balance for ALL Employees</h4>
-                <p className="text-[10px] text-emerald-100 mt-0.5">This will set the same balance for all active employees</p>
+                <h4 className="font-bold text-sm">Set Leave Opening Balance — Employee Wise</h4>
+                <p className="text-[10px] text-emerald-100 mt-0.5">Edit PL / CL / SL / CompOff for each employee individually</p>
               </div>
-              <button onClick={() => setBulkModalOpen(false)} className="p-1 hover:bg-emerald-800 rounded-lg">
+              <button onClick={() => { setBulkModalOpen(false); setBulkEdits({}); }} className="p-1 hover:bg-emerald-800 rounded-lg">
                 <X size={16} />
               </button>
             </div>
-            <div className="p-5 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] text-amber-800">
-                <strong>⚠️ Warning:</strong> This will OVERWRITE the opening balance for ALL active employees. Use only at the start of the financial year.
+
+            {/* Default Values + Apply All + Search */}
+            <div className="bg-emerald-50 border-b border-emerald-200 p-3 flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-emerald-800 uppercase">Defaults:</span>
+                <input type="number" value={bulkPL} onChange={(e) => setBulkPL(Number(e.target.value))}
+                  className="w-12 border border-emerald-200 rounded-lg p-1.5 text-xs font-mono text-center" placeholder="PL" title="PL" />
+                <input type="number" value={bulkCL} onChange={(e) => setBulkCL(Number(e.target.value))}
+                  className="w-12 border border-emerald-200 rounded-lg p-1.5 text-xs font-mono text-center" placeholder="CL" title="CL" />
+                <input type="number" value={bulkSL} onChange={(e) => setBulkSL(Number(e.target.value))}
+                  className="w-12 border border-emerald-200 rounded-lg p-1.5 text-xs font-mono text-center" placeholder="SL" title="SL" />
+                <input type="number" value={bulkCompOff} onChange={(e) => setBulkCompOff(Number(e.target.value))}
+                  className="w-12 border border-emerald-200 rounded-lg p-1.5 text-xs font-mono text-center" placeholder="C-Off" title="CompOff" />
+                <button onClick={applyDefaultToAll}
+                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition cursor-pointer whitespace-nowrap">
+                  Apply to All
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">PL (Privilege Leave)</label>
-                  <input type="number" value={bulkPL} onChange={(e) => setBulkPL(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CL (Casual Leave)</label>
-                  <input type="number" value={bulkCL} onChange={(e) => setBulkCL(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">SL (Sick Leave)</label>
-                  <input type="number" value={bulkSL} onChange={(e) => setBulkSL(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">CompOff</label>
-                  <input type="number" value={bulkCompOff} onChange={(e) => setBulkCompOff(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-lg p-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500" />
-                </div>
+              <div className="flex-1 min-w-[150px]">
+                <input type="text" value={bulkSearch} onChange={(e) => setBulkSearch(e.target.value)}
+                  placeholder="🔍 Search employee..."
+                  className="w-full border border-emerald-200 rounded-lg p-1.5 text-xs bg-white" />
               </div>
+              <span className="text-[10px] text-emerald-700 font-bold">
+                {Object.keys(bulkEdits).length > 0 ? `${Object.keys(bulkEdits).length} edited` : 'No changes yet'}
+              </span>
+            </div>
+
+            {/* Employee List */}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-left w-8">#</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-left">Code</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-left">Employee Name</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-left">Unit</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-center">PL</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-center">CL</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-center">SL</th>
+                    <th className="p-2 text-[9px] font-bold text-gray-500 uppercase text-center">C-Off</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkFilteredEmployees.map((emp, idx) => {
+                    const edit = bulkEdits[emp.id];
+                    const isEdited = !!edit;
+                    const currentPL = isEdited ? edit.pl : (emp.leave_balance_pl || 0);
+                    const currentCL = isEdited ? edit.cl : (emp.leave_balance_cl || 0);
+                    const currentSL = isEdited ? edit.sl : (emp.leave_balance_sl || 0);
+                    const currentCO = isEdited ? (edit as any).compoff || 0 : (emp.leave_balance_compoff || 0);
+                    return (
+                      <tr key={emp.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isEdited ? 'bg-emerald-50/60' : ''}`}>
+                        <td className="p-2 text-[10px] text-gray-400 font-mono">{idx + 1}</td>
+                        <td className="p-2 text-[10px] font-bold text-gray-700 font-mono">{emp.id}</td>
+                        <td className="p-2 text-[10px] text-gray-800">{emp.name}</td>
+                        <td className="p-2 text-[10px] text-gray-500">{emp.company}</td>
+                        <td className="p-1">
+                          <input type="number" value={currentPL}
+                            onChange={(e) => updateBulkEdit(emp.id, 'pl', Number(e.target.value))}
+                            className="w-14 border border-gray-200 rounded-lg p-1 text-[11px] font-mono text-center focus:ring-1 focus:ring-emerald-400" />
+                        </td>
+                        <td className="p-1">
+                          <input type="number" value={currentCL}
+                            onChange={(e) => updateBulkEdit(emp.id, 'cl', Number(e.target.value))}
+                            className="w-14 border border-gray-200 rounded-lg p-1 text-[11px] font-mono text-center focus:ring-1 focus:ring-emerald-400" />
+                        </td>
+                        <td className="p-1">
+                          <input type="number" value={currentSL}
+                            onChange={(e) => updateBulkEdit(emp.id, 'sl', Number(e.target.value))}
+                            className="w-14 border border-gray-200 rounded-lg p-1 text-[11px] font-mono text-center focus:ring-1 focus:ring-emerald-400" />
+                        </td>
+                        <td className="p-1">
+                          <input type="number" value={currentCO}
+                            onChange={(e) => updateBulkEdit(emp.id, 'compoff', Number(e.target.value))}
+                            className="w-14 border border-gray-200 rounded-lg p-1 text-[11px] font-mono text-center focus:ring-1 focus:ring-emerald-400" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {bulkFilteredEmployees.length === 0 && (
+                    <tr><td colSpan={8} className="p-6 text-center text-xs text-gray-400">No employees found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 p-3 flex items-center justify-between bg-gray-50 shrink-0">
+              <span className="text-[10px] text-gray-500">
+                {bulkFilteredEmployees.length} employees • Click any cell to edit
+              </span>
               <div className="flex gap-2">
-                <button onClick={() => setBulkModalOpen(false)}
-                  className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                <button onClick={() => { setBulkModalOpen(false); setBulkEdits({}); }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
                   Cancel
                 </button>
-                <button onClick={saveBulkOpeningBalance} disabled={saving}
-                  className="flex-1 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+                <button onClick={saveBulkOpeningBalance} disabled={saving || Object.keys(bulkEdits).length === 0}
+                  className={`px-5 py-2 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    Object.keys(bulkEdits).length === 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                  }`}>
                   <Save size={13} />
-                  {saving ? 'Saving...' : 'Set for ALL'}
+                  {saving ? 'Saving...' : `Save ${Object.keys(bulkEdits).length} Employee(s)`}
                 </button>
               </div>
             </div>
