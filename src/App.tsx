@@ -2544,6 +2544,15 @@ export default function App() {
                 fetchEmployees();
                 fetchPayrollRuns();
                 fetchLoans();
+                fetchRevisions();
+                fetchLeaveApps();
+                fetchCorrectionsList();
+                fetchGatePasses();
+                fetchCompoffRequests();
+                fetchDepartments();
+                fetchCompanies();
+                fetchLoanPolicy();
+                fetchFAndF();
               }}
               title="Refresh Data"
               className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100 transition cursor-pointer flex items-center gap-1 ml-auto md:ml-2"
