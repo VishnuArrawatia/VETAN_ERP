@@ -4256,7 +4256,6 @@ export default function App() {
                               <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[90px] text-right">Child All</th>
                               <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[90px] text-right">Medical All</th>
                               <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[90px] text-right">Special All</th>
-                              <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[90px] text-right">DA</th>
                               <th className="p-3 border-r border-emerald-200 bg-emerald-100 text-emerald-950 uppercase tracking-wider text-[10px] min-w-[110px] text-right font-black">Gross Salary</th>
                               <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[150px] text-right">PF contri by Empr</th>
                               <th className="p-3 border-r border-slate-200 bg-slate-100 text-slate-800 uppercase tracking-wider text-[10px] min-w-[150px] text-right">ESIC Contr by EMPR</th>
@@ -4395,10 +4394,6 @@ export default function App() {
                                   {/* Special All */}
                                   <td className="p-3 border-r border-slate-200 font-mono text-slate-600 text-right">
                                     ₹{rate_special.toLocaleString('en-IN')}
-                                  </td>
-                                  {/* Dearnes All */}
-                                  <td className="p-3 border-r border-slate-200 font-mono text-slate-600 text-right">
-                                    ₹{rate_da.toLocaleString('en-IN')}
                                   </td>
                                   {/* Gross Salary */}
                                   <td className="p-3 border-r border-emerald-200 font-mono font-black text-emerald-800 text-right bg-emerald-50/40">
@@ -7306,10 +7301,7 @@ export default function App() {
                         <span className="font-mono">₹{activePayslipDetail.earned_conveyance_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Overtime hours premium:</span>
-                      <span className="font-mono">₹{activePayslipDetail.overtime_pay.toLocaleString('en-IN')}</span>
-                    </div>
+
                   </div>
 
                   {/* Deductions column */}

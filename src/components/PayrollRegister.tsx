@@ -825,7 +825,6 @@ export default function PayrollRegister({
                         <span className="text-xs text-gray-600 block font-sans">
                           ₹{(
                             s.earned_hra +
-                            s.earned_da +
                             s.earned_special_allowance +
                             (s.earned_edu_allowance || 0) +
                             (s.earned_medical_allowance || 0) +
@@ -1095,10 +1094,7 @@ export default function PayrollRegister({
                         <span className="text-gray-500">Earned HRA:</span>
                         <span className="font-mono">₹{activeSlip.earned_hra.toLocaleString('en-IN')}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Dearness Allowance (DA):</span>
-                        <span className="font-mono">₹{activeSlip.earned_da.toLocaleString('en-IN')}</span>
-                      </div>
+
                       <div className="flex justify-between">
                         <span className="text-gray-500">Special Allowances:</span>
                         <span className="font-mono">₹{activeSlip.earned_special_allowance.toLocaleString('en-IN')}</span>
@@ -1121,10 +1117,7 @@ export default function PayrollRegister({
                           <span className="font-mono">₹{activeSlip.earned_conveyance_allowance.toLocaleString('en-IN')}</span>
                         </div>
                       )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Overtime hours premium:</span>
-                        <span className="font-mono">₹{activeSlip.overtime_pay.toLocaleString('en-IN')}</span>
-                      </div>
+
                     </div>
 
                     {/* Deductions column */}
