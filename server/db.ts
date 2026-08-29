@@ -3941,12 +3941,14 @@ export class PayrollDatabase {
       // Recalculate PF/ESIC on new earned base
       if (s.pf_deduction > 0) s.pf_deduction = Math.round(s.earned_base_salary * 0.12);
     }
-    s.tds = inputs.tds !== undefined ? Number(inputs.tds) : (s.tds || 0);
-    s.pf_deduction = inputs.pf_deduction !== undefined ? Number(inputs.pf_deduction) : (s.pf_deduction || 0);
-    s.loan_deduction = inputs.loan_deduction !== undefined ? Number(inputs.loan_deduction) : (s.loan_deduction || 0);
-    s.esic_deduction = inputs.esic_deduction !== undefined ? Number(inputs.esic_deduction) : (s.esic_deduction || 0);
-    s.custom_deductions = inputs.custom_deductions !== undefined ? Number(inputs.custom_deductions) : (s.custom_deductions || 0);
-    s.salary_advance = inputs.salary_advance !== undefined ? Number(inputs.salary_advance) : (s.salary_advance || 0);
+    // Support both short names (pf, esic, pt) from UI and full names (pf_deduction, etc.) from API
+    s.tds = (inputs.tds ?? inputs.tds) !== undefined ? Number(inputs.tds ?? inputs.tds) : (s.tds || 0);
+    s.pf_deduction = (inputs.pf_deduction ?? inputs.pf) !== undefined ? Number(inputs.pf_deduction ?? inputs.pf) : (s.pf_deduction || 0);
+    s.loan_deduction = (inputs.loan_deduction ?? inputs.loan) !== undefined ? Number(inputs.loan_deduction ?? inputs.loan) : (s.loan_deduction || 0);
+    s.esic_deduction = (inputs.esic_deduction ?? inputs.esic) !== undefined ? Number(inputs.esic_deduction ?? inputs.esic) : (s.esic_deduction || 0);
+    s.professional_tax = (inputs.professional_tax ?? inputs.pt) !== undefined ? Number(inputs.professional_tax ?? inputs.pt) : (s.professional_tax || 0);
+    s.custom_deductions = (inputs.custom_deductions ?? inputs.custom) !== undefined ? Number(inputs.custom_deductions ?? inputs.custom) : (s.custom_deductions || 0);
+    s.salary_advance = (inputs.salary_advance ?? inputs.advance) !== undefined ? Number(inputs.salary_advance ?? inputs.advance) : (s.salary_advance || 0);
     s.canteen_deduction = inputs.canteen_deduction !== undefined ? Number(inputs.canteen_deduction) : (s.canteen_deduction || 0);
     s.uniform_deduction = inputs.uniform_deduction !== undefined ? Number(inputs.uniform_deduction) : (s.uniform_deduction || 0);
     s.notice_deduction = inputs.notice_deduction !== undefined ? Number(inputs.notice_deduction) : (s.notice_deduction || 0);

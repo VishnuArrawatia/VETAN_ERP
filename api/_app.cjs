@@ -4238,12 +4238,13 @@ var PayrollDatabase = class {
       s.lop_deduction = Math.round((s.rate_base_salary + (s.rate_hra || 0) + (s.rate_special_allowance || 0)) * (s.lop_days / totalDays));
       if (s.pf_deduction > 0) s.pf_deduction = Math.round(s.earned_base_salary * 0.12);
     }
-    s.tds = inputs.tds !== void 0 ? Number(inputs.tds) : s.tds || 0;
-    s.pf_deduction = inputs.pf_deduction !== void 0 ? Number(inputs.pf_deduction) : s.pf_deduction || 0;
-    s.loan_deduction = inputs.loan_deduction !== void 0 ? Number(inputs.loan_deduction) : s.loan_deduction || 0;
-    s.esic_deduction = inputs.esic_deduction !== void 0 ? Number(inputs.esic_deduction) : s.esic_deduction || 0;
-    s.custom_deductions = inputs.custom_deductions !== void 0 ? Number(inputs.custom_deductions) : s.custom_deductions || 0;
-    s.salary_advance = inputs.salary_advance !== void 0 ? Number(inputs.salary_advance) : s.salary_advance || 0;
+    s.tds = (inputs.tds ?? inputs.tds) !== void 0 ? Number(inputs.tds ?? inputs.tds) : s.tds || 0;
+    s.pf_deduction = (inputs.pf_deduction ?? inputs.pf) !== void 0 ? Number(inputs.pf_deduction ?? inputs.pf) : s.pf_deduction || 0;
+    s.loan_deduction = (inputs.loan_deduction ?? inputs.loan) !== void 0 ? Number(inputs.loan_deduction ?? inputs.loan) : s.loan_deduction || 0;
+    s.esic_deduction = (inputs.esic_deduction ?? inputs.esic) !== void 0 ? Number(inputs.esic_deduction ?? inputs.esic) : s.esic_deduction || 0;
+    s.professional_tax = (inputs.professional_tax ?? inputs.pt) !== void 0 ? Number(inputs.professional_tax ?? inputs.pt) : s.professional_tax || 0;
+    s.custom_deductions = (inputs.custom_deductions ?? inputs.custom) !== void 0 ? Number(inputs.custom_deductions ?? inputs.custom) : s.custom_deductions || 0;
+    s.salary_advance = (inputs.salary_advance ?? inputs.advance) !== void 0 ? Number(inputs.salary_advance ?? inputs.advance) : s.salary_advance || 0;
     s.canteen_deduction = inputs.canteen_deduction !== void 0 ? Number(inputs.canteen_deduction) : s.canteen_deduction || 0;
     s.uniform_deduction = inputs.uniform_deduction !== void 0 ? Number(inputs.uniform_deduction) : s.uniform_deduction || 0;
     s.notice_deduction = inputs.notice_deduction !== void 0 ? Number(inputs.notice_deduction) : s.notice_deduction || 0;
