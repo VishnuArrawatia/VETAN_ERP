@@ -27730,6 +27730,21 @@ var PayrollDatabase = class {
     s.earned_conveyance_allowance = s.rate_conveyance_allowance;
     s.earned_special_allowance = s.rate_special_allowance;
     s.earned_da = s.rate_da;
+    if (inputs.pay_days !== void 0) {
+      const newPayDays = Number(inputs.pay_days);
+      const totalDays = s.total_days || 30;
+      s.pay_days = newPayDays;
+      s.lop_days = inputs.lop_days !== void 0 ? Number(inputs.lop_days) : totalDays - newPayDays;
+      const proration = Math.max(0, newPayDays) / totalDays;
+      s.earned_base_salary = Math.round(s.rate_base_salary * proration);
+      s.earned_hra = Math.round(s.rate_hra * proration);
+      s.earned_special_allowance = Math.round(s.rate_special_allowance * proration);
+      s.earned_edu_allowance = Math.round((s.rate_edu_allowance || 0) * proration);
+      s.earned_medical_allowance = Math.round((s.rate_medical_allowance || 0) * proration);
+      s.earned_conveyance_allowance = Math.round((s.rate_conveyance_allowance || 0) * proration);
+      s.lop_deduction = Math.round((s.rate_base_salary + (s.rate_hra || 0) + (s.rate_special_allowance || 0)) * (s.lop_days / totalDays));
+      if (s.pf_deduction > 0) s.pf_deduction = Math.round(s.earned_base_salary * 0.12);
+    }
     s.tds = inputs.tds !== void 0 ? Number(inputs.tds) : s.tds || 0;
     s.pf_deduction = inputs.pf_deduction !== void 0 ? Number(inputs.pf_deduction) : s.pf_deduction || 0;
     s.loan_deduction = inputs.loan_deduction !== void 0 ? Number(inputs.loan_deduction) : s.loan_deduction || 0;
