@@ -1,4 +1,3 @@
-function __placeholder__() {}
 import { useState } from 'react';
 import { Printer } from 'lucide-react';
 import { useStore, unitName, companyName } from '../lib/store';
@@ -112,5 +111,82 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
         />
       )}
     </div>
+  );
+}
+function PayslipModal({
+  worker, monthKey, payDays, otPay, basic, hra, other, gross, pf, esic, net, onClose,
+}: {
+  worker: WorkerRec; monthKey: string; payDays: number; otPay: number;
+  basic: number; hra: number; other: number; gross: number; pf: number; esic: number; net: number;
+  onClose: () => void;
+}) {
+  const { state } = useStore();
+  const company = companyName(state, worker.companyId);
+  return (
+    <Modal title="Payslip" open onClose={onClose} wide>
+      <div className="print-area rounded-xl border border-slate-200 p-6 space-y-4">
+        <div className="flex items-start justify-between border-b border-slate-200 pb-3">
+          <div>
+            <div className="text-lg font-bold text-slate-800">{company}</div>
+            <div className="text-xs text-slate-500">Salary Slip — {monthLabel(monthKey)}</div>
+          </div>
+          <div className="text-right text-xs text-slate-500">
+            <div>Code: <span className="font-mono text-slate-700">{worker.code}</span></div>
+            <div>UAN: {worker.uan || '—'}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div><div className="text-[11px] uppercase text-slate-400">Name</div><div className="font-semibold">{worker.name}</div></div>
+          <div><div className="text-[11px] uppercase text-slate-400">Unit</div><div className="font-semibold">{unitName(state, worker.unitId)}</div></div>
+          <div><div className="text-[11px] uppercase text-slate-400">Department</div><div>{worker.department || '—'}</div></div>
+          <div><div className="text-[11px] uppercase text-slate-400">Paid Days</div><div className="tabular-nums">{payDays} / {monthDays(monthKey)}</div></div>
+        </div>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
+              <th className="text-left px-3 py-2 rounded-l-lg">Earnings</th>
+              <th className="text-right px-3 py-2 rounded-r-lg">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-100"><td className="px-3 py-2">Basic</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(basic)}</td></tr>
+            <tr className="border-b border-slate-100"><td className="px-3 py-2">HRA</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(hra)}</td></tr>
+            {other > 0 && <tr className="border-b border-slate-100"><td className="px-3 py-2">Other Allowance</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(other)}</td></tr>}
+            {otPay > 0 && <tr className="border-b border-slate-100"><td className="px-3 py-2">Overtime</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(otPay)}</td></tr>}
+            <tr><td className="px-3 py-2 font-semibold">Gross</td><td className="px-3 py-2 text-right font-bold">₹{fmtINR2(gross)}</td></tr>
+          </tbody>
+        </table>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
+              <th className="text-left px-3 py-2 rounded-l-lg">Deductions</th>
+              <th className="text-right px-3 py-2 rounded-r-lg">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-100"><td className="px-3 py-2">Employee PF</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(pf)}</td></tr>
+            <tr className="border-b border-slate-100"><td className="px-3 py-2">ESIC</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(esic)}</td></tr>
+            <tr><td className="px-3 py-2 font-semibold">Total Deduction</td><td className="px-3 py-2 text-right font-bold">₹{fmtINR2(pf + esic)}</td></tr>
+          </tbody>
+        </table>
+
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-center justify-between">
+          <span className="font-bold text-emerald-800 text-sm">NET PAYABLE</span>
+          <span className="text-xl font-extrabold text-emerald-700 tabular-nums">₹{fmtINR2(net)}</span>
+        </div>
+        <div className="text-[11px] text-slate-400">
+          Rate/day ₹{fmtINR(worker.rateDay)} (Basic ₹{fmtINR(worker.rateBasic)} + HRA ₹{fmtINR(worker.rateHra)} + Other ₹{fmtINR(worker.rateOther)}) · Bank: {worker.bank || '—'} {worker.ac || ''}
+        </div>
+      </div>
+      <div className="mt-4 flex justify-end gap-2 no-print">
+        <Btn variant="secondary" onClick={onClose}>Close</Btn>
+        <Btn onClick={() => window.print()}>
+          <Printer size={15} /> Print / PDF
+        </Btn>
+      </div>
+    </Modal>
   );
 }

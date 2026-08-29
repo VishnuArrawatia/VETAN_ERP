@@ -93,6 +93,16 @@ export function LoanManagementView({
   const [formPurpose, setFormPurpose] = useState('');
   const [formApprovalAuthority, setFormApprovalAuthority] = useState('MD / HR Head');
   const [formRemarks, setFormRemarks] = useState('');
+  
+  // Guarantor states
+  const [formGuarantor1Code, setFormGuarantor1Code] = useState('');
+  const [formGuarantor1Name, setFormGuarantor1Name] = useState('');
+  const [formGuarantor1Dept, setFormGuarantor1Dept] = useState('');
+  const [formGuarantor1Salary, setFormGuarantor1Salary] = useState('');
+  const [formGuarantor2Code, setFormGuarantor2Code] = useState('');
+  const [formGuarantor2Name, setFormGuarantor2Name] = useState('');
+  const [formGuarantor2Dept, setFormGuarantor2Dept] = useState('');
+  const [formGuarantor2Salary, setFormGuarantor2Salary] = useState('');
 
   // Form States - Settlement / Foreclosure
   const [settleLoanId, setSettleLoanId] = useState('');
@@ -317,6 +327,14 @@ export function LoanManagementView({
           reason: formPurpose || (entryMode === 'OPENING' ? '1st April FY Opening Balance' : `${formLoanType} Sanction`),
           approval_authority: formApprovalAuthority,
           remarks: formRemarks,
+          guarantor1_code: formGuarantor1Code,
+          guarantor1_name: formGuarantor1Name,
+          guarantor1_department: formGuarantor1Dept,
+          guarantor1_monthly_salary: Number(formGuarantor1Salary || 0),
+          guarantor2_code: formGuarantor2Code,
+          guarantor2_name: formGuarantor2Name,
+          guarantor2_department: formGuarantor2Dept,
+          guarantor2_monthly_salary: Number(formGuarantor2Salary || 0),
           status: 'ACTIVE',
           skipped_months: [],
           additional_loans: [],
@@ -347,6 +365,8 @@ export function LoanManagementView({
     setFormTotalInstallments('');
     setFormPurpose('');
     setFormRemarks('');
+    setFormGuarantor1Code(''); setFormGuarantor1Name(''); setFormGuarantor1Dept(''); setFormGuarantor1Salary('');
+    setFormGuarantor2Code(''); setFormGuarantor2Name(''); setFormGuarantor2Dept(''); setFormGuarantor2Salary('');
   };
 
   // Handler: Settle / Foreclose Loan
@@ -1494,6 +1514,80 @@ export function LoanManagementView({
                 />
               </div>
 
+            </div>
+
+            {/* GUARANTOR SECTION */}
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <h4 className="text-xs font-extrabold text-amber-800 mb-3 flex items-center gap-2">
+                🛡️ गारंटर (Guarantors) — दो कर्मचारी अनिवार्य
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {/* Guarantor 1 */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">गारंटर 1 — कोड</label>
+                  <select
+                    value={formGuarantor1Code}
+                    onChange={(e) => {
+                      const emp = employees.find((em: any) => (em.emp_code || em.id) === e.target.value);
+                      setFormGuarantor1Code(e.target.value);
+                      setFormGuarantor1Name(emp?.name || '');
+                      setFormGuarantor1Dept(emp?.department || '');
+                      setFormGuarantor1Salary(String(emp?.rate_base_salary || 0));
+                    }}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Select --</option>
+                    {employees.map((em: any) => (
+                      <option key={em.id} value={em.emp_code || em.id}>{em.emp_code || em.id} — {em.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">नाम</label>
+                  <input type="text" value={formGuarantor1Name} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">विभाग</label>
+                  <input type="text" value={formGuarantor1Dept} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">मासिक वेतन</label>
+                  <input type="text" value={formGuarantor1Salary ? ('₹' + Number(formGuarantor1Salary).toLocaleString('en-IN')) : ''} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+
+                {/* Guarantor 2 */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">गारंटर 2 — कोड</label>
+                  <select
+                    value={formGuarantor2Code}
+                    onChange={(e) => {
+                      const emp = employees.find((em: any) => (em.emp_code || em.id) === e.target.value);
+                      setFormGuarantor2Code(e.target.value);
+                      setFormGuarantor2Name(emp?.name || '');
+                      setFormGuarantor2Dept(emp?.department || '');
+                      setFormGuarantor2Salary(String(emp?.rate_base_salary || 0));
+                    }}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Select --</option>
+                    {employees.map((em: any) => (
+                      <option key={em.id} value={em.emp_code || em.id}>{em.emp_code || em.id} — {em.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">नाम</label>
+                  <input type="text" value={formGuarantor2Name} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">विभाग</label>
+                  <input type="text" value={formGuarantor2Dept} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600">मासिक वेतन</label>
+                  <input type="text" value={formGuarantor2Salary ? ('₹' + Number(formGuarantor2Salary).toLocaleString('en-IN')) : ''} readOnly className="w-full p-2 border border-slate-200 rounded-lg text-xs bg-slate-50" />
+                </div>
+              </div>
             </div>
 
             <div className="pt-4 border-t flex justify-end gap-3">
