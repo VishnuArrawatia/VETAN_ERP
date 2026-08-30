@@ -70,6 +70,15 @@ export default function PayrollRegister({
   const [showAccountsJvModal, setShowAccountsJvModal] = useState(false);
   const [copyJvSuccess, setCopyJvSuccess] = useState(false);
 
+  // Filter slips by activeCompany — show only selected unit's payslips
+  const filteredSlips = React.useMemo(() => {
+    if (!activeCompany || activeCompany === 'ALL' || activeCompany === 'GROUP') return slips;
+    return slips.filter(s => {
+      const emp = employees.find(e => e.id === s.employee_id);
+      return emp ? emp.company === activeCompany : false;
+    });
+  }, [slips, activeCompany, employees]);
+
   // Accounts JV Calculation for activeMonth
   const accountsJvData = React.useMemo(() => {
     const slipsForMonth = slips.filter(s => s.month === activeMonth);
@@ -800,7 +809,7 @@ export default function PayrollRegister({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 font-sans">
-              {slips.map((s) => {
+              {filteredSlips.map((s) => {
                 const emp = employees.find(e => e.id === s.employee_id);
                 return (
                   <tr key={s.id} className="hover:bg-gray-50/50 transition">

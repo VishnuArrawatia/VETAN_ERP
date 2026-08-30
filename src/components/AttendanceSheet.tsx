@@ -117,15 +117,20 @@ export default function AttendanceSheet({
       const locked = records.length > 0 && records.every(r => r.is_locked);
       setIsLocked(locked);
       
-      // CRITICAL FIX: Show ALL employees for the unit — even those without attendance records.
+      // CRITICAL FIX: Show ONLY employees from the ACTIVE COMPANY — even those without attendance records.
       // Employees without records get 'NOT MARKED' status (present=0, absent=0, etc.)
       // This prevents the old bug where auto-creating 'Present' records polluted the database.
+      const filteredEmployees = employees.filter(emp => {
+        if (!activeCompany || activeCompany === 'ALL' || activeCompany === 'GROUP') return true;
+        return emp.company === activeCompany;
+      });
+      
       const empRecordMap = new Map<string, any>();
       for (const r of records) {
         empRecordMap.set(r.employee_id, r);
       }
       
-      const mapped: ParsedRecord[] = employees.map((emp, index) => {
+      const mapped: ParsedRecord[] = filteredEmployees.map((emp, index) => {
         const r = empRecordMap.get(emp.id);
         if (r) {
           // Employee HAS attendance record — use actual data
