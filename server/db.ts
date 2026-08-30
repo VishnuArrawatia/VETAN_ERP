@@ -61,10 +61,18 @@ interface Schema {
   hods?: HODMaster[];
   compoff_ledger?: any[];
   policies?: any[];
-  policy_acknowledgements?: any[];
+    policy_acknowledgements?: any[];
   gate_passes?: any[];
   shifts?: Shift[];
   loan_policy?: any;
+  // Workforce module (Phase A — foundation, additive)
+  contractors?: ContractorMaster[];
+  contractor_bills?: ContractorBill[];
+  contractor_bill_lines?: ContractorBillLine[];
+  cheque_payments?: ChequePayment[];
+  minimum_wage_rates?: MinimumWageRate[];
+  month_status?: MonthStatus[];
+  attendance_upload_batches?: AttendanceUploadBatch[];
 }
 
 const SEED_EMPLOYEES: Employee[] = [
@@ -468,8 +476,16 @@ export class PayrollDatabase {
     compoff_ledger: [],
     policies: [],
     policy_acknowledgements: [],
-    gate_passes: [],
-    loan_policy: null
+        gate_passes: [],
+    loan_policy: null,
+    // Workforce module (Phase A — foundation, additive)
+    contractors: [],
+    contractor_bills: [],
+    contractor_bill_lines: [],
+    cheque_payments: [],
+    minimum_wage_rates: [],
+    month_status: [],
+    attendance_upload_batches: []
   };
 
   private dbSqlite!: any;
