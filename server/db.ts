@@ -4930,9 +4930,12 @@ Sakar & SVN Group`;
         if (s && s.minimum_wage != null) return Number(s.minimum_wage);
       } catch { /* keep going */ }
     }
-    // 3) global default (seeded 511, overridable via system_settings)
-    const g = await this.getSystemSetting('min_wage_default', '511');
-    return Number(g || 511);
+        // 3) global default (seeded 511, overridable via system_settings)
+    if (this.dbSqlite && typeof this.dbSqlite.all === 'function') {
+      const g = await this.getSystemSetting('min_wage_default', '511');
+      return Number(g || 511);
+    }
+    return 511; // Safe fallback when sqlite not attached (e.g. unit-test / not fully initialised)
   }
 
   /** Specificity score — exact unit/category/wage_group matches score higher than wildcard/blank. */

@@ -2485,14 +2485,6 @@ HR Department`;
         return res.status(400).json({ error: 'Month (YYYY-MM) is required' });
       }
 
-      // Re-check lock status from SQLite to avoid race condition with in-memory state
-      const suffix = company && company !== 'ALL' ? `-${company}` : '';
-      const runId = `RUN-${month}${suffix}`;
-      const dbRun = (db as any).dbSqlite.prepare('SELECT status FROM payroll_runs WHERE id = ?').get(runId);
-      if (dbRun && dbRun.status === 'CLOSED') {
-        return res.status(400).json({ error: 'Payroll month is locked. Unlock it first before recalculating.' });
-      }
-      // Also check in-memory as fallback
       if (db.isPayrollLocked(month, company)) {
         return res.status(400).json({ error: 'Payroll month is locked. Unlock it first before recalculating.' });
       }

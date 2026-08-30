@@ -24,8 +24,8 @@ assert('WV: 23.50 -> 23.5', wv(23.5, 1) === 23.5, String(wv(23.5, 1)));
 const MINW = 511;
 assert('EX A: 11700/511 -> 22.5', db.calculateWageEquivalentDays(11700, MINW) === 22.5, String(db.calculateWageEquivalentDays(11700, MINW)));
 assert('EX B: 10000/511 -> 19.5', db.calculateWageEquivalentDays(10000, MINW) === 19.5, String(db.calculateWageEquivalentDays(10000, MINW)));
-assert('EX C: 15000/511 -> 29.5', db.calculateWageEquivalentDays(15000, MINW) === 29.5, String(db.calculateWageEquivalentDays(15000, MINW)));
-assert('EX D: 4000/511 -> 8', db.calculateWageEquivalentDays(4000, MINW) === 8, String(db.calculateWageEquivalentDays(4000, MINW)));
+assert('EX C: 15000/511 -> 29 (0.354 < 0.50)', db.calculateWageEquivalentDays(15000, MINW) === 29, String(db.calculateWageEquivalentDays(15000, MINW)));
+assert('EX D: 4000/511 -> 7.5 (0.828 >= 0.50)', db.calculateWageEquivalentDays(4000, MINW) === 7.5, String(db.calculateWageEquivalentDays(4000, MINW)));
 
 // ---- 2. Business NCP (PF/ESIC layer only) — Paid 26 example ----
 const ncp = db.calculateBusinessNCP(26, 11700, MINW);
@@ -41,7 +41,7 @@ assert('NCP C: businessNcp=0', ncpC.businessNcp === 0, String(ncpC.businessNcp))
 // ---- 3. Zero-min-wage guard ----
 assert('Zero min -> 0 counted', db.calculateWageEquivalentDays(10000, 0) === 0);
 
-// ---- 4. getMinimumWage defaults to 511 when no rate configured ----
+// ---- 3. getMinimumWage defaults to 511 when no rate configured (sqlite not attached in unit test, falls back) ----
 const mw = await db.getMinimumWage('SVN-1');
 assert('getMinimumWage default=511', mw === 511, String(mw));
 

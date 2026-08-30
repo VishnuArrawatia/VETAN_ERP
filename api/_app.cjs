@@ -4778,8 +4778,11 @@ Sakar & SVN Group`;
       } catch {
       }
     }
-    const g = await this.getSystemSetting("min_wage_default", "511");
-    return Number(g || 511);
+    if (this.dbSqlite && typeof this.dbSqlite.all === "function") {
+      const g = await this.getSystemSetting("min_wage_default", "511");
+      return Number(g || 511);
+    }
+    return 511;
   }
   /** Specificity score — exact unit/category/wage_group matches score higher than wildcard/blank. */
   _mwSpecificity(r, opts) {
@@ -7807,12 +7810,6 @@ HR Department`;
       const { month, company } = req.body;
       if (!month || !/^\d{4}-\d{2}$/.test(month)) {
         return res.status(400).json({ error: "Month (YYYY-MM) is required" });
-      }
-      const suffix = company && company !== "ALL" ? `-${company}` : "";
-      const runId = `RUN-${month}${suffix}`;
-      const dbRun = db.dbSqlite.prepare("SELECT status FROM payroll_runs WHERE id = ?").get(runId);
-      if (dbRun && dbRun.status === "CLOSED") {
-        return res.status(400).json({ error: "Payroll month is locked. Unlock it first before recalculating." });
       }
       if (db.isPayrollLocked(month, company)) {
         return res.status(400).json({ error: "Payroll month is locked. Unlock it first before recalculating." });
