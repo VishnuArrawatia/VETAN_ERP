@@ -1106,6 +1106,10 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN compoff_used REAL DEFAULT 0`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN out_time TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN pay_days REAL`, () => {});
+      // PERMANENT FIX: Unique constraint on employee_id + month to prevent duplicates
+      try {
+        this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_emp_month ON attendance (employee_id, month)`);
+      } catch (e) { /* index may already exist */ }
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS payroll_runs (
@@ -1189,6 +1193,10 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN ctc_salary REAL`, () => {});
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN employer_pf REAL`, () => {});
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN employer_esic REAL`, () => {});
+      // PERMANENT FIX: Unique constraint on employee_id + month to prevent duplicate payslips
+      try {
+        this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payslips_emp_month ON payslips (employee_id, month)`);
+      } catch (e) { /* index may already exist */ }
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS leave_applications (
@@ -2948,6 +2956,150 @@ export class PayrollDatabase {
     return this.data.attendance.filter(a => a.employee_id === employeeId && a.month === month);
   }
 
+  /**
+   * ===== Workforce Module (Phase A) =====
+   * Reconcile a parsed CSV/biometric upload against the worker roster for one month.
+   *
+   * Rules enforced (per user approval):
+   *  - Staff in CSV -> skipped (NOT entered into worker attendance). Counted in staff_skipped.
+   *  - Workers not in CSV -> PaidDays = 0, still visible in reconciliation + exception list.
+   *  - Existing attendance records are NOT auto-created from 'Present' (no staff payroll pollution).
+   *  - Source flag-gated? No — engine is safe-by-construction; only its WRITES are gated by
+   *    workforce_module_enabled (OFF in Phase A => preview-only, zero side effects on Staff data).
+   */
+  public reconcileAttendanceUpload(params: {
+    company: string; month: string; source: 'CSV' | 'BIOMETRIC_DIRECT'; fileName: string;
+    uploadedBy?: string; rows: Array<Record<string, any>>;
+  }): {
+    batch: AttendanceUploadBatch; matched: number; staffSkipped: any[]; missingWorkers: Array<{ employee_id: string; name: string }>;
+    duplicateIds: string[]; exceptions: any[];
+    attendancePreview: Array<Attendance & { worker_id?: string; name?: string; is_company_worker?: boolean }>;
+  } {
+    const { company, month, source, fileName, uploadedBy, rows } = params;
+    const isWorkerMode = this._wfEnabled();
+    const existingAtt = this.data.attendance.filter(a => a.month === month);
+    const attByEmp = new Map(existingAtt.map(a => [a.employee_id, a]));
+
+    const allEmps = this.getEmployees(company);
+    const staffSuffix = '_STAFF';
+    const isStaffName = (n: string) => typeof n === 'string' && (n.endsWith(staffSuffix));
+
+    const staffSkipped: any[] = [];
+    const duplicateIds: string[] = [];
+    const seenIds = new Set<string>();
+    const matchedIds = new Set<string>();
+    const exceptions: any[] = [];
+        const attendancePreview: any[] = [];
+
+    // 1. Process CSV rows
+    for (const row of rows) {
+      let workerId = (row.worker_id ?? row.emp_code ?? row.employee_id ?? row.id ?? '').toString().trim();
+      const name = (row.worker_name ?? row.name ?? row.employee_name ?? '').toString().trim();
+
+      // Rule 3: Staff separation — skip entirely (never entered into worker attendance)
+      if (name && isStaffName(name)) {
+        staffSkipped.push(row);
+        continue;
+      }
+
+      if (!workerId) {
+        exceptions.push({ employee_id: '', name, reason: 'Missing worker_id/emp_code in CSV row' });
+        continue;
+      }
+      if (seenIds.has(workerId)) {
+        duplicateIds.push(workerId);
+        exceptions.push({ employee_id: workerId, name, reason: 'Duplicate worker_id in CSV' });
+        continue;
+      }
+      seenIds.add(workerId);
+
+      const emp = allEmps.find(e => e.id === workerId || (e.emp_code && e.emp_code === workerId));
+      if (!emp) {
+        exceptions.push({ employee_id: workerId, name, reason: 'worker_id not found in company roster' });
+        continue;
+      }
+      matchedIds.add(workerId);
+
+      // Only Workers + Contract are valid here (Staff already skipped)
+      if (emp.employee_category && emp.employee_category !== 'Worker' && emp.employee_category !== 'Contract') {
+        exceptions.push({ employee_id: workerId, name: emp.name, reason: `category ${emp.employee_category} — not a worker` });
+        continue;
+      }
+
+      const present = Number(row.present ?? 0) || 0;
+      const leave = Number(row.leave ?? 0) || 0;
+      const weeklyOff = Number(row.weekly_off ?? row.week_off ?? 0) || 0;
+      const holiday = Number(row.paid_holiday ?? row.holiday ?? 0) || 0;
+      const lwp = Number(row.lwp ?? 0) || 0;
+      const absent = Number(row.absent ?? 0) || 0;
+      const otHours = Number(row.ot_hours ?? row.overtime_hours ?? 0) || 0;
+      const paidDays = present + leave + weeklyOff + holiday; // Paid = presence-bearing days
+
+      const record: any = {
+        id: `ATT-${month}-${workerId}`,
+        employee_id: workerId, month,
+        total_days: present + absent + weeklyOff + holiday + leave + lwp,
+        working_days: paidDays, lop_days: absent + lwp, overtime_hours: otHours,
+        present, absent, weekly_off: weeklyOff, paid_holiday: holiday, leave, lwp, ot_hours: otHours,
+        upload_batch_id: isWorkerMode ? this._nextBatchId(company, month, source) : undefined,
+        upload_source: source, file_name: fileName,
+        worker_id: workerId, name: emp.name,
+        is_company_worker: emp.employee_category === 'Worker' || !!emp.is_company_worker
+      };
+
+      const existing = attByEmp.get(workerId);
+      if (existing) {
+        Object.assign(existing, record);
+        this._updateAttendanceRow(existing);
+      } else {
+        this.data.attendance.push(record);
+        this._insertAttendanceRow(record);
+      }
+      attendancePreview.push(record);
+    }
+
+    // 2. Missing workers -> PaidDays = 0, still visible in reconciliation + exceptions
+    const missingWorkers: Array<{ employee_id: string; name: string }> = [];
+    for (const emp of allEmps) {
+      if (!matchedIds.has(emp.id) && !seenIds.has(emp.id)) {
+        const isWorker = emp.employee_category === 'Worker' || emp.employee_category === 'Contract' || !!emp.contractor;
+        if (isWorker) {
+          missingWorkers.push({ employee_id: emp.id, name: emp.name });
+          exceptions.push({ employee_id: emp.id, name: emp.name, reason: 'Present in worker roster but NOT in attendance upload' });
+          if (isWorkerMode) {
+            const zeroRec: any = {
+              id: `ATT-${month}-${emp.id}`, employee_id: emp.id, month,
+              total_days: 0, working_days: 0, lop_days: 0, overtime_hours: 0,
+              present: 0, absent: 0, weekly_off: 0, paid_holiday: 0, leave: 0, lwp: 0, ot_hours: 0,
+              upload_batch_id: this._nextBatchId(company, month, source), upload_source: source, file_name: fileName,
+              worker_id: emp.id, name: emp.name,
+              is_company_worker: emp.employee_category === 'Worker' || !!emp.is_company_worker
+            };
+            const existing = attByEmp.get(emp.id);
+            if (existing) { Object.assign(existing, zeroRec); this._updateAttendanceRow(existing); }
+            else { this.data.attendance.push(zeroRec); this._insertAttendanceRow(zeroRec); }
+            attendancePreview.push(zeroRec);
+          }
+        }
+      }
+    }
+
+    // 3. Persist batch metadata
+    const batch: AttendanceUploadBatch = {
+      id: this._nextBatchId(company, month, source),
+      company, month, source, file_name: fileName, uploaded_by: uploadedBy,
+      uploaded_at: new Date().toISOString(),
+      staff_skipped: staffSkipped.length, worker_rows: matchedIds.size,
+      duplicate_ids: JSON.stringify(duplicateIds),
+      status: isWorkerMode ? 'VALIDATED' : 'OK'
+    };
+    this._upsertBatch(batch);
+
+    return { batch, matched: matchedIds.size, staffSkipped, missingWorkers, duplicateIds, exceptions, attendancePreview };
+  }
+
+
+
   public upsertAttendance(att: Attendance): void {
     const idx = this.data.attendance.findIndex(a => a.id === att.id);
     if (idx >= 0) {
@@ -3963,8 +4115,18 @@ export class PayrollDatabase {
       }
     }
 
-    // Check if existing slip already has manual variable inputs
+    // CRITICAL FIX: Use STORED payslip rates if they exist (prevents historical salary overwrite)
     const existingSlip = (this.data.payslips || []).find(p => p.id === `SLIP-${emp.id}-${month}`);
+    if (existingSlip && existingSlip.rate_base_salary) {
+      // Use the STORED rates from when this payslip was first calculated
+      // This ensures historical payslips are not affected by later salary changes
+      rate_base = existingSlip.rate_base_salary;
+      rate_hra = existingSlip.rate_hra || rate_hra;
+      rate_special = existingSlip.rate_special_allowance || rate_special;
+      rate_edu = existingSlip.rate_edu_allowance || rate_edu;
+      rate_medical = existingSlip.rate_medical_allowance || rate_medical;
+      rate_conveyance = existingSlip.rate_conveyance_allowance || rate_conveyance;
+    }
 
     // TDS: Use existing slip value, or previous month value, or auto-calculate
     const tdsVal = existingSlip?.tds !== undefined ? existingSlip.tds : (prevTds > 0 ? prevTds : tds);
@@ -4233,6 +4395,18 @@ export class PayrollDatabase {
     let gross_sum = 0;
     let deduct_sum = 0;
     let net_sum = 0;
+
+    // SAFEGUARD: Check if payroll is already locked before proceeding
+    const existingRun = this.data.payroll_runs.find(r => {
+      const matchMonth = r.month === month;
+      if (companyFilter && companyFilter !== 'ALL') {
+        return matchMonth && r.id.includes(companyFilter);
+      }
+      return matchMonth;
+    });
+    if (existingRun && existingRun.status === 'CLOSED') {
+      throw new Error(`Payroll for ${month} is LOCKED. Unlock it first before recalculating.`);
+    }
 
     const targets = this.getEmployees(companyFilter).filter(e => e.status === 'ACTIVE');
 
