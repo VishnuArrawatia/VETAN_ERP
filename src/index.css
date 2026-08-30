@@ -91,10 +91,12 @@
   body * {
     visibility: hidden;
   }
-  #compliance-printable-document, #compliance-printable-document * {
+  #compliance-printable-document, #compliance-printable-document *,
+  .salary-slip-print, .salary-slip-print * {
     visibility: visible;
   }
-  #compliance-printable-document {
+  #compliance-printable-document,
+  .salary-slip-print {
     visibility: visible !important;
     position: absolute !important;
     left: 0 !important;
@@ -106,6 +108,10 @@
     box-shadow: none !important;
     background: white !important;
     color: black !important;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
   }
 }
 

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Employee, PayrollRun, Payslip } from '../types';
-import { getCompanyName } from './CompanyLogos';
+import { getCompanyName, CompanyLogo } from './CompanyLogos';
 import PayrollInputManagementView from './PayrollInputManagementView';
 
 interface PayrollRegisterProps {
@@ -797,8 +797,7 @@ export default function PayrollRegister({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
-              <tr className="bg-gray-50 border-b select-none font-display text-gray-500">
-                <th className="p-4.5 text-xs font-semibold">Staff Name / Ref</th>
+              <tr className="bg-gray-50 border-b select-none font-display text-gray-500">                 <th className="p-4.5 text-xs font-semibold">Employee Name</th>
                 <th className="p-4.5 text-xs font-semibold text-center">Paid Days</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Earned Basic (A)</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Allowances (B)</th>
@@ -1032,11 +1031,14 @@ export default function PayrollRegister({
                 <div className="space-y-6 text-slate-800">
                   
                   {/* Printable Header */}
-                  <div className="text-center pb-5 border-b border-gray-200">
-                    <div className="flex justify-center mb-1">
-                      <Building className="text-emerald-600" size={24} />
+                  <div className="text-center pb-4 border-b border-gray-200">
+                    <div className="flex justify-center mb-2">
+                      {(() => {
+                        const emp = employees.find(e => e.id === activeSlip.employee_id);
+                        return <CompanyLogo company={emp?.company || ''} className="h-10" showText={false} />;
+                      })()}
                     </div>
-                    <h2 className="text-lg font-bold text-gray-900 tracking-tight font-display">
+                    <h2 className="text-base font-bold text-gray-900 tracking-tight font-display">
                       {(() => {
                         const emp = employees.find(e => e.id === activeSlip.employee_id);
                         return getCompanyName(emp?.company || '');
@@ -1061,7 +1063,7 @@ export default function PayrollRegister({
                           <td className="font-mono font-bold pb-1.5 text-gray-900">{activeSlip.employee_id}</td>
                         </tr>
                         <tr>
-                          <td className="text-gray-400 pb-1.5">Staff Name:</td>
+                          <td className="text-gray-400 pb-1.5">Employee Name:</td>
                           <td className="font-bold pb-1.5 text-gray-900">{activeSlip.employee_name}</td>
                         </tr>
                         <tr>
@@ -1078,7 +1080,7 @@ export default function PayrollRegister({
                     <table className="w-full text-left">
                       <tbody>
                         <tr>
-                          <td className="text-gray-400 pb-1.5">Bank Link Name:</td>
+                          <td className="text-gray-400 pb-1.5">Bank Name:</td>
                           <td className="font-medium pb-1.5 text-gray-900">{activeSlip.bank_name}</td>
                         </tr>
                         <tr>
@@ -1086,11 +1088,11 @@ export default function PayrollRegister({
                           <td className="font-mono pb-1.5 text-gray-900">{activeSlip.bank_account}</td>
                         </tr>
                         <tr>
-                          <td className="text-gray-400 pb-1.5">IFS Code Details:</td>
+                          <td className="text-gray-400 pb-1.5">IFSC Code:</td>
                           <td className="font-mono pb-1.5 text-gray-900">{activeSlip.ifsc}</td>
                         </tr>
                         <tr>
-                          <td className="text-gray-400 pb-1.5">PAN Card No:</td>
+                          <td className="text-gray-400 pb-1.5">PAN:</td>
                           <td className="font-mono pb-1.5 text-gray-900 uppercase">{activeSlip.pan}</td>
                         </tr>
                       </tbody>
@@ -1101,24 +1103,23 @@ export default function PayrollRegister({
                   <div className="grid grid-cols-2 gap-x-6 border-t border-b border-gray-100 py-4 font-sans text-xs">
                     
                     {/* Earnings column */}
-                    <div className="space-y-2">
-                      <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Earnings Component</span>
+                    <div className="space-y-2">                        <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Earnings</span>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Prorated Basic:</span>
+                        <span className="text-gray-500">Basic Salary:</span>
                         <span className="font-mono">₹{activeSlip.earned_base_salary.toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Earned HRA:</span>
+                        <span className="text-gray-500">HRA:</span>
                         <span className="font-mono">₹{activeSlip.earned_hra.toLocaleString('en-IN')}</span>
                       </div>
 
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Special Allowances:</span>
+                        <span className="text-gray-500">Special Allowance:</span>
                         <span className="font-mono">₹{activeSlip.earned_special_allowance.toLocaleString('en-IN')}</span>
                       </div>
                       {activeSlip.earned_edu_allowance !== undefined && activeSlip.earned_edu_allowance > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Education Allowance:</span>
+                          <span className="text-gray-500">Children Education Allowance:</span>
                           <span className="font-mono">₹{activeSlip.earned_edu_allowance.toLocaleString('en-IN')}</span>
                         </div>
                       )}
@@ -1140,15 +1141,12 @@ export default function PayrollRegister({
                     {/* Deductions column */}
                     <div className="space-y-2 border-l pl-6">
                       <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Deductions</span>
-                      <div className="flex justify-between items-center h-7">
-                        <span className="text-gray-500">Loss of Pay (LOP) fine:</span>
-                        <span className="font-mono">₹{activeSlip.lop_deduction.toLocaleString('en-IN')}</span>
-                      </div>
+
 
                       {isEditing ? (
                         <div className="space-y-2 pt-1 border-t border-dashed border-gray-100">
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">EPF Employee Share (12%):</span>
+                            <span className="text-gray-500 text-[11px]">Employee PF:</span>
                             <input 
                               type="number"
                               value={editPf}
@@ -1157,7 +1155,7 @@ export default function PayrollRegister({
                             />
                           </div>
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">ESIC Share (0.75%):</span>
+                            <span className="text-gray-500 text-[11px]">Employee ESIC:</span>
                             <input 
                               type="number"
                               value={editEsic}
@@ -1175,7 +1173,7 @@ export default function PayrollRegister({
                             />
                           </div>
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">Income Tax (TDS):</span>
+                            <span className="text-gray-500 text-[11px]">TDS:</span>
                             <input 
                               type="number"
                               value={editTds}
@@ -1184,7 +1182,7 @@ export default function PayrollRegister({
                             />
                           </div>
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">Loan Repayment:</span>
+                            <span className="text-gray-500 text-[11px]">Loan Amount:</span>
                             <input 
                               type="number"
                               value={editLoan}
@@ -1193,7 +1191,7 @@ export default function PayrollRegister({
                             />
                           </div>
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">Salary Advance:</span>
+                            <span className="text-gray-500 text-[11px]">Salary Advance Amount:</span>
                             <input 
                               type="number"
                               value={editSalaryAdvance}
@@ -1202,7 +1200,7 @@ export default function PayrollRegister({
                             />
                           </div>
                           <div className="flex justify-between items-center gap-2">
-                            <span className="text-gray-500 text-[11px]">Others (Custom):</span>
+                            <span className="text-gray-500 text-[11px]">Other Deduction:</span>
                             <input 
                               type="number"
                               value={editCustomDeductions}
@@ -1214,36 +1212,36 @@ export default function PayrollRegister({
                       ) : (
                         <div className="space-y-2">
                           <div className="flex justify-between items-center h-7">
-                            <span className="text-gray-500">EPF Employee Share (12%):</span>
+                            <span className="text-gray-500">Employee PF:</span>
                             <span className="font-mono">₹{activeSlip.pf_deduction.toLocaleString('en-IN')}</span>
                           </div>
                           <div className="flex justify-between items-center h-7">
-                            <span className="text-gray-500">ESIC Medical Share (0.75%):</span>
+                            <span className="text-gray-500">Employee ESIC:</span>
                             <span className="font-mono">₹{activeSlip.esic_deduction.toLocaleString('en-IN')}</span>
                           </div>
                           <div className="flex justify-between items-center h-7">
-                            <span className="text-gray-500">Professional Tax (PT):</span>
+                            <span className="text-gray-500">Professional Tax:</span>
                             <span className="font-mono">₹{activeSlip.professional_tax.toLocaleString('en-IN')}</span>
                           </div>
                           <div className="flex justify-between items-center h-7">
-                            <span className="text-gray-500">Income Tax (TDS Estimate):</span>
+                            <span className="text-gray-500">TDS:</span>
                             <span className="font-mono">₹{activeSlip.tds.toLocaleString('en-IN')}</span>
                           </div>
                           {activeSlip.loan_deduction !== undefined && activeSlip.loan_deduction > 0 && (
                             <div className="flex justify-between items-center h-7 font-semibold text-amber-700">
-                              <span>Loan Repayment:</span>
+                              <span>Loan Amount:</span>
                               <span className="font-mono">₹{activeSlip.loan_deduction.toLocaleString('en-IN')}</span>
                             </div>
                           )}
                           {activeSlip.salary_advance !== undefined && activeSlip.salary_advance > 0 && (
                             <div className="flex justify-between items-center h-7 font-semibold text-amber-700">
-                              <span>Salary Advance:</span>
+                              <span>Salary Advance Amount:</span>
                               <span className="font-mono">₹{activeSlip.salary_advance.toLocaleString('en-IN')}</span>
                             </div>
                           )}
                           {activeSlip.custom_deductions !== undefined && activeSlip.custom_deductions > 0 && (
                             <div className="flex justify-between items-center h-7 font-semibold text-rose-700">
-                              <span>Others (Deductions):</span>
+                              <span>Other Deduction:</span>
                               <span className="font-mono">₹{activeSlip.custom_deductions.toLocaleString('en-IN')}</span>
                             </div>
                           )}
@@ -1260,7 +1258,7 @@ export default function PayrollRegister({
                       <span className="font-mono text-gray-900">₹{activeSlip.gross_salary.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between pl-6 border-l">
-                      <span className="text-gray-900">TOTAL DEDUCTION:</span>
+                      <span className="text-gray-900">TOTAL DEDUCTIONS:</span>
                       <span className="font-mono text-rose-600">₹{liveTotalDeductions.toLocaleString('en-IN')}</span>
                     </div>
                   </div>
@@ -1268,7 +1266,7 @@ export default function PayrollRegister({
                   {/* Net Final transfers highlight */}
                   <div className="bg-emerald-50 p-4.5 rounded-xl border border-emerald-100 flex justify-between items-center text-emerald-900">
                     <div>
-                      <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">NET TRANSFER AMOUNT</span>
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">NET PAYABLE</span>
                       <span className="text-xs text-emerald-700 block mt-0.5">Disbursed to bank listed on file.</span>
                     </div>
                     <span className="text-xl font-extrabold font-mono tracking-tight text-emerald-700">
