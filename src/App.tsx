@@ -91,6 +91,8 @@ import HODMasterView from './components/HODMasterView';
 import ShiftMasterView from './components/ShiftMasterView';
 import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
+import SalaryRestructure from './components/SalaryRestructure';
+import ArrearWorking from './components/ArrearWorking';
 import BulkSalaryRevisionUpload from './components/BulkSalaryRevisionUpload';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
@@ -3311,6 +3313,28 @@ export default function App() {
                       onSuccess={() => {
                         fetchEmployees();
                         fetchRevisions();
+                      }}
+                    />
+
+                    {/* Salary Restructure — Reverse CTC Calculator */}
+                    <SalaryRestructure
+                      employees={employees}
+                      activeCompany={activeCompany}
+                      onRefresh={() => {
+                        fetchEmployees();
+                        fetchRevisions();
+                      }}
+                    />
+
+                    {/* Arrear Working — Month-wise Arrear Calculation */}
+                    <ArrearWorking
+                      employees={employees}
+                      slips={monthlySlips}
+                      attendance={attendance}
+                      activeCompany={activeCompany}
+                      onRefresh={() => {
+                        fetchEmployees();
+                        fetchPayrollRuns();
                       }}
                     />
 
