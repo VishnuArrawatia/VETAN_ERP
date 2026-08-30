@@ -100,11 +100,14 @@ export async function createApp(supabaseAdmin?: any) {
     next();
   });
 
-  // Helper to verify PIN securely against database system settings
+    // Helper to verify PIN securely against database system settings
   async function verifyPin(pin: any): Promise<boolean> {
     const isSecEnabled = await db.getSystemSetting('production_security_enabled', '0');
-    if (isSecEnabled === '0') {
-      return true; // Bypass PIN verification in Testing Mode
+    const securityMode = await db.getSystemSetting('security_mode', 'testing');
+    // PIN is required only when EITHER production security OR security_mode='production'.
+    // Default (testing mode, sec disabled) => bypass, preserving existing behavior.
+    if (isSecEnabled === '0' && securityMode !== 'production') {
+      return true; // Bypass PIN verification in Testing Mode (default — unchanged)
     }
     const hash = crypto.createHash('sha256').update(String(pin || '')).digest('hex');
     const storedHash = await db.getSystemSetting('super_admin_pin', crypto.createHash('sha256').update('1234').digest('hex'));
@@ -1435,6 +1438,49 @@ export async function createApp(supabaseAdmin?: any) {
       db.saveAttendance(records);
       db.logAudit('Attendance Modified', `Adjusted attendance coordinates for ${records.length} staff members for month ${first.month} (${company || 'ALL'})`, getOperator(req));
       res.json({ success: true, count: records.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ADMIN: Delete attendance record by ID
+  app.delete('/api/admin/attendance/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const dbSqlite = (db as any).dbSqlite;
+      dbSqlite.run('DELETE FROM attendance WHERE id = ?', [id]);
+      // Also remove from in-memory
+      const data = (db as any).data;
+      if (data.attendance) {
+        (db as any).data.attendance = data.attendance.filter((a: any) => a.id !== id);
+      }
+      await db.persistDataSync();
+      res.json({ success: true, deleted: id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ADMIN: Update attendance record fields
+  app.put('/api/admin/attendance/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const dbSqlite = (db as any).dbSqlite;
+      
+      // Update SQLite
+      const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+      const values = [...Object.values(updates), id];
+      dbSqlite.run(`UPDATE attendance SET ${setClauses} WHERE id = ?`, values);
+      
+      // Update in-memory
+      const data = (db as any).data;
+      if (data.attendance) {
+        const att = data.attendance.find((a: any) => a.id === id);
+        if (att) Object.assign(att, updates);
+      }
+      await db.persistDataSync();
+      res.json({ success: true, updated: id, fields: Object.keys(updates) });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

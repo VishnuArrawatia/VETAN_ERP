@@ -1573,11 +1573,99 @@ export class PayrollDatabase {
       ];
       for (const s of defaultShifts) {
         this.dbSqlite.run(`INSERT OR IGNORE INTO shifts (code, name, start_time, end_time, grace_time, weekly_off) VALUES (?, ?, ?, ?, ?, ?)`,
-          [s.code, s.name, s.start_time, s.end_time, s.grace_time, s.weekly_off]
+                    [s.code, s.name, s.start_time, s.end_time, s.grace_time, s.weekly_off]
         );
       }
     });
+
+    // ===== Workforce Module (Phase A: foundation — additive) =====
+    // Safe column adder: reads PRAGMA, only ADDs missing columns (ignores duplicates).
+    const addColumnSafe = (table: string, colDef: string) => {
+      this.dbSqlite.run(`PRAGMA table_info(${table})`, (err: any, cols: any[]) => {
+        if (err) return;
+        const exists = Array.isArray(cols) && cols.some((c: any) => c.name === colDef.split(' ')[0]);
+        if (!exists) {
+          this.dbSqlite.run(`ALTER TABLE ${table} ADD COLUMN ${colDef}`, (e: any) => { /* ignore if exists */ });
+        }
+      });
+    };
+
+    addColumnSafe('companies', 'pf_esic_applicable INTEGER DEFAULT 1');
+    addColumnSafe('companies', 'security_mode TEXT DEFAULT \'testing\'');
+    addColumnSafe('employees', 'contractor_id TEXT DEFAULT NULL');
+    addColumnSafe('employees', 'is_company_worker INTEGER DEFAULT 0');
+    addColumnSafe('employees', 'payment_mode TEXT DEFAULT \'HDFC\'');
+    addColumnSafe('attendance', 'upload_batch_id TEXT DEFAULT NULL');
+    addColumnSafe('attendance', 'upload_source TEXT DEFAULT \'EXCEL\'');
+    addColumnSafe('attendance', 'file_name TEXT DEFAULT NULL');
+    addColumnSafe('attendance', 'locked_by TEXT DEFAULT NULL');
+    addColumnSafe('attendance', 'locked_at TEXT DEFAULT NULL');
+    addColumnSafe('attendance', 'lock_reason TEXT DEFAULT NULL');
+    addColumnSafe('payslips', 'ncp_days REAL DEFAULT 0');
+    addColumnSafe('payslips', 'applicable_days REAL DEFAULT 0');
+    addColumnSafe('payslips', 'worker_category TEXT DEFAULT NULL');
+        addColumnSafe('payslips', 'contractor_id TEXT DEFAULT NULL');
+
+    // --- New Workforce tables (CREATE IF NOT EXISTS = zero impact on existing modules) ---
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS contractors (
+      id TEXT PRIMARY KEY, name TEXT, company TEXT, unit TEXT,
+      gst TEXT, pan TEXT, contact TEXT, active INTEGER DEFAULT 1
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS minimum_wage_rates (
+      id TEXT PRIMARY KEY, company TEXT, unit TEXT, worker_category TEXT,
+      wage_group TEXT, effective_from TEXT, effective_to TEXT,
+      minimum_wage REAL, active INTEGER DEFAULT 1
+    )`);
+    this.dbSqlite.run(`CREATE INDEX IF NOT EXISTS idx_minwage_lookup ON minimum_wage_rates (company, unit, worker_category, wage_group, effective_from)`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS contractor_bills (
+      id TEXT PRIMARY KEY, company TEXT, contractor_id TEXT, month TEXT,
+      status TEXT DEFAULT 'DRAFT', total_gross REAL DEFAULT 0,
+      total_pf REAL DEFAULT 0, total_esic REAL DEFAULT 0, net_payable REAL DEFAULT 0,
+            created_by TEXT, created_at TEXT, locked INTEGER DEFAULT 0
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS contractor_bill_lines (
+      id TEXT PRIMARY KEY, bill_id TEXT, employee_id TEXT, worker_name TEXT,
+      present_days REAL DEFAULT 0, leave_days REAL DEFAULT 0, weekly_off REAL DEFAULT 0,
+      holiday REAL DEFAULT 0, paid_days REAL DEFAULT 0, ncp_days REAL DEFAULT 0,
+      wage_rate REAL DEFAULT 0, gross_wages REAL DEFAULT 0, pf REAL DEFAULT 0,
+      esic REAL DEFAULT 0, other_deductions REAL DEFAULT 0, net_payable REAL DEFAULT 0
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS cheque_payments (
+      id TEXT PRIMARY KEY, employee_id TEXT, company TEXT, month TEXT,
+      net_pay REAL DEFAULT 0, cheque_number TEXT, payment_date TEXT, remarks TEXT
+    )`);
+    this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cheque_uniq ON cheque_payments (company, month, employee_id)`);
+    this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cheque_num ON cheque_payments (company, month, cheque_number)`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS month_status (
+      company TEXT, month TEXT, state TEXT DEFAULT 'OPEN',
+      locked_by TEXT, locked_at TEXT, lock_reason TEXT, updated_at TEXT,
+      PRIMARY KEY (company, month)
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS attendance_upload_batches (
+      id TEXT PRIMARY KEY, company TEXT, month TEXT, source TEXT DEFAULT 'CSV',
+      file_name TEXT, uploaded_by TEXT, uploaded_at TEXT,
+      staff_skipped INTEGER DEFAULT 0, worker_rows INTEGER DEFAULT 0,
+      duplicate_ids TEXT, status TEXT DEFAULT 'OK'
+    )`);
+
+    // Workforce feature flags — ALL default OFF/safe => existing Staff behavior unchanged.
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('min_wage_default', '511')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('use_min_wage_ncp', '0')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('pf_ncp_reduces_statutory_pf', '0')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('esic_use_pf_ncp', '0')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('workforce_module_enabled', '0')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('direct_biometric_enabled', '0')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('use_legacy_all_employees', '1')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('payment_export_strict_bank', '1')`);
+    this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('security_mode', 'testing')`);
   }
+
 
   private loadAndSeed(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -2033,11 +2121,40 @@ export class PayrollDatabase {
           this.dbSqlite.all(`SELECT * FROM gate_passes`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
         });
 
-        const pShifts = new Promise<any[]>((res) => {
+                const pShifts = new Promise<any[]>((res) => {
           this.dbSqlite.all(`SELECT * FROM shifts`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
         });
 
-        Promise.all([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, pUsers, pHods, pLedger, pPolicies, pAcks, pGatePasses, pShifts]).then(([emps, atts, runs, slips, leaves, ffs, loans, depts, companies, revisions, assets, travel, broadcasts, corrections, compoffs, overtimes, users, hods, ledger, pols, acks, gatePasses, sfts]) => {
+        const pContractors = new Promise<ContractorMaster[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM contractors`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pMinWage = new Promise<MinimumWageRate[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM minimum_wage_rates`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pCBills = new Promise<ContractorBill[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM contractor_bills`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pCBillLines = new Promise<ContractorBillLine[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM contractor_bill_lines`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pCheques = new Promise<ChequePayment[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM cheque_payments`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pMonthStatus = new Promise<MonthStatus[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM month_status`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+        const pBatches = new Promise<AttendanceUploadBatch[]>((res) => {
+          this.dbSqlite.all(`SELECT * FROM attendance_upload_batches`, (err: any, rows: any[]) => err ? res([]) : res(rows || []));
+        });
+
+
+                Promise.all([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, pUsers, pHods, pLedger, pPolicies, pAcks, pGatePasses, pShifts, pContractors, pMinWage, pCBills, pCBillLines, pCheques, pMonthStatus, pBatches]).then(([emps, atts, runs, slips, leaves, ffs, loans, depts, companies, revisions, assets, travel, broadcasts, corrections, compoffs, overtimes, users, hods, ledger, pols, acks, gatePasses, sfts, contractorsList, minWageList, cBills, cBillLines, cheques, monthStatus, batches]) => {
           this.data = {
             employees: emps,
             attendance: atts,
@@ -2072,7 +2189,15 @@ export class PayrollDatabase {
             policies: pols,
             policy_acknowledgements: acks,
             gate_passes: gatePasses,
-            shifts: sfts
+            shifts: sfts,
+            // Workforce module (Phase A — foundation)
+            contractors: contractorsList,
+            contractor_bills: cBills,
+            contractor_bill_lines: cBillLines,
+            cheque_payments: cheques,
+            minimum_wage_rates: minWageList,
+            month_status: monthStatus,
+            attendance_upload_batches: batches
           };
           resolve();
         }).catch(reject);
@@ -4735,6 +4860,90 @@ Sakar & SVN Group`;
     });
   }
 
+  // ===== Workforce Module (Phase A: calculation engine + lookups) =====
+  // These are PURE helpers — they do NOT alter Staff Payroll or any existing calculation.
+  // They are wired into PF/ESIC / Worker Payroll ONLY when feature flags are ON (Phase C+).
+  // All existing behaviour stays 100% unchanged because flags default to OFF in this phase.
+
+  /**
+   * APPROVED rule — Full/Half day conversion of Wage-Equivalent Days.
+   *
+   *   WageEquivDays = GrossWages / MinimumWage
+   *   BaseDays       = floor(WageEquivDays)
+   *   DecimalPart    = WageEquivDays - BaseDays
+   *   if DecimalPart < 0.50  -> CountedWageDays = BaseDays        (e.g. 22.40 -> 22,  22.49 -> 22)
+   *   else                  -> CountedWageDays = BaseDays + 0.5   (e.g. 22.50 -> 22.5, 22.90 -> 22.5, NOT 23)
+   *
+   * NOTE: this is NOT standard rounding. Only 0.0 and 0.5 increments are ever produced.
+   * Used ONLY inside PF Challan / ESIC Challan business-calculation layers.
+   */
+  public calculateWageEquivalentDays(grossWages: number, minimumWage: number): number {
+    if (!minimumWage || minimumWage <= 0) return 0;
+    const wageEquivDays = grossWages / minimumWage;
+    const baseDays = Math.floor(wageEquivDays);
+    const decimalPart = wageEquivDays - baseDays;
+    return decimalPart < 0.5 ? baseDays : baseDays + 0.5;
+  }
+
+  /**
+   * Business NCP for the PF/ESIC challan layer ONLY.
+   *   applicableDays = MIN(paidDays, countedWageDays)
+   *   businessNCP    = paidDays - applicableDays
+   * Does NOT modify present/paid/gross/wage/bill/payment values.
+   */
+  public calculateBusinessNCP(paidDays: number, grossWages: number, minimumWage: number): {
+    countedWageDays: number; applicableDays: number; businessNcp: number;
+  } {
+    const countedWageDays = this.calculateWageEquivalentDays(grossWages, minimumWage);
+    const applicableDays = Math.min(paidDays, countedWageDays);
+    const businessNcp = paidDays - applicableDays;
+    return { countedWageDays, applicableDays, businessNcp };
+  }
+
+  /** Minimum-wage lookup with approved precedence (data-driven, never hard-coded):
+   *  1) minimum_wage_rates table (company → unit → category → wage_group → effective date, most specific wins)
+   *  2) company.settings JSON { minimum_wage }
+   *  3) global 'min_wage_default' system setting (seeded = 511)
+   */
+  public async getMinimumWage(company: string, opts: { unit?: string; workerCategory?: string; wageGroup?: string; asOfDate?: string } = {}): Promise<number> {
+    const asOf = opts.asOfDate || new Date().toISOString().slice(0, 10);
+    const candidates = (this.data.minimum_wage_rates || [])
+      .filter(r => r.active === 1
+        && r.company === company
+        && r.effective_from <= asOf
+        && (!r.effective_to || r.effective_to >= asOf))
+      .filter(r => {
+        const matchUnit = !opts.unit || !r.unit || r.unit === opts.unit;
+        const matchCat = !opts.workerCategory || !r.worker_category || r.worker_category === opts.workerCategory;
+        const matchGroup = !opts.wageGroup || !r.wage_group || r.wage_group === opts.wageGroup;
+        return matchUnit && matchCat && matchGroup;
+      });
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => this._mwSpecificity(b, opts) - this._mwSpecificity(a, opts));
+      return Number(candidates[0].minimum_wage) || 0;
+    }
+    // 2) company settings JSON
+    const comp = this.getCompanies().find(c => c.id === company);
+    if (comp && comp.settings) {
+      try {
+        const s = JSON.parse(typeof comp.settings === 'string' ? comp.settings : comp.settings);
+        if (s && s.minimum_wage != null) return Number(s.minimum_wage);
+      } catch { /* keep going */ }
+    }
+    // 3) global default (seeded 511, overridable via system_settings)
+    const g = await this.getSystemSetting('min_wage_default', '511');
+    return Number(g || 511);
+  }
+
+  /** Specificity score — exact unit/category/wage_group matches score higher than wildcard/blank. */
+  private _mwSpecificity(r: MinimumWageRate, opts: { unit?: string; workerCategory?: string; wageGroup?: string; }): number {
+    let s = 0;
+    if (opts.unit && r.unit === opts.unit) s += 1;
+    if (opts.workerCategory && r.worker_category === opts.workerCategory) s += 1;
+    if (opts.wageGroup && r.wage_group === opts.wageGroup) s += 1;
+    return s;
+  }
+
   public getFullBackupJSON(): any {
     return this.data;
   }
@@ -4954,12 +5163,16 @@ Sakar & SVN Group`;
     };
 
     // Helper to clear and batch insert
-    const tablesToClear = [
+                const tablesToClear = [
       'employees', 'attendance', 'payroll_runs', 'payslips', 'leave_applications',
       'ff_settlements', 'loans', 'departments', 'companies', 'salary_revisions',
       'assets', 'travel_reimbursements', 'broadcasts', 'attendance_corrections',
-      'compoff_requests', 'overtime_requests', 'users', 'hods', 'audit_logs'
+      'compoff_requests', 'overtime_requests', 'users', 'hods', 'audit_logs',
+      // Workforce module (Phase A — new tables)
+      'contractors', 'minimum_wage_rates', 'contractor_bills',
+      'contractor_bill_lines', 'cheque_payments', 'month_status', 'attendance_upload_batches'
     ];
+
 
     try {
       await runSql('BEGIN TRANSACTION');
@@ -5368,7 +5581,7 @@ Sakar & SVN Group`;
       }
     }
 
-    if (backupData.audit_logs && Array.isArray(backupData.audit_logs)) {
+        if (backupData.audit_logs && Array.isArray(backupData.audit_logs)) {
       for (const al of backupData.audit_logs) {
         const id = al.id || 'AUDIT-' + Math.random().toString(36).substring(2, 11).toUpperCase();
         const action = al.action || '';
@@ -5380,6 +5593,20 @@ Sakar & SVN Group`;
           `INSERT OR REPLACE INTO audit_logs (id, action, details, user_name, timestamp) VALUES (?, ?, ?, ?, ?)`,
           [id, action, details, user_name, timestamp]
         );
+      }
+    }
+
+    // Generic repopulate for Workforce module tables (Phase A — additive, data safety)
+    const workforceTables = ['contractors', 'minimum_wage_rates', 'contractor_bills', 'contractor_bill_lines', 'cheque_payments', 'month_status', 'attendance_upload_batches'];
+    for (const tbl of workforceTables) {
+      const rows = (backupData as any)[tbl];
+      if (Array.isArray(rows)) {
+        for (const row of rows) {
+          const cols = Object.keys(row);
+          if (cols.length === 0) continue;
+          const placeholders = cols.map(() => '?').join(',');
+          await runSql(`INSERT OR REPLACE INTO ${tbl} (${cols.join(',')}) VALUES (${placeholders})`, cols.map(c => row[c] ?? null));
+        }
       }
     }
 
