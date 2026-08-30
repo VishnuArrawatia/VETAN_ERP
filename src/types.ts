@@ -75,6 +75,13 @@ export interface Employee {
   salary_structure_type?: 'FIXED' | 'PERCENTAGE' | 'MIXED';
   hidden_salary_heads?: string;
   pf_number?: string;
+  pf_member_id?: string;
+  form_11_status?: string;
+  form_11_file?: string;
+  pf_non_deduction_reason?: string;
+  pf_verified_by?: string;
+  pf_verification_date?: string;
+  pf_hr_remarks?: string;
 
   // Workforce module fields
   father_husband_name?: string;
@@ -514,6 +521,101 @@ export interface Shift {
   end_time: string;
   grace_time: number;
   weekly_off: string;
+}
+
+// ===== Workforce Module (Phase A: foundation — additive, opt-in) =====
+// All collections below are EMPTY by default and do not affect Staff Payroll.
+
+export interface ContractorMaster {
+  id: string;
+  name: string;
+  company: string;
+  unit?: string;
+  gst?: string;
+  pan?: string;
+  contact?: string;
+  active: number; // 1/0
+}
+
+export interface MinimumWageRate {
+  id: string;
+  company: string;
+  unit?: string;
+  worker_category?: string;
+  wage_group?: string;
+  effective_from: string; // YYYY-MM-DD
+  effective_to?: string; // YYYY-MM-DD or null (open-ended)
+  minimum_wage: number;
+  active: number; // 1/0
+}
+
+export interface ContractorBill {
+  id: string; // BILL-<company>-<month>-<contractor>
+  company: string;
+  contractor_id: string;
+  month: string; // YYYY-MM
+  status: 'DRAFT' | 'ISSUED' | 'PAID';
+  total_gross: number;
+  total_pf: number;
+  total_esic: number;
+  net_payable: number;
+  created_by?: string;
+  created_at?: string;
+  locked: number; // 0/1
+}
+
+export interface ContractorBillLine {
+  id: string;
+  bill_id: string;
+  employee_id: string;
+  worker_name?: string;
+  present_days: number;
+  leave_days: number;
+  weekly_off: number;
+  holiday: number;
+  paid_days: number;
+  ncp_days: number;
+  wage_rate: number;
+  gross_wages: number;
+  pf: number;
+  esic: number;
+  other_deductions: number;
+  net_payable: number;
+}
+
+export interface ChequePayment {
+  id: string; // CHEQUE-<company>-<month>-<employee>
+  employee_id: string;
+  company: string;
+  month: string;
+  net_pay: number;
+  cheque_number: string;
+  payment_date: string;
+  remarks?: string;
+}
+
+export interface MonthStatus {
+  company: string;
+  month: string;
+  state: 'OPEN' | 'UPLOADED' | 'RECONCILED' | 'FINALIZED' | 'PAYROLL_DONE' | 'CLOSED' | 'LOCKED';
+  locked_by?: string;
+  locked_at?: string;
+  lock_reason?: string;
+  updated_at: string;
+}
+
+export interface AttendanceUploadBatch {
+  id: string; // BATCH-<company>-<month>-<timestamp>
+  company: string;
+  month: string;
+  source: 'CSV' | 'BIOMETRIC_DIRECT';
+  file_name: string;
+  uploaded_by?: string;
+  uploaded_at: string;
+  staff_skipped: number;
+  worker_rows: number;
+  duplicate_ids: string; // JSON array
+  status: 'OK' | 'VALIDATED' | 'LOCKED';
 }
 
 

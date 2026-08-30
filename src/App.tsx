@@ -357,6 +357,12 @@ export default function App() {
   const [editPfOptIn, setEditPfOptIn] = useState(false);
   const [editEsicOptIn, setEditEsicOptIn] = useState(false);
   const [editPtOptIn, setEditPtOptIn] = useState(false);
+  const [editPfMemberId, setEditPfMemberId] = useState('');
+  const [editForm11Status, setEditForm11Status] = useState('Pending');
+  const [editPfNonDeductionReason, setEditPfNonDeductionReason] = useState('');
+  const [editPfHrRemarks, setEditPfHrRemarks] = useState('');
+  const [editPfVerifiedBy, setEditPfVerifiedBy] = useState('');
+  const [editPfVerificationDate, setEditPfVerificationDate] = useState('');
 
   // Search/Filters directory
   const [searchTerm, setSearchTerm] = useState('');
@@ -1462,6 +1468,12 @@ export default function App() {
       setEditPfOptIn(!!employee.pf_opt_in);
       setEditEsicOptIn(!!employee.esic_opt_in);
       setEditPtOptIn(!!employee.professional_tax_opt_in);
+      setEditPfMemberId(employee.pf_member_id || '');
+      setEditForm11Status(employee.form_11_status || 'Pending');
+      setEditPfNonDeductionReason(employee.pf_non_deduction_reason || '');
+      setEditPfHrRemarks(employee.pf_hr_remarks || '');
+      setEditPfVerifiedBy(employee.pf_verified_by || '');
+      setEditPfVerificationDate(employee.pf_verification_date || '');
 
       // Fetch historical payslips for this employee
       const resSlips = await fetch(`/api/payslips/employee/${employee.id}`);
@@ -1687,6 +1699,12 @@ export default function App() {
       pf_opt_in: manualPfOptIn,
       esic_opt_in: manualEsicOptIn,
       professional_tax_opt_in: manualPtOptIn,
+      pf_member_id: editPfMemberId,
+      form_11_status: editForm11Status,
+      pf_non_deduction_reason: editPfNonDeductionReason,
+      pf_hr_remarks: editPfHrRemarks,
+      pf_verified_by: editPfVerifiedBy,
+      pf_verification_date: editPfVerificationDate,
       salary_structure_type: manualSalaryStructureType,
       hidden_salary_heads: manualHiddenHeads.join(','),
       qualification: manualQualification,
@@ -6805,6 +6823,62 @@ export default function App() {
                               />
                               <span>EPF (Provident Fund) Applicable</span>
                             </label>
+
+                            {editPfOptIn && (
+                              <div className="grid grid-cols-2 gap-2 mt-1">
+                                <div>
+                                  <label className="text-[9px] text-gray-500 font-semibold">UAN</label>
+                                  <input type="text" value={editUan} onChange={(e) => setEditUan(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white" placeholder="UAN Number" />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] text-gray-500 font-semibold">PF Member ID</label>
+                                  <input type="text" value={editPfMemberId} onChange={(e) => setEditPfMemberId(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white" placeholder="PF Member ID" />
+                                </div>
+                              </div>
+                            )}
+
+                            {!editPfOptIn && (
+                              <div className="space-y-1.5 mt-1">
+                                <div>
+                                  <label className="text-[9px] text-gray-500 font-semibold">PF Non-Deduction Reason</label>
+                                  <select value={editPfNonDeductionReason} onChange={(e) => setEditPfNonDeductionReason(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white">
+                                    <option value="">Select Reason</option>
+                                    <option value="Exempted Establishment">Exempted Establishment</option>
+                                    <option value="Gross Salary Above Limit">Gross Salary Above ₹15,000 Limit</option>
+                                    <option value="Employee Opted Out">Employee Opted Out</option>
+                                    <option value="Casual/Daily Wager">Casual / Daily Wager</option>
+                                    <option value="Other">Other</option>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Form 11 Status */}
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                              <div>
+                                <label className="text-[9px] text-gray-500 font-semibold">Form 11 Status</label>
+                                <select value={editForm11Status} onChange={(e) => setEditForm11Status(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white">
+                                  <option value="Pending">Pending</option>
+                                  <option value="Submitted">Submitted</option>
+                                  <option value="Verified">Verified</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-gray-500 font-semibold">Verified By</label>
+                                <input type="text" value={editPfVerifiedBy} onChange={(e) => setEditPfVerifiedBy(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white" placeholder="HR Name" />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 mt-1">
+                              <div>
+                                <label className="text-[9px] text-gray-500 font-semibold">Verification Date</label>
+                                <input type="date" value={editPfVerificationDate} onChange={(e) => setEditPfVerificationDate(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white" />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-gray-500 font-semibold">HR Remarks</label>
+                                <input type="text" value={editPfHrRemarks} onChange={(e) => setEditPfHrRemarks(e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white" placeholder="Remarks" />
+                              </div>
+                            </div>
 
                             <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 select-none">
                               <input 

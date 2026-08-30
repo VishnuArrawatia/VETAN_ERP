@@ -8,14 +8,14 @@ import path from 'path';
 import crypto from 'crypto';
 
 let sqlite3: any = null;
-import { 
-  Employee, 
-  Attendance, 
-  PayrollRun, 
-  Payslip, 
-  SQLResult, 
-  LeaveApplication, 
-  FullAndFinalSettlement, 
+import {
+  Employee,
+  Attendance,
+  PayrollRun,
+  Payslip,
+  SQLResult,
+  LeaveApplication,
+  FullAndFinalSettlement,
   Form16Calculation,
   Loan,
   LoanSettlement,
@@ -27,7 +27,14 @@ import {
   BroadcastNotice,
   HRUser,
   HODMaster,
-  Shift
+  Shift,
+  ContractorMaster,
+  MinimumWageRate,
+  ContractorBill,
+  ContractorBillLine,
+  ChequePayment,
+  MonthStatus,
+  AttendanceUploadBatch
 } from '../src/types';
 
 const DB_SQLITE_FILE = path.join(process.cwd(), 'Payroll.db');
@@ -1020,6 +1027,13 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN can_approve_leave INTEGER`, () => {});
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN can_approve_misspunch INTEGER`, () => {});
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN photo TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN pf_member_id TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN form_11_status TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN form_11_file TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN pf_non_deduction_reason TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN pf_verified_by TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN pf_verification_date TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN pf_hr_remarks TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN qualification TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN location TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE employees ADD COLUMN vehicle_detail TEXT`, () => {});
@@ -2181,7 +2195,7 @@ export class PayrollDatabase {
   private syncEmployee(emp: Employee) {
     // Auto-standardize employee name on every save
     emp.name = this.standardizeName(emp.name);
-    this.dbSqlite.run(`INSERT OR REPLACE INTO employees (id, name, company, designation, department, email, phone, joining_date, exit_date, status, bank_name, bank_account, ifsc, pan, uan, base_salary, hra, special_allowance, da, pf_opt_in, esic_opt_in, professional_tax_opt_in, leave_balance_pl, leave_balance_cl, leave_balance_sl, qualification, location, vehicle_detail, prev_company_name, prev_company_location, total_experience, shift_timing, password, birth_year, needs_password_change, aadhaar_number, dob, gender, marital_status, emergency_contact, blood_group, esic_number, cost_center, reporting_manager, employee_category, reporting_hod, reporting_hod_name, conveyance_allowance, edu_allowance, medical_allowance, hidden_salary_heads, salary_structure_type, bonus_payable, ctc_salary, reporting_hod_code, is_hod, can_approve_leave, can_approve_misspunch, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    this.dbSqlite.run(`INSERT OR REPLACE INTO employees (id, name, company, designation, department, email, phone, joining_date, exit_date, status, bank_name, bank_account, ifsc, pan, uan, base_salary, hra, special_allowance, da, pf_opt_in, esic_opt_in, professional_tax_opt_in, leave_balance_pl, leave_balance_cl, leave_balance_sl, qualification, location, vehicle_detail, prev_company_name, prev_company_location, total_experience, shift_timing, password, birth_year, needs_password_change, aadhaar_number, dob, gender, marital_status, emergency_contact, blood_group, esic_number, cost_center, reporting_manager, employee_category, reporting_hod, reporting_hod_name, conveyance_allowance, edu_allowance, medical_allowance, hidden_salary_heads, salary_structure_type, bonus_payable, ctc_salary, reporting_hod_code, is_hod, can_approve_leave, can_approve_misspunch, photo, pf_member_id, form_11_status, form_11_file, pf_non_deduction_reason, pf_verified_by, pf_verification_date, pf_hr_remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         emp.id, emp.name, emp.company, emp.designation, emp.department, emp.email, emp.phone, emp.joining_date, emp.exit_date || null, emp.status,
         emp.bank_name, emp.bank_account, emp.ifsc, emp.pan, emp.uan, emp.base_salary, emp.hra, emp.special_allowance, emp.da,
@@ -2198,7 +2212,10 @@ export class PayrollDatabase {
         emp.is_hod ? 1 : 0,
         emp.can_approve_leave ? 1 : 0,
         emp.can_approve_misspunch ? 1 : 0,
-        emp.photo || null
+        emp.photo || null,
+        emp.pf_member_id || null, emp.form_11_status || 'Pending', emp.form_11_file || null,
+        emp.pf_non_deduction_reason || null, emp.pf_verified_by || null,
+        emp.pf_verification_date || null, emp.pf_hr_remarks || null
       ],
       (err: any) => { if (err) console.error('SQLite Sync Error on Employees:', err); }
     );
