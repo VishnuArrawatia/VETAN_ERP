@@ -530,6 +530,8 @@ export class PayrollDatabase {
             this.inMemoryOnly = true;
             this.loadedFromSeed = false; // Real data loaded — allow persistData()
             this.enforceCompanyCorrections();
+            // FIX: Clean up orphaned payroll runs — keep only one per month
+            this.cleanupOrphanedPayrollRuns();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
             return;
           }
@@ -694,6 +696,46 @@ export class PayrollDatabase {
         initPureJSInMemory();
       }
     });
+  }
+
+  private cleanupOrphanedPayrollRuns() {
+    // FIX: When there are multiple payroll runs for the same month (e.g., RUN-2026-04 + RUN-2026-04-Sakar-I),
+    // keep only the most recently processed one per month.
+    if (!this.data.payroll_runs || this.data.payroll_runs.length === 0) return;
+    
+    const monthMap = new Map<string, typeof this.data.payroll_runs>();
+    for (const run of this.data.payroll_runs) {
+      const existing = monthMap.get(run.month);
+      if (!existing) {
+        monthMap.set(run.month, [run]);
+      } else {
+        existing.push(run);
+      }
+    }
+    
+    const cleaned: typeof this.data.payroll_runs = [];
+    for (const [month, runs] of monthMap) {
+      if (runs.length === 1) {
+        cleaned.push(runs[0]);
+      } else {
+        // Keep the most recently processed run (latest processed_at)
+        runs.sort((a, b) => (b.processed_at || '').localeCompare(a.processed_at || ''));
+        console.log(`[Cleanup] Month ${month}: ${runs.length} runs found, keeping ${runs[0].id} (${runs[0].status})`);
+        cleaned.push(runs[0]);
+      }
+    }
+    
+    if (cleaned.length !== this.data.payroll_runs.length) {
+      console.log(`[Cleanup] Payroll runs: ${this.data.payroll_runs.length} → ${cleaned.length}`);
+      this.data.payroll_runs = cleaned;
+      // Also clean SQLite
+      try {
+        for (const month of monthMap.keys()) {
+          const best = monthMap.get(month)![0];
+          this.dbSqlite.run(`DELETE FROM payroll_runs WHERE month = ? AND id != ?`, [month, best.id]);
+        }
+      } catch (e) { /* ignore */ }
+    }
   }
 
   private enforceCompanyCorrections() {
@@ -4024,13 +4066,13 @@ export class PayrollDatabase {
     const hiddenHeads = (emp.hidden_salary_heads || '').split(',').map(h => h.trim());
     const isHidden = (head: string) => hiddenHeads.includes(head);
 
-    const rate_base = emp.base_salary;
-    const rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : (emp.hra ?? 0));
-    const rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : (emp.special_allowance ?? 0));
+    let rate_base = emp.base_salary;
+    let rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : (emp.hra ?? 0));
+    let rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : (emp.special_allowance ?? 0));
     const rate_da = 0; // DA completely removed from salary structure
-    const rate_edu = isHidden('edu_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : ((emp.edu_allowance && emp.edu_allowance > 0) ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100)));
-    const rate_medical = isHidden('medical_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : ((emp.medical_allowance && emp.medical_allowance > 0) ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100)));
-    const rate_conveyance = isHidden('conveyance_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : ((emp.conveyance_allowance && emp.conveyance_allowance > 0) ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100)));
+    let rate_edu = isHidden('edu_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : ((emp.edu_allowance && emp.edu_allowance > 0) ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100)));
+    let rate_medical = isHidden('medical_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : ((emp.medical_allowance && emp.medical_allowance > 0) ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100)));
+    let rate_conveyance = isHidden('conveyance_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : ((emp.conveyance_allowance && emp.conveyance_allowance > 0) ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100)));
     const rate_bonus = Math.round(rate_base * 0.0833);
 
     const earned_base = Math.round(rate_base * proration);
@@ -4387,11 +4429,13 @@ export class PayrollDatabase {
         const matchMonth = p.month === month;
         return !(matchMonth && emp?.company === companyFilter);
       });
+      // FIX: Remove ALL runs for this month that include the company filter
       this.data.payroll_runs = this.data.payroll_runs.filter(r => !(r.month === month && r.id.includes(companyFilter)));
       
       this.dbSqlite.run(`DELETE FROM payslips WHERE month = ? AND employee_id IN (SELECT id FROM employees WHERE company = ?)`, [month, companyFilter]);
       this.dbSqlite.run(`DELETE FROM payroll_runs WHERE month = ? AND id LIKE ?`, [month, `%${companyFilter}%`]);
     } else {
+      // FIX: When running for ALL, also remove any company-specific runs for this month
       this.data.payslips = this.data.payslips.filter(p => p.month !== month);
       this.data.payroll_runs = this.data.payroll_runs.filter(r => r.month !== month);
       
@@ -4906,7 +4950,8 @@ Sakar & SVN Group`;
   public unlockPayroll(month: string, companyFilter?: string): boolean {
     const suffix = companyFilter && companyFilter !== 'ALL' ? `-${companyFilter}` : '';
     const runId = `RUN-${month}${suffix}`;
-    const run = this.data.payroll_runs.find(r => r.month === month && (r.id === runId || r.id === `RUN-${month}`));
+    // FIX: Find EXACT run match — no fallback to generic run
+    const run = this.data.payroll_runs.find(r => r.id === runId);
     if (!run) return false;
     run.status = 'DRAFT';
     

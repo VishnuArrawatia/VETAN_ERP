@@ -436,8 +436,17 @@ export default function PayrollRegister({
           </button>
         </div>
 
-        <div className="text-xs font-mono font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border">
-          Unit: <strong className="text-slate-900">{activeCompany}</strong> | Month: <strong className="text-slate-900">{activeMonth}</strong>
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-mono font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border">
+            Unit: <strong className="text-slate-900">{activeCompany}</strong> | Month: <strong className="text-slate-900">{activeMonth}</strong>
+          </div>
+          <button
+            onClick={() => { if (onRefresh) onRefresh(); }}
+            className="px-3 py-1.5 text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl cursor-pointer transition-all flex items-center gap-1"
+            title="Force refresh payroll data from server"
+          >
+            🔄 Refresh
+          </button>
         </div>
       </div>
 

@@ -4,6 +4,9 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -25,6 +28,395 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// node_modules/file-uri-to-path/index.js
+var require_file_uri_to_path = __commonJS({
+  "node_modules/file-uri-to-path/index.js"(exports2, module2) {
+    var sep = require("path").sep || "/";
+    module2.exports = fileUriToPath;
+    function fileUriToPath(uri) {
+      if ("string" != typeof uri || uri.length <= 7 || "file://" != uri.substring(0, 7)) {
+        throw new TypeError("must pass in a file:// URI to convert to a file path");
+      }
+      var rest = decodeURI(uri.substring(7));
+      var firstSlash = rest.indexOf("/");
+      var host = rest.substring(0, firstSlash);
+      var path3 = rest.substring(firstSlash + 1);
+      if ("localhost" == host) host = "";
+      if (host) {
+        host = sep + sep + host;
+      }
+      path3 = path3.replace(/^(.+)\|/, "$1:");
+      if (sep == "\\") {
+        path3 = path3.replace(/\//g, "\\");
+      }
+      if (/^.+\:/.test(path3)) {
+      } else {
+        path3 = sep + path3;
+      }
+      return host + path3;
+    }
+  }
+});
+
+// node_modules/bindings/bindings.js
+var require_bindings = __commonJS({
+  "node_modules/bindings/bindings.js"(exports2, module2) {
+    var fs3 = require("fs");
+    var path3 = require("path");
+    var fileURLToPath = require_file_uri_to_path();
+    var join = path3.join;
+    var dirname = path3.dirname;
+    var exists = fs3.accessSync && function(path4) {
+      try {
+        fs3.accessSync(path4);
+      } catch (e) {
+        return false;
+      }
+      return true;
+    } || fs3.existsSync || path3.existsSync;
+    var defaults = {
+      arrow: process.env.NODE_BINDINGS_ARROW || " \u2192 ",
+      compiled: process.env.NODE_BINDINGS_COMPILED_DIR || "compiled",
+      platform: process.platform,
+      arch: process.arch,
+      nodePreGyp: "node-v" + process.versions.modules + "-" + process.platform + "-" + process.arch,
+      version: process.versions.node,
+      bindings: "bindings.node",
+      try: [
+        // node-gyp's linked version in the "build" dir
+        ["module_root", "build", "bindings"],
+        // node-waf and gyp_addon (a.k.a node-gyp)
+        ["module_root", "build", "Debug", "bindings"],
+        ["module_root", "build", "Release", "bindings"],
+        // Debug files, for development (legacy behavior, remove for node v0.9)
+        ["module_root", "out", "Debug", "bindings"],
+        ["module_root", "Debug", "bindings"],
+        // Release files, but manually compiled (legacy behavior, remove for node v0.9)
+        ["module_root", "out", "Release", "bindings"],
+        ["module_root", "Release", "bindings"],
+        // Legacy from node-waf, node <= 0.4.x
+        ["module_root", "build", "default", "bindings"],
+        // Production "Release" buildtype binary (meh...)
+        ["module_root", "compiled", "version", "platform", "arch", "bindings"],
+        // node-qbs builds
+        ["module_root", "addon-build", "release", "install-root", "bindings"],
+        ["module_root", "addon-build", "debug", "install-root", "bindings"],
+        ["module_root", "addon-build", "default", "install-root", "bindings"],
+        // node-pre-gyp path ./lib/binding/{node_abi}-{platform}-{arch}
+        ["module_root", "lib", "binding", "nodePreGyp", "bindings"]
+      ]
+    };
+    function bindings(opts) {
+      if (typeof opts == "string") {
+        opts = { bindings: opts };
+      } else if (!opts) {
+        opts = {};
+      }
+      Object.keys(defaults).map(function(i2) {
+        if (!(i2 in opts)) opts[i2] = defaults[i2];
+      });
+      if (!opts.module_root) {
+        opts.module_root = exports2.getRoot(exports2.getFileName());
+      }
+      if (path3.extname(opts.bindings) != ".node") {
+        opts.bindings += ".node";
+      }
+      var requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
+      var tries = [], i = 0, l = opts.try.length, n, b, err;
+      for (; i < l; i++) {
+        n = join.apply(
+          null,
+          opts.try[i].map(function(p) {
+            return opts[p] || p;
+          })
+        );
+        tries.push(n);
+        try {
+          b = opts.path ? requireFunc.resolve(n) : requireFunc(n);
+          if (!opts.path) {
+            b.path = n;
+          }
+          return b;
+        } catch (e) {
+          if (e.code !== "MODULE_NOT_FOUND" && e.code !== "QUALIFIED_PATH_RESOLUTION_FAILED" && !/not find/i.test(e.message)) {
+            throw e;
+          }
+        }
+      }
+      err = new Error(
+        "Could not locate the bindings file. Tried:\n" + tries.map(function(a) {
+          return opts.arrow + a;
+        }).join("\n")
+      );
+      err.tries = tries;
+      throw err;
+    }
+    module2.exports = exports2 = bindings;
+    exports2.getFileName = function getFileName(calling_file) {
+      var origPST = Error.prepareStackTrace, origSTL = Error.stackTraceLimit, dummy = {}, fileName;
+      Error.stackTraceLimit = 10;
+      Error.prepareStackTrace = function(e, st) {
+        for (var i = 0, l = st.length; i < l; i++) {
+          fileName = st[i].getFileName();
+          if (fileName !== __filename) {
+            if (calling_file) {
+              if (fileName !== calling_file) {
+                return;
+              }
+            } else {
+              return;
+            }
+          }
+        }
+      };
+      Error.captureStackTrace(dummy);
+      dummy.stack;
+      Error.prepareStackTrace = origPST;
+      Error.stackTraceLimit = origSTL;
+      var fileSchema = "file://";
+      if (fileName.indexOf(fileSchema) === 0) {
+        fileName = fileURLToPath(fileName);
+      }
+      return fileName;
+    };
+    exports2.getRoot = function getRoot(file) {
+      var dir = dirname(file), prev;
+      while (true) {
+        if (dir === ".") {
+          dir = process.cwd();
+        }
+        if (exists(join(dir, "package.json")) || exists(join(dir, "node_modules"))) {
+          return dir;
+        }
+        if (prev === dir) {
+          throw new Error(
+            'Could not find module root given file: "' + file + '". Do you have a `package.json` file? '
+          );
+        }
+        prev = dir;
+        dir = join(dir, "..");
+      }
+    };
+  }
+});
+
+// node_modules/sqlite3/lib/sqlite3-binding.js
+var require_sqlite3_binding = __commonJS({
+  "node_modules/sqlite3/lib/sqlite3-binding.js"(exports2, module2) {
+    module2.exports = require_bindings()("node_sqlite3.node");
+  }
+});
+
+// node_modules/sqlite3/lib/trace.js
+var require_trace = __commonJS({
+  "node_modules/sqlite3/lib/trace.js"(exports2) {
+    var util = require("util");
+    function extendTrace(object, property, pos) {
+      const old = object[property];
+      object[property] = function() {
+        const error = new Error();
+        const name = object.constructor.name + "#" + property + "(" + Array.prototype.slice.call(arguments).map(function(el) {
+          return util.inspect(el, false, 0);
+        }).join(", ") + ")";
+        if (typeof pos === "undefined") pos = -1;
+        if (pos < 0) pos += arguments.length;
+        const cb = arguments[pos];
+        if (typeof arguments[pos] === "function") {
+          arguments[pos] = function replacement() {
+            const err = arguments[0];
+            if (err && err.stack && !err.__augmented) {
+              err.stack = filter(err).join("\n");
+              err.stack += "\n--> in " + name;
+              err.stack += "\n" + filter(error).slice(1).join("\n");
+              err.__augmented = true;
+            }
+            return cb.apply(this, arguments);
+          };
+        }
+        return old.apply(this, arguments);
+      };
+    }
+    exports2.extendTrace = extendTrace;
+    function filter(error) {
+      return error.stack.split("\n").filter(function(line) {
+        return line.indexOf(__filename) < 0;
+      });
+    }
+  }
+});
+
+// node_modules/sqlite3/lib/sqlite3.js
+var require_sqlite3 = __commonJS({
+  "node_modules/sqlite3/lib/sqlite3.js"(exports2, module2) {
+    var path3 = require("path");
+    var sqlite32 = require_sqlite3_binding();
+    var EventEmitter = require("events").EventEmitter;
+    module2.exports = exports2 = sqlite32;
+    function normalizeMethod(fn) {
+      return function(sql) {
+        let errBack;
+        const args = Array.prototype.slice.call(arguments, 1);
+        if (typeof args[args.length - 1] === "function") {
+          const callback = args[args.length - 1];
+          errBack = function(err) {
+            if (err) {
+              callback(err);
+            }
+          };
+        }
+        const statement = new Statement(this, sql, errBack);
+        return fn.call(this, statement, args);
+      };
+    }
+    function inherits(target, source) {
+      for (const k in source.prototype)
+        target.prototype[k] = source.prototype[k];
+    }
+    sqlite32.cached = {
+      Database: function(file, a, b) {
+        if (file === "" || file === ":memory:") {
+          return new Database(file, a, b);
+        }
+        let db;
+        file = path3.resolve(file);
+        if (!sqlite32.cached.objects[file]) {
+          db = sqlite32.cached.objects[file] = new Database(file, a, b);
+        } else {
+          db = sqlite32.cached.objects[file];
+          const callback = typeof a === "number" ? b : a;
+          if (typeof callback === "function") {
+            let cb2 = function() {
+              callback.call(db, null);
+            };
+            var cb = cb2;
+            if (db.open) process.nextTick(cb2);
+            else db.once("open", cb2);
+          }
+        }
+        return db;
+      },
+      objects: {}
+    };
+    var Database = sqlite32.Database;
+    var Statement = sqlite32.Statement;
+    var Backup = sqlite32.Backup;
+    inherits(Database, EventEmitter);
+    inherits(Statement, EventEmitter);
+    inherits(Backup, EventEmitter);
+    Database.prototype.prepare = normalizeMethod(function(statement, params) {
+      return params.length ? statement.bind.apply(statement, params) : statement;
+    });
+    Database.prototype.run = normalizeMethod(function(statement, params) {
+      statement.run.apply(statement, params).finalize();
+      return this;
+    });
+    Database.prototype.get = normalizeMethod(function(statement, params) {
+      statement.get.apply(statement, params).finalize();
+      return this;
+    });
+    Database.prototype.all = normalizeMethod(function(statement, params) {
+      statement.all.apply(statement, params).finalize();
+      return this;
+    });
+    Database.prototype.each = normalizeMethod(function(statement, params) {
+      statement.each.apply(statement, params).finalize();
+      return this;
+    });
+    Database.prototype.map = normalizeMethod(function(statement, params) {
+      statement.map.apply(statement, params).finalize();
+      return this;
+    });
+    Database.prototype.backup = function() {
+      let backup;
+      if (arguments.length <= 2) {
+        backup = new Backup(this, arguments[0], "main", "main", true, arguments[1]);
+      } else {
+        backup = new Backup(this, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+      }
+      backup.retryErrors = [sqlite32.BUSY, sqlite32.LOCKED];
+      return backup;
+    };
+    Statement.prototype.map = function() {
+      const params = Array.prototype.slice.call(arguments);
+      const callback = params.pop();
+      params.push(function(err, rows) {
+        if (err) return callback(err);
+        const result = {};
+        if (rows.length) {
+          const keys = Object.keys(rows[0]);
+          const key = keys[0];
+          if (keys.length > 2) {
+            for (let i = 0; i < rows.length; i++) {
+              result[rows[i][key]] = rows[i];
+            }
+          } else {
+            const value = keys[1];
+            for (let i = 0; i < rows.length; i++) {
+              result[rows[i][key]] = rows[i][value];
+            }
+          }
+        }
+        callback(err, result);
+      });
+      return this.all.apply(this, params);
+    };
+    var isVerbose = false;
+    var supportedEvents = ["trace", "profile", "change"];
+    Database.prototype.addListener = Database.prototype.on = function(type) {
+      const val = EventEmitter.prototype.addListener.apply(this, arguments);
+      if (supportedEvents.indexOf(type) >= 0) {
+        this.configure(type, true);
+      }
+      return val;
+    };
+    Database.prototype.removeListener = function(type) {
+      const val = EventEmitter.prototype.removeListener.apply(this, arguments);
+      if (supportedEvents.indexOf(type) >= 0 && !this._events[type]) {
+        this.configure(type, false);
+      }
+      return val;
+    };
+    Database.prototype.removeAllListeners = function(type) {
+      const val = EventEmitter.prototype.removeAllListeners.apply(this, arguments);
+      if (supportedEvents.indexOf(type) >= 0) {
+        this.configure(type, false);
+      }
+      return val;
+    };
+    sqlite32.verbose = function() {
+      if (!isVerbose) {
+        const trace = require_trace();
+        [
+          "prepare",
+          "get",
+          "run",
+          "all",
+          "each",
+          "map",
+          "close",
+          "exec"
+        ].forEach(function(name) {
+          trace.extendTrace(Database.prototype, name);
+        });
+        [
+          "bind",
+          "get",
+          "run",
+          "all",
+          "each",
+          "map",
+          "reset",
+          "finalize"
+        ].forEach(function(name) {
+          trace.extendTrace(Statement.prototype, name);
+        });
+        isVerbose = true;
+      }
+      return sqlite32;
+    };
+  }
+});
 
 // server/app.ts
 var app_exports = {};
@@ -496,6 +888,7 @@ var PayrollDatabase = class {
             this.inMemoryOnly = true;
             this.loadedFromSeed = false;
             this.enforceCompanyCorrections();
+            this.cleanupOrphanedPayrollRuns();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
             return;
           }
@@ -521,7 +914,7 @@ var PayrollDatabase = class {
     }
     let sqlite3Mod = null;
     try {
-      const imported = await import("sqlite3");
+      const imported = await Promise.resolve().then(() => __toESM(require_sqlite3(), 1));
       sqlite3Mod = imported.default || imported;
       sqlite3 = sqlite3Mod;
     } catch (err) {
@@ -638,6 +1031,39 @@ var PayrollDatabase = class {
         initPureJSInMemory();
       }
     });
+  }
+  cleanupOrphanedPayrollRuns() {
+    if (!this.data.payroll_runs || this.data.payroll_runs.length === 0) return;
+    const monthMap = /* @__PURE__ */ new Map();
+    for (const run of this.data.payroll_runs) {
+      const existing = monthMap.get(run.month);
+      if (!existing) {
+        monthMap.set(run.month, [run]);
+      } else {
+        existing.push(run);
+      }
+    }
+    const cleaned = [];
+    for (const [month, runs] of monthMap) {
+      if (runs.length === 1) {
+        cleaned.push(runs[0]);
+      } else {
+        runs.sort((a, b) => (b.processed_at || "").localeCompare(a.processed_at || ""));
+        console.log(`[Cleanup] Month ${month}: ${runs.length} runs found, keeping ${runs[0].id} (${runs[0].status})`);
+        cleaned.push(runs[0]);
+      }
+    }
+    if (cleaned.length !== this.data.payroll_runs.length) {
+      console.log(`[Cleanup] Payroll runs: ${this.data.payroll_runs.length} \u2192 ${cleaned.length}`);
+      this.data.payroll_runs = cleaned;
+      try {
+        for (const month of monthMap.keys()) {
+          const best = monthMap.get(month)[0];
+          this.dbSqlite.run(`DELETE FROM payroll_runs WHERE month = ? AND id != ?`, [month, best.id]);
+        }
+      } catch (e) {
+      }
+    }
   }
   enforceCompanyCorrections() {
     console.log("Enforcing correct company names and addresses...");
@@ -1091,6 +1517,10 @@ var PayrollDatabase = class {
       });
       this.dbSqlite.run(`ALTER TABLE attendance ADD COLUMN pay_days REAL`, () => {
       });
+      try {
+        this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_emp_month ON attendance (employee_id, month)`);
+      } catch (e) {
+      }
     });
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS payroll_runs (
       id TEXT PRIMARY KEY,
@@ -1197,6 +1627,10 @@ var PayrollDatabase = class {
       });
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN employer_esic REAL`, () => {
       });
+      try {
+        this.dbSqlite.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payslips_emp_month ON payslips (employee_id, month)`);
+      } catch (e) {
+      }
     });
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS leave_applications (
       id TEXT PRIMARY KEY,
@@ -2927,6 +3361,157 @@ var PayrollDatabase = class {
   getAttendanceByEmployeeAndMonth(employeeId, month) {
     return this.data.attendance.filter((a) => a.employee_id === employeeId && a.month === month);
   }
+  /**
+   * ===== Workforce Module (Phase A) =====
+   * Reconcile a parsed CSV/biometric upload against the worker roster for one month.
+   *
+   * Rules enforced (per user approval):
+   *  - Staff in CSV -> skipped (NOT entered into worker attendance). Counted in staff_skipped.
+   *  - Workers not in CSV -> PaidDays = 0, still visible in reconciliation + exception list.
+   *  - Existing attendance records are NOT auto-created from 'Present' (no staff payroll pollution).
+   *  - Source flag-gated? No — engine is safe-by-construction; only its WRITES are gated by
+   *    workforce_module_enabled (OFF in Phase A => preview-only, zero side effects on Staff data).
+   */
+  reconcileAttendanceUpload(params) {
+    const { company, month, source, fileName, uploadedBy, rows } = params;
+    const isWorkerMode = this._wfEnabled();
+    const existingAtt = this.data.attendance.filter((a) => a.month === month);
+    const attByEmp = new Map(existingAtt.map((a) => [a.employee_id, a]));
+    const allEmps = this.getEmployees(company);
+    const staffSuffix = "_STAFF";
+    const isStaffName = (n) => typeof n === "string" && n.endsWith(staffSuffix);
+    const staffSkipped = [];
+    const duplicateIds = [];
+    const seenIds = /* @__PURE__ */ new Set();
+    const matchedIds = /* @__PURE__ */ new Set();
+    const exceptions = [];
+    const attendancePreview = [];
+    for (const row of rows) {
+      let workerId = (row.worker_id ?? row.emp_code ?? row.employee_id ?? row.id ?? "").toString().trim();
+      const name = (row.worker_name ?? row.name ?? row.employee_name ?? "").toString().trim();
+      if (name && isStaffName(name)) {
+        staffSkipped.push(row);
+        continue;
+      }
+      if (!workerId) {
+        exceptions.push({ employee_id: "", name, reason: "Missing worker_id/emp_code in CSV row" });
+        continue;
+      }
+      if (seenIds.has(workerId)) {
+        duplicateIds.push(workerId);
+        exceptions.push({ employee_id: workerId, name, reason: "Duplicate worker_id in CSV" });
+        continue;
+      }
+      seenIds.add(workerId);
+      const emp = allEmps.find((e) => e.id === workerId || e.emp_code && e.emp_code === workerId);
+      if (!emp) {
+        exceptions.push({ employee_id: workerId, name, reason: "worker_id not found in company roster" });
+        continue;
+      }
+      matchedIds.add(workerId);
+      if (emp.employee_category && emp.employee_category !== "Worker" && emp.employee_category !== "Contract") {
+        exceptions.push({ employee_id: workerId, name: emp.name, reason: `category ${emp.employee_category} \u2014 not a worker` });
+        continue;
+      }
+      const present = Number(row.present ?? 0) || 0;
+      const leave = Number(row.leave ?? 0) || 0;
+      const weeklyOff = Number(row.weekly_off ?? row.week_off ?? 0) || 0;
+      const holiday = Number(row.paid_holiday ?? row.holiday ?? 0) || 0;
+      const lwp = Number(row.lwp ?? 0) || 0;
+      const absent = Number(row.absent ?? 0) || 0;
+      const otHours = Number(row.ot_hours ?? row.overtime_hours ?? 0) || 0;
+      const paidDays = present + leave + weeklyOff + holiday;
+      const record = {
+        id: `ATT-${month}-${workerId}`,
+        employee_id: workerId,
+        month,
+        total_days: present + absent + weeklyOff + holiday + leave + lwp,
+        working_days: paidDays,
+        lop_days: absent + lwp,
+        overtime_hours: otHours,
+        present,
+        absent,
+        weekly_off: weeklyOff,
+        paid_holiday: holiday,
+        leave,
+        lwp,
+        ot_hours: otHours,
+        upload_batch_id: isWorkerMode ? this._nextBatchId(company, month, source) : void 0,
+        upload_source: source,
+        file_name: fileName,
+        worker_id: workerId,
+        name: emp.name,
+        is_company_worker: emp.employee_category === "Worker" || !!emp.is_company_worker
+      };
+      const existing = attByEmp.get(workerId);
+      if (existing) {
+        Object.assign(existing, record);
+        this._updateAttendanceRow(existing);
+      } else {
+        this.data.attendance.push(record);
+        this._insertAttendanceRow(record);
+      }
+      attendancePreview.push(record);
+    }
+    const missingWorkers = [];
+    for (const emp of allEmps) {
+      if (!matchedIds.has(emp.id) && !seenIds.has(emp.id)) {
+        const isWorker = emp.employee_category === "Worker" || emp.employee_category === "Contract" || !!emp.contractor;
+        if (isWorker) {
+          missingWorkers.push({ employee_id: emp.id, name: emp.name });
+          exceptions.push({ employee_id: emp.id, name: emp.name, reason: "Present in worker roster but NOT in attendance upload" });
+          if (isWorkerMode) {
+            const zeroRec = {
+              id: `ATT-${month}-${emp.id}`,
+              employee_id: emp.id,
+              month,
+              total_days: 0,
+              working_days: 0,
+              lop_days: 0,
+              overtime_hours: 0,
+              present: 0,
+              absent: 0,
+              weekly_off: 0,
+              paid_holiday: 0,
+              leave: 0,
+              lwp: 0,
+              ot_hours: 0,
+              upload_batch_id: this._nextBatchId(company, month, source),
+              upload_source: source,
+              file_name: fileName,
+              worker_id: emp.id,
+              name: emp.name,
+              is_company_worker: emp.employee_category === "Worker" || !!emp.is_company_worker
+            };
+            const existing = attByEmp.get(emp.id);
+            if (existing) {
+              Object.assign(existing, zeroRec);
+              this._updateAttendanceRow(existing);
+            } else {
+              this.data.attendance.push(zeroRec);
+              this._insertAttendanceRow(zeroRec);
+            }
+            attendancePreview.push(zeroRec);
+          }
+        }
+      }
+    }
+    const batch = {
+      id: this._nextBatchId(company, month, source),
+      company,
+      month,
+      source,
+      file_name: fileName,
+      uploaded_by: uploadedBy,
+      uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
+      staff_skipped: staffSkipped.length,
+      worker_rows: matchedIds.size,
+      duplicate_ids: JSON.stringify(duplicateIds),
+      status: isWorkerMode ? "VALIDATED" : "OK"
+    };
+    this._upsertBatch(batch);
+    return { batch, matched: matchedIds.size, staffSkipped, missingWorkers, duplicateIds, exceptions, attendancePreview };
+  }
   upsertAttendance(att) {
     const idx = this.data.attendance.findIndex((a) => a.id === att.id);
     if (idx >= 0) {
@@ -2951,7 +3536,10 @@ var PayrollDatabase = class {
         const phol = record.paid_holiday || 0;
         const lve = record.leave || 0;
         const lw = record.lwp || 0;
-        record.total_days = pres + abs + woff + phol + lve + lw;
+        if (!record.total_days || record.total_days <= 0) {
+          const calendarDays = new Date(parseInt(record.month.split("-")[0]), parseInt(record.month.split("-")[1]), 0).getDate();
+          record.total_days = calendarDays;
+        }
         record.lop_days = abs + lw;
         record.working_days = pres + woff + phol + lve;
         record.overtime_hours = record.ot_hours || 0;
@@ -3767,13 +4355,13 @@ var PayrollDatabase = class {
     const isLockedPercentage = emp.salary_structure_type === "PERCENTAGE" || isFormulaMonth;
     const hiddenHeads = (emp.hidden_salary_heads || "").split(",").map((h) => h.trim());
     const isHidden = (head) => hiddenHeads.includes(head);
-    const rate_base = emp.base_salary;
-    const rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : emp.hra ?? 0;
-    const rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : emp.special_allowance ?? 0;
+    let rate_base = emp.base_salary;
+    let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : emp.hra ?? 0;
+    let rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : emp.special_allowance ?? 0;
     const rate_da = 0;
-    const rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100);
-    const rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100);
-    const rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100);
+    let rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100);
+    let rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100);
+    let rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100);
     const rate_bonus = Math.round(rate_base * 0.0833);
     const earned_base = Math.round(rate_base * proration);
     const earned_hra = Math.round(rate_hra * proration);
@@ -3846,6 +4434,14 @@ var PayrollDatabase = class {
       }
     }
     const existingSlip = (this.data.payslips || []).find((p) => p.id === `SLIP-${emp.id}-${month}`);
+    if (existingSlip && existingSlip.rate_base_salary) {
+      rate_base = existingSlip.rate_base_salary;
+      rate_hra = existingSlip.rate_hra || rate_hra;
+      rate_special = existingSlip.rate_special_allowance || rate_special;
+      rate_edu = existingSlip.rate_edu_allowance || rate_edu;
+      rate_medical = existingSlip.rate_medical_allowance || rate_medical;
+      rate_conveyance = existingSlip.rate_conveyance_allowance || rate_conveyance;
+    }
     const tdsVal = existingSlip?.tds !== void 0 ? existingSlip.tds : prevTds > 0 ? prevTds : tds;
     const customDed = existingSlip?.custom_deductions !== void 0 ? existingSlip.custom_deductions || 0 : prevCustom;
     const advanceDed = existingSlip?.salary_advance !== void 0 ? existingSlip.salary_advance || 0 : prevAdvance;
@@ -4141,6 +4737,16 @@ var PayrollDatabase = class {
     let gross_sum = 0;
     let deduct_sum = 0;
     let net_sum = 0;
+    const existingRun = this.data.payroll_runs.find((r) => {
+      const matchMonth = r.month === month;
+      if (companyFilter && companyFilter !== "ALL") {
+        return matchMonth && r.id.includes(companyFilter);
+      }
+      return matchMonth;
+    });
+    if (existingRun && existingRun.status === "CLOSED") {
+      throw new Error(`Payroll for ${month} is LOCKED. Unlock it first before recalculating.`);
+    }
     const targets = this.getEmployees(companyFilter).filter((e) => e.status === "ACTIVE");
     for (const emp of targets) {
       let att = this.data.attendance.find((a) => a.employee_id === emp.id && a.month === month);
@@ -4600,7 +5206,7 @@ Sakar & SVN Group`;
   unlockPayroll(month, companyFilter) {
     const suffix = companyFilter && companyFilter !== "ALL" ? `-${companyFilter}` : "";
     const runId = `RUN-${month}${suffix}`;
-    const run = this.data.payroll_runs.find((r) => r.month === month && (r.id === runId || r.id === `RUN-${month}`));
+    const run = this.data.payroll_runs.find((r) => r.id === runId);
     if (!run) return false;
     run.status = "DRAFT";
     this.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
