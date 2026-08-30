@@ -3120,6 +3120,8 @@ export class PayrollDatabase {
   public saveAttendance(bulk: Attendance[]) {
     for (const record of bulk) {
       // Auto-compute traditional fields if the new summary fields are provided
+      // Only recalculate working_days and lop_days from components.
+      // NEVER overwrite total_days — it represents calendar days for the month.
       if (record.present !== undefined) {
         const pres = record.present || 0;
         const abs = record.absent || 0;
@@ -3128,7 +3130,13 @@ export class PayrollDatabase {
         const lve = record.leave || 0;
         const lw = record.lwp || 0;
         
-        record.total_days = pres + abs + woff + phol + lve + lw;
+        // CRITICAL: Do NOT recalculate total_days — it is calendar days (30/31)
+        // Only recalculate working_days and lop_days from the component fields
+        if (!record.total_days || record.total_days <= 0) {
+          // Only set total_days if not provided (new record)
+          const calendarDays = new Date(parseInt(record.month.split('-')[0]), parseInt(record.month.split('-')[1]), 0).getDate();
+          record.total_days = calendarDays;
+        }
         record.lop_days = abs + lw;
         record.working_days = pres + woff + phol + lve;
         record.overtime_hours = record.ot_hours || 0;
