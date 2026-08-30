@@ -3691,8 +3691,12 @@ export class PayrollDatabase {
   // Automation Calculation Logic for Single Employee Draft Wage Slip
   public calculateSingleSlip(emp: Employee, att: any, month: string): Payslip {
     const totalDays = att.total_days || 30;
-    const payDays = att.pay_days !== undefined ? Number(att.pay_days) : (totalDays - (att.lop_days || 0));
-    const workDays = payDays;
+    // CRITICAL FIX: Always calculate pay_days from attendance fields.
+    // Never trust stored pay_days — it may be stale from a previous calculation.
+    // pay_days = total_days - LOP days (absent + LWP)
+    const lopDays = att.lop_days || 0;
+    const workDays = Math.max(0, totalDays - lopDays);
+    const payDays = workDays;
 
     const proration = Math.max(0, workDays) / totalDays;
 

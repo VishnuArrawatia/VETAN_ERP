@@ -140,7 +140,7 @@ export default function PayrollInputManagementView({
     const initialGrid: Record<string, Record<string, any>> = {};
     monthSlips.forEach(s => {
       initialGrid[s.id] = {
-        pay_days: s.pay_days ?? 30,
+        pay_days: s.pay_days ?? (30 - (s.lop_days || 0)),
         lop_days: s.lop_days ?? 0,
         tds: s.tds || 0,
         custom_deductions: s.custom_deductions || 0,
@@ -882,7 +882,7 @@ export default function PayrollInputManagementView({
                       <td className="p-1 text-center font-sans bg-green-50/30">
                         <div className="flex items-center justify-center gap-1">
                           <input type="number" min={0} max={31}
-                            value={rowInputs.pay_days ?? slip.pay_days ?? 30}
+                            value={rowInputs.pay_days ?? slip.pay_days ?? (30 - (slip.lop_days || 0))}
                             onChange={(e) => handleCellChange(slip.id, 'pay_days', e.target.value)}
                             className="w-10 text-center text-[11px] font-bold text-emerald-800 border border-emerald-200 rounded px-1 py-0.5 bg-white focus:ring-1 focus:ring-emerald-400"
                             title="Pay Days"
