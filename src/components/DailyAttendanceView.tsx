@@ -155,33 +155,64 @@ export default function DailyAttendanceView({
     }
   };
 
-  // Save all changes
+  // Save all changes — ACCUMULATE into monthly summary, never overwrite
   const handleSaveAll = async () => {
     setLoading(true);
     try {
-      // Build attendance records from employeeStatus
       const records: Attendance[] = Object.entries(employeeStatus).map(([empId, status]) => {
         const emp = activeEmps.find(e => e.id === empId);
         const month = yesterday.substring(0, 7);
         const punch = punchTimes[empId] || { in_time: '', out_time: '' };
-        return {
-          id: `ATT-${empId}-${month}`,
-          employee_id: empId,
-          month: month,
-          total_days: status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
-          working_days: status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
-          lop_days: status === 'ABSENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
-          overtime_hours: 0,
-          present: status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
-          absent: status === 'ABSENT' ? 1 : 0,
-          weekly_off: 0,
-          paid_holiday: 0,
-          leave: status === 'LEAVE' ? 1 : 0,
-          lwp: 0,
-          is_locked: false,
-          in_time: punch.in_time || undefined,
-          out_time: punch.out_time || undefined
-        } as any;
+        
+        // Find existing monthly attendance to ACCUMULATE into
+        const existing = attendance.find(a => a.employee_id === empId && a.month === month);
+        const calendarDays = 30; // Default for month — will be calculated properly
+        
+        if (existing) {
+          // ACCUMULATE: increment present/absent/leave counts, keep total_days
+          const newPresent = (existing.present || 0) + (status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0);
+          const newAbsent = (existing.absent || 0) + (status === 'ABSENT' ? 1 : 0);
+          const newLeave = (existing.leave || 0) + (status === 'LEAVE' ? 1 : 0);
+          const newLwp = existing.lwp || 0;
+          const newWo = existing.weekly_off || 0;
+          const newPh = existing.paid_holiday || 0;
+          const newTotal = newPresent + newAbsent + newLeave + newLwp + newWo + newPh;
+          
+          return {
+            ...existing,
+            id: existing.id,
+            employee_id: empId,
+            month: month,
+            total_days: Math.max(existing.total_days || calendarDays, newTotal),
+            present: newPresent,
+            absent: newAbsent,
+            leave: newLeave,
+            working_days: newPresent + newWo + newPh + newLeave,
+            lop_days: newAbsent + newLwp,
+            in_time: punch.in_time || existing.in_time,
+            out_time: punch.out_time || existing.out_time
+          } as any;
+        } else {
+          // NEW record — create with calendar days for the month
+          return {
+            id: `ATT-${empId}-${month}`,
+            employee_id: empId,
+            month: month,
+            total_days: calendarDays,
+            working_days: status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
+            lop_days: status === 'ABSENT' ? 1 : 0,
+            overtime_hours: 0,
+            present: status === 'PRESENT' ? 1 : status === 'HALF_DAY' ? 0.5 : 0,
+            absent: status === 'ABSENT' ? 1 : 0,
+            weekly_off: 0,
+            paid_holiday: 0,
+            leave: status === 'LEAVE' ? 1 : 0,
+            lwp: 0,
+            is_locked: false,
+            in_time: punch.in_time || undefined,
+            out_time: punch.out_time || undefined
+          } as any;
+        }
       });
       
       await onSaveAttendance(records);
