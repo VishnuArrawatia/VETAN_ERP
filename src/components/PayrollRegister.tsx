@@ -336,7 +336,7 @@ export default function PayrollRegister({
       if (ok) {
         setSuccessLogs(`Salary calculations draft computed successfully for '${activeMonth}'!`);
       } else {
-        setErrorMsg('Failed to process structure calculations.');
+        setErrorMsg('Payroll for this month is already locked/closed. Unlock it first before recalculating.');
       }
     } catch (e: any) {
       setErrorMsg(e.message);

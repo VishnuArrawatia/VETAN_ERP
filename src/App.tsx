@@ -7285,7 +7285,7 @@ export default function App() {
                         <td className="font-mono font-bold pb-1.5 text-gray-900">{activePayslipDetail.employee_id}</td>
                       </tr>
                       <tr>
-                        <td className="text-gray-400 pb-1.5">Staff Name:</td>
+                        <td className="text-gray-400 pb-1.5">Employee Name:</td>
                         <td className="font-bold pb-1.5 text-gray-900">{activePayslipDetail.employee_name}</td>
                       </tr>
                       <tr>
@@ -7302,7 +7302,7 @@ export default function App() {
                   <table className="w-full text-left">
                     <tbody>
                       <tr>
-                        <td className="text-gray-400 pb-1.5">Bank Link Name:</td>
+                        <td className="text-gray-400 pb-1.5">Bank Name:</td>
                         <td className="font-medium pb-1.5 text-gray-900">{activePayslipDetail.bank_name}</td>
                       </tr>
                       <tr>
@@ -7310,11 +7310,11 @@ export default function App() {
                         <td className="font-mono pb-1.5 text-gray-900">{activePayslipDetail.bank_account}</td>
                       </tr>
                       <tr>
-                        <td className="text-gray-400 pb-1.5">IFS Code Details:</td>
+                        <td className="text-gray-400 pb-1.5">IFSC Code:</td>
                         <td className="font-mono pb-1.5 text-gray-900">{activePayslipDetail.ifsc}</td>
                       </tr>
                       <tr>
-                        <td className="text-gray-400 pb-1.5">PAN Card No:</td>
+                        <td className="text-gray-400 pb-1.5">PAN:</td>
                         <td className="font-mono pb-1.5 text-gray-900 uppercase">{activePayslipDetail.pan}</td>
                       </tr>
                     </tbody>
@@ -7325,26 +7325,25 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-x-6 border-t border-b border-gray-100 py-4 font-sans text-xs">
                   {/* Earnings column */}
                   <div className="space-y-2">
-                    <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Earnings Component</span>
+                    <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Earnings</span>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Prorated Basic:</span>
+                      <span className="text-gray-500">Basic Salary:</span>
                       <span className="font-mono">₹{activePayslipDetail.earned_base_salary.toLocaleString('en-IN')}</span>
                     </div>
                     {activePayslipDetail.earned_hra !== undefined && activePayslipDetail.earned_hra > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Earned HRA:</span>
+                        <span className="text-gray-500">HRA:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_hra.toLocaleString('en-IN')}</span>
                       </div>
                     )}
                     {activePayslipDetail.earned_special_allowance > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Special Allowances:</span>
+                        <span className="text-gray-500">Special Allowance:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_special_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
                     {activePayslipDetail.earned_edu_allowance > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Education Allowance:</span>
+                      <div className="flex justify-between">                          <span className="text-gray-500">Children Education Allowance:</span>
                         <span className="font-mono">₹{activePayslipDetail.earned_edu_allowance.toLocaleString('en-IN')}</span>
                       </div>
                     )}
@@ -7365,30 +7364,26 @@ export default function App() {
 
                   {/* Deductions column */}
                   <div className="space-y-2 border-l pl-6">
-                    <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Statutory Deductions</span>
+                    <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Deductions</span>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Loss of Pay (LOP) fine:</span>
-                      <span className="font-mono">₹{activePayslipDetail.lop_deduction.toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">EPF Employee Share (12%):</span>
+                      <span className="text-gray-500">Employee PF:</span>
                       <span className="font-mono">₹{activePayslipDetail.pf_deduction.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">ESIC Medical Share (0.75%):</span>
+                      <span className="text-gray-500">Employee ESIC:</span>
                       <span className="font-mono">₹{activePayslipDetail.esic_deduction.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Professional Tax (PT):</span>
+                      <span className="text-gray-500">Professional Tax:</span>
                       <span className="font-mono">₹{activePayslipDetail.professional_tax.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Income Tax (TDS Estimate):</span>
+                      <span className="text-gray-500">TDS:</span>
                       <span className="font-mono">₹{activePayslipDetail.tds.toLocaleString('en-IN')}</span>
                     </div>
                     {activePayslipDetail.loan_deduction !== undefined && activePayslipDetail.loan_deduction > 0 && (
                       <div className="flex justify-between font-semibold text-amber-700">
-                        <span>Loan / Advance Repayment:</span>
+                        <span>Loan Amount:</span>
                         <span className="font-mono">₹{activePayslipDetail.loan_deduction.toLocaleString('en-IN')}</span>
                       </div>
                     )}
@@ -7402,7 +7397,7 @@ export default function App() {
                     <span className="font-mono text-gray-900">₹{activePayslipDetail.gross_salary.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between pl-6 border-l">
-                    <span className="text-gray-900">TOTAL DEDUCTION:</span>
+                    <span className="text-gray-900">TOTAL DEDUCTIONS:</span>
                     <span className="font-mono text-rose-600">₹{activePayslipDetail.total_deductions.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
@@ -7410,7 +7405,7 @@ export default function App() {
                 {/* Net Final transfers highlight */}
                 <div className="bg-emerald-50 p-4.5 rounded-xl border border-emerald-100 flex justify-between items-center text-emerald-900">
                   <div>
-                    <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">NET TRANSFER AMOUNT</span>
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase block tracking-wider">NET PAYABLE</span>
                     <span className="text-xs text-emerald-700 block mt-0.5">Disbursed to bank listed on file.</span>
                   </div>
                   <span className="text-xl font-extrabold font-mono tracking-tight text-emerald-700">
