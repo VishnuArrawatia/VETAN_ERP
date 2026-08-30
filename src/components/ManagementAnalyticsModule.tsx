@@ -40,6 +40,7 @@ import * as XLSX from 'xlsx';
 
 interface ManagementAnalyticsModuleProps {
   employees: Employee[];
+  activeCompany?: string;
   monthlySlips: Payslip[];
   payrollRuns: PayrollRun[];
   allRevisions: SalaryRevision[];
@@ -50,7 +51,8 @@ interface ManagementAnalyticsModuleProps {
 }
 
 export default function ManagementAnalyticsModule({
-  employees,
+  employees: _allEmployees,
+  activeCompany = 'ALL',
   monthlySlips,
   payrollRuns,
   allRevisions,
@@ -59,6 +61,11 @@ export default function ManagementAnalyticsModule({
   activeMonth,
   onRefreshData
 }: ManagementAnalyticsModuleProps) {
+  // Filter employees by activeCompany
+  const employees = _allEmployees.filter(emp => {
+    if (!activeCompany || activeCompany === 'ALL' || activeCompany === 'GROUP') return true;
+    return emp.company === activeCompany;
+  });
   // Navigation tabs for Management Analytics
   const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'salary' | 'company_unit' | 'headcount_movement' | 'joining_exit' | 'increments' | 'profile_history' | 'accounts_jv'>('dashboard');
   

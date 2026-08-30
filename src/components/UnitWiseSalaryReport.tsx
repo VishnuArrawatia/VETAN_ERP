@@ -34,10 +34,15 @@ interface Props {
   employees: Employee[];
   monthlySlips: Payslip[];
   companies: Company[];
+  activeCompany?: string;
   currentUser?: { role: string; company_rights?: string[] } | null;
 }
 
-export default function UnitWiseSalaryReport({ employees, monthlySlips, companies, currentUser }: Props) {
+export default function UnitWiseSalaryReport({ employees, monthlySlips, companies, activeCompany = 'ALL', currentUser }: Props) {
+  const filteredEmployees = employees.filter(emp => {
+    if (!activeCompany || activeCompany === 'ALL' || activeCompany === 'GROUP') return true;
+    return emp.company === activeCompany;
+  });
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -72,7 +77,7 @@ export default function UnitWiseSalaryReport({ employees, monthlySlips, companie
       totalAdvance: number;
     }> = {};
 
-    employees.filter(e => e.status !== 'SEPARATED' && e.status !== 'RESIGNED').forEach(emp => {
+    filteredEmployees.filter(e => e.status !== 'SEPARATED' && e.status !== 'RESIGNED').forEach(emp => {
       const unit = emp.company || 'Unknown';
       
       // Unit-based filtering for HR

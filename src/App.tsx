@@ -2430,6 +2430,7 @@ export default function App() {
     return (
       <ManagementDashboard 
         employees={employees}
+        activeCompany={activeCompany}
         leaveApps={leaveApps}
         payrollRuns={payrollRuns}
         monthlySlips={monthlySlips}
@@ -3442,6 +3443,7 @@ export default function App() {
                   {reportsSubTab === 'lifecycle' && (
                     <EmployeeLifeCycleReport 
                       employees={employees}
+                      activeCompany={activeCompany}
                       allRevisions={allRevisions}
                       allLoans={loans}
                       allLeaveApps={leaveApps}
@@ -3453,6 +3455,7 @@ export default function App() {
                   {reportsSubTab === 'analytics' && (
                     <ManagementAnalyticsModule 
                       employees={employees}
+                      activeCompany={activeCompany}
                       monthlySlips={monthlySlips}
                       payrollRuns={payrollRuns}
                       allRevisions={allRevisions}
@@ -3626,6 +3629,7 @@ export default function App() {
                       employees={employees}
                       monthlySlips={monthlySlips}
                       companies={companies}
+                      activeCompany={activeCompany}
                       currentUser={activeHR}
                     />
                   )}

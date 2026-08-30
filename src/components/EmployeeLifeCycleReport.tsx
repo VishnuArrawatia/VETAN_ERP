@@ -33,6 +33,7 @@ import * as XLSX from 'xlsx';
 
 interface EmployeeLifeCycleReportProps {
   employees: Employee[];
+  activeCompany?: string;
   allRevisions?: SalaryRevision[];
   allLoans?: Loan[];
   allLeaveApps?: LeaveApplication[];
@@ -42,12 +43,18 @@ interface EmployeeLifeCycleReportProps {
 
 export default function EmployeeLifeCycleReport({
   employees,
+  activeCompany = 'ALL',
   allRevisions = [],
   allLoans = [],
   allLeaveApps = [],
   allFfRecords = [],
   allAttendance = []
 }: EmployeeLifeCycleReportProps) {
+  // Filter employees by activeCompany
+  const filteredEmployees = employees.filter(emp => {
+    if (!activeCompany || activeCompany === 'ALL' || activeCompany === 'GROUP') return true;
+    return emp.company === activeCompany;
+  });
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   
@@ -72,7 +79,7 @@ export default function EmployeeLifeCycleReport({
 
   // Find selected employee object
   const employee = useMemo(() => {
-    return employees.find(e => e.id === selectedEmpId) || null;
+    return filteredEmployees.find(e => e.id === selectedEmpId) || null;
   }, [employees, selectedEmpId]);
 
   // Fetch employee detailed data when selection changes
@@ -456,7 +463,7 @@ export default function EmployeeLifeCycleReport({
               className="pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 focus:bg-white focus:ring-1 focus:ring-emerald-500 font-sans focus:outline-none w-full font-semibold text-slate-800"
             >
               <option value="">-- Choose Employee to Audit --</option>
-              {employees.map(e => (
+              {filteredEmployees.map(e => (
                 <option key={e.id} value={e.id}>
                   [{e.id}] {e.name} - {e.company} ({e.department})
                 </option>

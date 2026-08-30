@@ -40,6 +40,7 @@ import { Employee, LeaveApplication, Payslip, PayrollRun, Attendance } from '../
 
 interface ManagementDashboardProps {
   employees: Employee[];
+  activeCompany?: string;
   leaveApps: LeaveApplication[];
   payrollRuns: PayrollRun[];
   monthlySlips: Payslip[];
@@ -55,6 +56,7 @@ interface ManagementDashboardProps {
 
 export default function ManagementDashboard({
   employees,
+  activeCompany = 'ALL',
   leaveApps,
   payrollRuns,
   monthlySlips,
@@ -67,6 +69,10 @@ export default function ManagementDashboard({
   ffRecords = [],
   onLogout
 }: ManagementDashboardProps) {
+  // Filter employees by activeCompany — ALL downstream code must use this filtered list
+  const filteredEmps = activeCompany && activeCompany !== 'ALL' && activeCompany !== 'GROUP'
+    ? filteredEmps.filter(emp => emp.company === activeCompany)
+    : employees;
   // Navigation tabs for the Management Dashboard
   const [mgmtTab, setMgmtTab] = useState<'group' | 'company' | 'headcount' | 'salary' | 'leaves' | 'compliance' | 'productivity' | 'boardroom'>('group');
   const [presentationMode, setPresentationMode] = useState(false);
@@ -79,14 +85,14 @@ export default function ManagementDashboard({
   // --- STATS COMPUTATIONS ---
   const stats = useMemo(() => {
     // 1. Employee stats
-    const totalHeadcount = employees.length;
-    const activeHeadcount = employees.filter(e => e.status === 'ACTIVE').length;
-    const resignedHeadcount = employees.filter(e => e.status === 'RESIGNED' || e.status === 'SEPARATED').length;
+    const totalHeadcount = filteredEmps.length;
+    const activeHeadcount = filteredEmps.filter(e => e.status === 'ACTIVE').length;
+    const resignedHeadcount = filteredEmps.filter(e => e.status === 'RESIGNED' || e.status === 'SEPARATED').length;
     
     // Headcount by company
     const headcountByCompany: Record<string, number> = {};
     companies.forEach(c => { headcountByCompany[c.id] = 0; });
-    employees.forEach(e => {
+    filteredEmps.forEach(e => {
       if (headcountByCompany[e.company] !== undefined) {
         headcountByCompany[e.company]++;
       } else {
@@ -96,13 +102,13 @@ export default function ManagementDashboard({
 
     // Headcount by department
     const headcountByDept: Record<string, number> = {};
-    employees.forEach(e => {
+    filteredEmps.forEach(e => {
       headcountByDept[e.department] = (headcountByDept[e.department] || 0) + 1;
     });
 
     // Headcount by category
     const headcountByCategory: Record<string, number> = { Staff: 0, Worker: 0, Contract: 0 };
-    employees.forEach(e => {
+    filteredEmps.forEach(e => {
       const cat = e.employee_category || 'Staff';
       headcountByCategory[cat] = (headcountByCategory[cat] || 0) + 1;
     });
@@ -125,9 +131,9 @@ export default function ManagementDashboard({
     companies.forEach(c => { salaryCostByCompany[c.id] = { gross: 0, net: 0, deductions: 0 }; });
     slipsForMonth.forEach(s => {
       if (!salaryCostByCompany[s.employee_id]) {
-        const empCompany = employees.find(e => e.id === s.employee_id)?.company || s.month; // fallback if missing
+        const empCompany = filteredEmps.find(e => e.id === s.employee_id)?.company || s.month; // fallback if missing
         // Let's resolve company
-        const realCompany = employees.find(e => e.id === s.employee_id)?.company || companies[0]?.id;
+        const realCompany = filteredEmps.find(e => e.id === s.employee_id)?.company || companies[0]?.id;
         if (realCompany && salaryCostByCompany[realCompany]) {
           salaryCostByCompany[realCompany].gross += s.gross_salary;
           salaryCostByCompany[realCompany].net += s.net_salary;
@@ -151,7 +157,7 @@ export default function ManagementDashboard({
 
     // 4. Compliance Rates (Complete PF, ESIC, PT, PAN, Aadhaar documentation)
     let compliantCount = 0;
-    employees.forEach(e => {
+    filteredEmps.forEach(e => {
       if (e.pan && e.uan && e.aadhaar_number && e.bank_account) {
         compliantCount++;
       }
@@ -213,21 +219,21 @@ export default function ManagementDashboard({
       .filter(s => s.month.substring(0, 4) === activeMonth.substring(0, 4) && s.month <= activeMonth)
       .reduce((sum, s) => sum + s.gross_salary, 0);
 
-    const activeEmpVal = employees.filter(e => e.status === 'ACTIVE').length;
+    const activeEmpVal = filteredEmps.filter(e => e.status === 'ACTIVE').length;
     const avgEmpCost = activeEmpVal > 0 ? Math.round(stats.totalGrossCost / activeEmpVal) : 0;
 
     // Staff vs Workers vs Contractors
-    const staffCount = employees.filter(e => e.employee_category === 'Staff' || !e.employee_category).length;
-    const workersCount = employees.filter(e => e.employee_category === 'Worker').length;
-    const contractorsCount = employees.filter(e => e.employee_category === 'Contract').length;
+    const staffCount = filteredEmps.filter(e => e.employee_category === 'Staff' || !e.employee_category).length;
+    const workersCount = filteredEmps.filter(e => e.employee_category === 'Worker').length;
+    const contractorsCount = filteredEmps.filter(e => e.employee_category === 'Contract').length;
 
     // New joiners / Resigned
-    const newJoinersCount = employees.filter(e => e.joining_date && e.joining_date.startsWith(activeMonth)).length;
-    const resignedCount = employees.filter(e => e.status === 'RESIGNED' || (e.exit_date && e.exit_date.startsWith(activeMonth))).length;
+    const newJoinersCount = filteredEmps.filter(e => e.joining_date && e.joining_date.startsWith(activeMonth)).length;
+    const resignedCount = filteredEmps.filter(e => e.status === 'RESIGNED' || (e.exit_date && e.exit_date.startsWith(activeMonth))).length;
 
     // Attrition
-    const exitedThisYear = employees.filter(e => e.status === 'RESIGNED' && e.exit_date && e.exit_date.substring(0, 4) === activeMonth.substring(0, 4)).length;
-    const attritionRate = employees.length > 0 ? (exitedThisYear / employees.length) * 100 : 0;
+    const exitedThisYear = filteredEmps.filter(e => e.status === 'RESIGNED' && e.exit_date && e.exit_date.substring(0, 4) === activeMonth.substring(0, 4)).length;
+    const attritionRate = filteredEmps.length > 0 ? (exitedThisYear / filteredEmps.length) * 100 : 0;
 
     return {
       leavePercent,
@@ -245,8 +251,8 @@ export default function ManagementDashboard({
   // Selected Unit Computations
   const unitStats = useMemo(() => {
     const unitCompany = companies.find(c => c.id === selectedUnit);
-    const unitEmployees = employees.filter(e => e.company === selectedUnit);
-    const slipsForUnit = monthlySlips.filter(s => s.month === activeMonth && employees.find(e => e.id === s.employee_id)?.company === selectedUnit);
+    const unitEmployees = filteredEmps.filter(e => e.company === selectedUnit);
+    const slipsForUnit = monthlySlips.filter(s => s.month === activeMonth && filteredEmps.find(e => e.id === s.employee_id)?.company === selectedUnit);
     
     const headCount = unitEmployees.length;
     const activeCount = unitEmployees.filter(e => e.status === 'ACTIVE').length;
@@ -289,7 +295,7 @@ export default function ManagementDashboard({
 
   // Staff Table Filters
   const filteredEmployees = useMemo(() => {
-    return employees.filter(emp => {
+    return filteredEmps.filter(emp => {
       const matchesSearch = emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase()) || 
                             emp.designation.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
                             emp.id.toLowerCase().includes(employeeSearchTerm.toLowerCase());
@@ -584,7 +590,7 @@ export default function ManagementDashboard({
                 <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-1">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">New Joiners</span>
                   <p className="text-2xl font-black font-mono text-teal-400 tracking-tight">
-                    {employees.length === 0 ? "Pending Data Upload" : `${executiveAnalytics.newJoinersCount}`}
+                    {filteredEmps.length === 0 ? "Pending Data Upload" : `${executiveAnalytics.newJoinersCount}`}
                   </p>
                   <span className="text-[9px] text-slate-500 block">Onboarded in active month</span>
                 </div>
@@ -592,7 +598,7 @@ export default function ManagementDashboard({
                 <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-1">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Resigned Employees</span>
                   <p className="text-2xl font-black font-mono text-rose-400 tracking-tight">
-                    {employees.length === 0 ? "Pending Data Upload" : `${executiveAnalytics.resignedCount}`}
+                    {filteredEmps.length === 0 ? "Pending Data Upload" : `${executiveAnalytics.resignedCount}`}
                   </p>
                   <span className="text-[9px] text-slate-500 block">Separated in active month</span>
                 </div>
@@ -728,13 +734,13 @@ export default function ManagementDashboard({
                       alert('Exporting Combined & Unit-wise Ledger Matrix to CSV...');
                       const headers = 'Unit Code,Unit Name,Total Headcount,Active Headcount,New Joiners,Resigned,Monthly Payroll Cost,YTD Payroll,Avg Cost Per Employee,Attendance %,Leave %,OT Hours\n';
                       const rows = companies.map(c => {
-                        const compEmps = employees.filter(e => e.company === c.id);
-                        const compSlips = monthlySlips.filter(s => s.month === activeMonth && employees.find(emp => emp.id === s.employee_id)?.company === c.id);
+                        const compEmps = filteredEmps.filter(e => e.company === c.id);
+                        const compSlips = monthlySlips.filter(s => s.month === activeMonth && filteredEmps.find(emp => emp.id === s.employee_id)?.company === c.id);
                         const compActive = compEmps.filter(e => e.status === 'ACTIVE').length;
                         const compNew = compEmps.filter(e => e.joining_date && e.joining_date.startsWith(activeMonth)).length;
                         const compResigned = compEmps.filter(e => e.status === 'RESIGNED' || (e.exit_date && e.exit_date.startsWith(activeMonth))).length;
                         const compGross = compSlips.reduce((sum, s) => sum + s.gross_salary, 0);
-                        const compYtd = monthlySlips.filter(s => s.month.substring(0, 4) === activeMonth.substring(0, 4) && s.month <= activeMonth && employees.find(emp => emp.id === s.employee_id)?.company === c.id).reduce((sum, s) => sum + s.gross_salary, 0);
+                        const compYtd = monthlySlips.filter(s => s.month.substring(0, 4) === activeMonth.substring(0, 4) && s.month <= activeMonth && filteredEmps.find(emp => emp.id === s.employee_id)?.company === c.id).reduce((sum, s) => sum + s.gross_salary, 0);
                         const compAvgCost = compActive > 0 ? Math.round(compGross / compActive) : 0;
                         const compAtt = attendance.filter(a => a.month === activeMonth && compEmps.some(e => e.id === a.employee_id));
                         const compPossible = compAtt.reduce((sum, a) => sum + a.total_days, 0);
@@ -781,14 +787,14 @@ export default function ManagementDashboard({
                     </thead>
                     <tbody className="divide-y divide-slate-800/50 text-[11px] font-medium text-slate-300">
                       {companies.map(c => {
-                        const compEmps = employees.filter(e => e.company === c.id);
-                        const compSlips = monthlySlips.filter(s => s.month === activeMonth && employees.find(emp => emp.id === s.employee_id)?.company === c.id);
+                        const compEmps = filteredEmps.filter(e => e.company === c.id);
+                        const compSlips = monthlySlips.filter(s => s.month === activeMonth && filteredEmps.find(emp => emp.id === s.employee_id)?.company === c.id);
                         const compActive = compEmps.filter(e => e.status === 'ACTIVE').length;
                         const compNew = compEmps.filter(e => e.joining_date && e.joining_date.startsWith(activeMonth)).length;
                         const compResigned = compEmps.filter(e => e.status === 'RESIGNED' || (e.exit_date && e.exit_date.startsWith(activeMonth))).length;
                         
                         const compGross = compSlips.reduce((sum, s) => sum + s.gross_salary, 0);
-                        const compYtd = monthlySlips.filter(s => s.month.substring(0, 4) === activeMonth.substring(0, 4) && s.month <= activeMonth && employees.find(emp => emp.id === s.employee_id)?.company === c.id).reduce((sum, s) => sum + s.gross_salary, 0);
+                        const compYtd = monthlySlips.filter(s => s.month.substring(0, 4) === activeMonth.substring(0, 4) && s.month <= activeMonth && filteredEmps.find(emp => emp.id === s.employee_id)?.company === c.id).reduce((sum, s) => sum + s.gross_salary, 0);
                         const compAvgCost = compActive > 0 ? Math.round(compGross / compActive) : 0;
                         
                         const compAtt = attendance.filter(a => a.month === activeMonth && compEmps.some(e => e.id === a.employee_id));
@@ -1387,7 +1393,7 @@ export default function ManagementDashboard({
             // Department-wise approved leaves this month
             const deptLeaves: Record<string, number> = {};
             leaveApps.filter(l => l.status === 'APPROVED').forEach(l => {
-              const emp = employees.find(e => e.id === l.employee_id);
+              const emp = filteredEmps.find(e => e.id === l.employee_id);
               const d = emp?.department || 'Production';
               deptLeaves[d] = (deptLeaves[d] || 0) + 1;
             });
