@@ -1407,38 +1407,15 @@ export async function createApp(supabaseAdmin?: any) {
       }
     }
     
-    // Ensure every single employee in that company has an attendance row registered
-    const employees = db.getEmployees(targetCompany);
-    const existing = db.getAttendance(month, targetCompany);
-    
-    const missing: Attendance[] = [];
-    const yearMonth = month;
-    const daysInMonth = new Date(
-      parseInt(yearMonth.split('-')[0]),
-      parseInt(yearMonth.split('-')[1]),
-      0
-    ).getDate();
-
-    for (const emp of employees) {
-      const entry = existing.find(a => a.employee_id === emp.id);
-      if (!entry) {
-        missing.push({
-          id: `ATT-${emp.id}-${month}`,
-          employee_id: emp.id,
-          month: month,
-          total_days: daysInMonth,
-          working_days: daysInMonth,
-          lop_days: 0,
-          overtime_hours: 0
-        });
-      }
-    }
-
-    if (missing.length > 0) {
-      db.saveAttendance(missing);
-    }
-
-    res.json(db.getAttendance(month, targetCompany));
+    // CRITICAL FIX: Do NOT auto-create attendance records for missing employees.
+    // Auto-creating 'Present' records for employees with NO punch data caused:
+    //   - Duplicate attendance (auto-created + actual CSV import)
+    //   - Missing employees incorrectly showing as 'Present'
+    //   - Database pollution with fake attendance records
+    // Only return ACTUAL attendance records from the database.
+    // Frontend will display missing employees as 'NOT MARKED'.
+    const records = db.getAttendance(month, targetCompany);
+    res.json(records);
   });
 
   app.post('/api/attendance/bulk', (req, res) => {
@@ -2757,6 +2734,8 @@ HR Department`;
       'Department',
       'Designation',
       'Basic Wage Rate',
+      'Calendar Days',
+      'Paid Days',
       'Earned Basic',
       'Earned HRA',
       'Earned Education Allowance',
@@ -2789,6 +2768,8 @@ HR Department`;
         `"${emp?.company || 'SVN-1'}"`,
         `"${s.department}"`,
         `"${s.designation}"`,
+        s.calendar_days || 30,
+        s.pay_days ?? '-',
         s.rate_base_salary,
         s.earned_base_salary,
         s.earned_hra,

@@ -790,6 +790,7 @@ export default function PayrollRegister({
             <thead>
               <tr className="bg-gray-50 border-b select-none font-display text-gray-500">
                 <th className="p-4.5 text-xs font-semibold">Staff Name / Ref</th>
+                <th className="p-4.5 text-xs font-semibold text-center">Paid Days</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Earned Basic (A)</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Allowances (B)</th>
                 <th className="p-4.5 text-xs font-semibold text-right">Gross Earnings (A+B)</th>
@@ -816,6 +817,9 @@ export default function PayrollRegister({
                           </span>
                         </div>
                       </div>
+                    </td>
+                    <td className="p-4.5 text-center font-mono text-xs font-bold text-gray-700">
+                      {s.pay_days ?? '-'}
                     </td>
                     <td className="p-4.5 text-right font-mono text-xs text-gray-700 font-medium">
                       ₹{s.earned_base_salary.toLocaleString('en-IN')}
@@ -1033,6 +1037,10 @@ export default function PayrollRegister({
                     <span className="text-xs font-bold text-gray-700 font-mono mt-2 block">
                       SALARY SLIP FOR: {new Date(`${activeSlip.month}-02`).toLocaleDateString('en-IN', { year: 'numeric', month: 'long' }).toUpperCase()} {activeSlip.month >= '2026-08' ? '(PERCENTAGE FORMULA APPLIED)' : ''}
                     </span>
+                    <div className="flex gap-4 mt-1">
+                      <span className="text-[10px] font-mono text-gray-600">Calendar Days: <span className="font-bold">{activeSlip.calendar_days || 30}</span></span>
+                      <span className="text-[10px] font-mono text-emerald-700 font-bold">Paid Days: {activeSlip.pay_days ?? (activeSlip.calendar_days || 30)}</span>
+                    </div>
                   </div>
 
                   {/* Sub-grid information parameters */}

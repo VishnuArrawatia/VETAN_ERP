@@ -313,6 +313,8 @@ export interface Payslip {
   payment_date?: string;
   hidden_salary_heads?: string;
   salary_structure_type?: 'FIXED' | 'PERCENTAGE' | 'MIXED';
+  pay_days?: number;
+  calendar_days?: number;
 }
 
 export interface PayrollEarningHead {

@@ -117,13 +117,21 @@ export default function AttendanceSheet({
       const locked = records.length > 0 && records.every(r => r.is_locked);
       setIsLocked(locked);
       
-      // If records exist and we're just loading, populate verification step or show upload
-      if (records.length > 0) {
-        const mapped: ParsedRecord[] = records.map((r, index) => {
-          const emp = employees.find(e => e.id === r.employee_id);
+      // CRITICAL FIX: Show ALL employees for the unit — even those without attendance records.
+      // Employees without records get 'NOT MARKED' status (present=0, absent=0, etc.)
+      // This prevents the old bug where auto-creating 'Present' records polluted the database.
+      const empRecordMap = new Map<string, any>();
+      for (const r of records) {
+        empRecordMap.set(r.employee_id, r);
+      }
+      
+      const mapped: ParsedRecord[] = employees.map((emp, index) => {
+        const r = empRecordMap.get(emp.id);
+        if (r) {
+          // Employee HAS attendance record — use actual data
           return {
             Worker_Code: r.employee_id,
-            Employee_Name: emp?.name || 'Unknown',
+            Employee_Name: emp.name || 'Unknown',
             Present: r.present ?? (r.working_days - (r.leave ?? 0)),
             Absent: r.absent ?? 0,
             Weekly_Off: r.weekly_off ?? 4,
@@ -137,13 +145,28 @@ export default function AttendanceSheet({
             CompOff_Used: r.compoff_used ?? 0,
             rowNum: index + 1
           };
-        });
-        setParsedRecords(mapped);
-        setCurrentStep(locked ? 'LOCK' : 'VERIFY');
-      } else {
-        setParsedRecords([]);
-        setCurrentStep('UPLOAD');
-      }
+        } else {
+          // Employee has NO attendance record — show as NOT MARKED (all zeros)
+          return {
+            Worker_Code: emp.id,
+            Employee_Name: emp.name || 'Unknown',
+            Present: 0,
+            Absent: 0,
+            Weekly_Off: 0,
+            Paid_Holiday: 0,
+            Leave: 0,
+            LWP: 0,
+            OT_Hours: 0,
+            Leave_PL: 0,
+            Leave_CL: 0,
+            Leave_SL: 0,
+            CompOff_Used: 0,
+            rowNum: index + 1
+          };
+        }
+      });
+      setParsedRecords(mapped);
+      setCurrentStep(locked ? 'LOCK' : 'VERIFY');
     } catch (e) {
       console.error('Error loading attendance:', e);
       setErrorMsg('Failed to fetch existing attendance logs');
@@ -1328,13 +1351,13 @@ export default function AttendanceSheet({
             </div>
 
             {/* Interactive Spreadsheet Grid */}
-            <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-xs">
+            <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-xs max-h-[600px] overflow-y-auto">
               <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50 border-b border-gray-100 select-none">
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-16 text-center">Row</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-28">Employee Code</th>
-                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-44">Employee Name</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-16 text-center bg-gray-50">Row</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-28 bg-gray-50">Employee Code</th>
+                    <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider w-44 bg-gray-50">Employee Name</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Present</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-20">Absent</th>
                     <th className="p-3 text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center w-16">W/O</th>

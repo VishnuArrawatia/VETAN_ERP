@@ -1151,6 +1151,14 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN mobile_deduction REAL`, () => {});
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN damage_deduction REAL`, () => {});
       this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN remarks TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN pay_days REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN calendar_days REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN bonus_incentive REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN rate_bonus_payable REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN earned_bonus_payable REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN ctc_salary REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN employer_pf REAL`, () => {});
+      this.dbSqlite.run(`ALTER TABLE payslips ADD COLUMN employer_esic REAL`, () => {});
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS leave_applications (
@@ -3899,6 +3907,7 @@ export class PayrollDatabase {
       hidden_salary_heads: emp.hidden_salary_heads || '',
       salary_structure_type: emp.salary_structure_type || 'FIXED',
       pay_days: workDays,
+      calendar_days: totalDays,
       total_days: totalDays
     };
   }
