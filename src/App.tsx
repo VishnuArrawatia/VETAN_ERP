@@ -1625,6 +1625,17 @@ export default function App() {
   };
 
   // Create single employee manually
+  /** Standardize employee name to Proper Case */
+  const standardizeName = (name: string): string => {
+    if (!name) return name;
+    return name
+      .trim()
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const handleCreateEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualId || !manualId.trim()) {
@@ -1648,7 +1659,7 @@ export default function App() {
 
     const payload: Partial<Employee> = {
       id: manualId.trim(),
-      name: manualName,
+      name: standardizeName(manualName),
       company: manualUnit as any,
       designation: manualDesignation,
       department: manualDept,

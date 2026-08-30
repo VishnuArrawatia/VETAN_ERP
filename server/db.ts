@@ -2167,7 +2167,20 @@ export class PayrollDatabase {
     return false;
   }
 
+  /** Standardize employee name to Proper Case: "First Middle Last" */
+  private standardizeName(name: string): string {
+    if (!name) return name;
+    return name
+      .trim()                    // Remove leading/trailing spaces
+      .replace(/\s+/g, ' ')      // Collapse multiple spaces to single
+      .split(' ')                // Split into words
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) // Proper case each word
+      .join(' ');                // Join back
+  }
+
   private syncEmployee(emp: Employee) {
+    // Auto-standardize employee name on every save
+    emp.name = this.standardizeName(emp.name);
     this.dbSqlite.run(`INSERT OR REPLACE INTO employees (id, name, company, designation, department, email, phone, joining_date, exit_date, status, bank_name, bank_account, ifsc, pan, uan, base_salary, hra, special_allowance, da, pf_opt_in, esic_opt_in, professional_tax_opt_in, leave_balance_pl, leave_balance_cl, leave_balance_sl, qualification, location, vehicle_detail, prev_company_name, prev_company_location, total_experience, shift_timing, password, birth_year, needs_password_change, aadhaar_number, dob, gender, marital_status, emergency_contact, blood_group, esic_number, cost_center, reporting_manager, employee_category, reporting_hod, reporting_hod_name, conveyance_allowance, edu_allowance, medical_allowance, hidden_salary_heads, salary_structure_type, bonus_payable, ctc_salary, reporting_hod_code, is_hod, can_approve_leave, can_approve_misspunch, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         emp.id, emp.name, emp.company, emp.designation, emp.department, emp.email, emp.phone, emp.joining_date, emp.exit_date || null, emp.status,
@@ -2291,6 +2304,9 @@ export class PayrollDatabase {
   public updateEmployee(id: string, updated: Partial<Employee>): Employee | undefined {
     const idx = this.data.employees.findIndex(e => e.id === id);
     if (idx === -1) return undefined;
+    
+    // Auto-standardize employee name on every update
+    if (updated.name) updated.name = this.standardizeName(updated.name);
     
     const oldEmp = this.data.employees[idx];
     const oldSalary = oldEmp.base_salary;

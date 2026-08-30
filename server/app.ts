@@ -3767,6 +3767,33 @@ HR Department`;
     }
   });
 
+  // Bulk name standardization endpoint
+  app.post('/api/admin/standardize-names', async (req, res) => {
+    try {
+      const standardizeName = (name: string): string => {
+        if (!name) return name;
+        return name.trim().replace(/\s+/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      };
+      
+      const employees = db.getEmployees();
+      let fixed = 0;
+      for (const emp of employees) {
+        const standardizedName = standardizeName(emp.name);
+        if (standardizedName !== emp.name) {
+          db.updateEmployee(emp.id, { name: standardizedName });
+          fixed++;
+        }
+      }
+      
+      // Force persist to Supabase
+      await db.persistDataSync();
+      
+      res.json({ success: true, fixed, total: employees.length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Expose db instance for Vercel handler to call reloadFromSupabase()
   (app as any).locals = (app as any).locals || {};
   (app as any).locals.db = db;

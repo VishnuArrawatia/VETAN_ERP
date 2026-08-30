@@ -26517,7 +26517,13 @@ var PayrollDatabase = class {
     }
     return false;
   }
+  /** Standardize employee name to Proper Case: "First Middle Last" */
+  standardizeName(name) {
+    if (!name) return name;
+    return name.trim().replace(/\s+/g, " ").split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  }
   syncEmployee(emp) {
+    emp.name = this.standardizeName(emp.name);
     this.dbSqlite.run(
       `INSERT OR REPLACE INTO employees (id, name, company, designation, department, email, phone, joining_date, exit_date, status, bank_name, bank_account, ifsc, pan, uan, base_salary, hra, special_allowance, da, pf_opt_in, esic_opt_in, professional_tax_opt_in, leave_balance_pl, leave_balance_cl, leave_balance_sl, qualification, location, vehicle_detail, prev_company_name, prev_company_location, total_experience, shift_timing, password, birth_year, needs_password_change, aadhaar_number, dob, gender, marital_status, emergency_contact, blood_group, esic_number, cost_center, reporting_manager, employee_category, reporting_hod, reporting_hod_name, conveyance_allowance, edu_allowance, medical_allowance, hidden_salary_heads, salary_structure_type, bonus_payable, ctc_salary, reporting_hod_code, is_hod, can_approve_leave, can_approve_misspunch, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -26671,6 +26677,7 @@ var PayrollDatabase = class {
   updateEmployee(id, updated) {
     const idx = this.data.employees.findIndex((e) => e.id === id);
     if (idx === -1) return void 0;
+    if (updated.name) updated.name = this.standardizeName(updated.name);
     const oldEmp = this.data.employees[idx];
     const oldSalary = oldEmp.base_salary;
     const newSalary = updated.base_salary;
@@ -33039,6 +33046,27 @@ HR Department`;
         total_advance: totalAdvance,
         unit_breakdown: unitBreakdown
       });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/admin/standardize-names", async (req, res) => {
+    try {
+      const standardizeName = (name) => {
+        if (!name) return name;
+        return name.trim().replace(/\s+/g, " ").split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+      };
+      const employees = db.getEmployees();
+      let fixed = 0;
+      for (const emp of employees) {
+        const standardizedName = standardizeName(emp.name);
+        if (standardizedName !== emp.name) {
+          db.updateEmployee(emp.id, { name: standardizedName });
+          fixed++;
+        }
+      }
+      await db.persistDataSync();
+      res.json({ success: true, fixed, total: employees.length });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
