@@ -28810,10 +28810,10 @@ var PayrollDatabase = class _PayrollDatabase {
       if (revFull.medical_allowance !== void 0) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== void 0) rate_conveyance_val = Number(revFull.conveyance_allowance);
     } else if (allEmpRevisions.length > 0) {
-      const earliestFutureRev = allEmpRevisions.find((r) => r.effective_date && r.effective_date > monthEnd);
-      if (earliestFutureRev) {
-        rate_base = Number(earliestFutureRev.old_salary);
-        console.log(`[Payroll] ${emp.id} month ${month}: using pre-increment rate \u20B9${rate_base} (next revision effective ${earliestFutureRev.effective_date})`);
+      const firstRev = allEmpRevisions[0];
+      if (firstRev && firstRev.old_salary) {
+        rate_base = Number(firstRev.old_salary);
+        console.log(`[Payroll] ${emp.id} month ${month}: no revision applicable, using original rate \u20B9${rate_base} (first revision: ${firstRev.effective_date})`);
       }
     }
     let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val;

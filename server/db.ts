@@ -4575,13 +4575,14 @@ export class PayrollDatabase {
       if (revFull.medical_allowance !== undefined) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== undefined) rate_conveyance_val = Number(revFull.conveyance_allowance);
     } else if (allEmpRevisions.length > 0) {
-      // No revision applies to this month, but future revisions exist.
-      // The employee master may have been overwritten — use the earliest
-      // future revision's OLD salary as the correct pre-increment rate.
-      const earliestFutureRev = allEmpRevisions.find(r => r.effective_date && r.effective_date > monthEnd);
-      if (earliestFutureRev) {
-        rate_base = Number(earliestFutureRev.old_salary);
-        console.log(`[Payroll] ${emp.id} month ${month}: using pre-increment rate ₹${rate_base} (next revision effective ${earliestFutureRev.effective_date})`);
+      // No revision applies to this month, but revisions exist for this employee.
+      // The employee master may have been overwritten by a later revision.
+      // Find the very FIRST revision for this employee and use its old_salary,
+      // which represents the original pre-increment salary.
+      const firstRev = allEmpRevisions[0];
+      if (firstRev && firstRev.old_salary) {
+        rate_base = Number(firstRev.old_salary);
+        console.log(`[Payroll] ${emp.id} month ${month}: no revision applicable, using original rate ₹${rate_base} (first revision: ${firstRev.effective_date})`);
       }
     }
     let rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val);
