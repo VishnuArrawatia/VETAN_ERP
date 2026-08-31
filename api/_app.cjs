@@ -5128,12 +5128,25 @@ var PayrollDatabase = class _PayrollDatabase {
       salary_structure_type: emp.salary_structure_type || "FIXED",
       pay_days: workDays,
       calendar_days: totalDays,
-      total_days: totalDays
+      total_days: totalDays,
+      // LEAVE/ATTENDANCE SNAPSHOT: Freeze attendance data at calculation time.
+      // These values are immutable once the payslip is created.
+      snapshot_present: att.present || 0,
+      snapshot_leave: att.leave || 0,
+      snapshot_weekly_off: att.weekly_off || 0,
+      snapshot_absent: att.absent || 0,
+      snapshot_lop_days: lopDays,
+      snapshot_loan_emi: loan_deduction,
+      snapshot_total_loan_active: activeLoans.length
     };
   }
   updatePayslipFullVariableInputs(id, inputs) {
     const s = this.data.payslips.find((p) => p.id === id);
     if (!s) return null;
+    const run = this.data.payroll_runs.find((r) => r.month === s.month && r.status === "CLOSED");
+    if (run) {
+      throw new Error(`Payroll for ${s.month} is LOCKED/CLOSED. Cannot modify payslip ${id}. Unlock the payroll first.`);
+    }
     if (inputs.rate_base_salary !== void 0) s.rate_base_salary = Number(inputs.rate_base_salary);
     if (inputs.rate_hra !== void 0) s.rate_hra = Number(inputs.rate_hra);
     if (inputs.rate_edu_allowance !== void 0) s.rate_edu_allowance = Number(inputs.rate_edu_allowance);
