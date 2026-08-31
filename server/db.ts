@@ -4532,7 +4532,7 @@ export class PayrollDatabase {
   }
 
   // Automation Calculation Logic for Single Employee Draft Wage Slip
-  public calculateSingleSlip(emp: Employee, att: any, month: string): Payslip {
+  public calculateSingleSlip(emp: Employee, att: any, month: string, forceFresh = false): Payslip {
     const totalDays = att.total_days || 30;
     // CRITICAL FIX: Always calculate pay_days from attendance fields.
     // Never trust stored pay_days — it may be stale from a previous calculation.
@@ -4702,9 +4702,9 @@ export class PayrollDatabase {
       }
     }
 
-    // CRITICAL FIX: Use STORED payslip rates if they exist (prevents historical salary overwrite)
+    // CRITICAL FIX: Use STORED payslip rates only for CLOSED payslips or when NOT force-fresh
     const existingSlip = (this.data.payslips || []).find(p => p.id === `SLIP-${emp.id}-${month}`);
-    if (existingSlip && existingSlip.rate_base_salary) {
+    if (!forceFresh && existingSlip && existingSlip.rate_base_salary) {
       // Use the STORED rates from when this payslip was first calculated
       // This ensures historical payslips are not affected by later salary changes
       rate_base = existingSlip.rate_base_salary;
@@ -5025,7 +5025,7 @@ export class PayrollDatabase {
         continue;
       }
 
-      const slip = this.calculateSingleSlip(emp, att, month);
+      const slip = this.calculateSingleSlip(emp, att, month, true);
 
       // FIX: Restore manual edits that HR made before recalculation
       const saved = savedManualInputs[emp.id];
