@@ -4562,6 +4562,18 @@ export class PayrollDatabase {
     const applicableRevisions = allEmpRevisions
       .filter(r => r.effective_date && r.effective_date <= monthEnd)
       .sort((a, b) => (b.effective_date || '').localeCompare(a.effective_date || ''));
+    // POINT-IN-TIME RATE RESOLUTION:
+    // Determine the correct salary rate for the target payroll month.
+    //
+    // Problem: emp.base_salary may have been overwritten by addSalaryRevision()
+    // when effective_date <= today. But for historical months (e.g., April 2026),
+    // we need the rate that was EFFECTIVE at that time, not the current rate.
+    //
+    // Solution:
+    // 1. If a revision applies to this month (effective_date <= monthEnd) → use its new_salary
+    // 2. If NO revision applies → use old_salary from the EARLIEST future revision
+    //    (which represents the pre-increment rate before any future changes)
+    // 3. If NO revisions exist at all → use emp.base_salary (original, unchanged)
     let rate_base = emp.base_salary;
     let rate_hra_val = emp.hra ?? 0;
     let rate_special_val = emp.special_allowance ?? 0;
@@ -4578,10 +4590,20 @@ export class PayrollDatabase {
       if (revFull.edu_allowance !== undefined) rate_edu_val = Number(revFull.edu_allowance);
       if (revFull.medical_allowance !== undefined) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== undefined) rate_conveyance_val = Number(revFull.conveyance_allowance);
+    } else if (allEmpRevisions.length > 0) {
+      // NO revision applies for this month, but future revisions exist.
+      // emp.base_salary may have been overwritten by addSalaryRevision().
+      // Use the old_salary from the EARLIEST revision — this is the pre-increment rate.
+      const earliestRev = allEmpRevisions[0];
+      rate_base = Number(earliestRev.old_salary);
+      const revFull = earliestRev as any;
+      if (revFull.hra !== undefined) rate_hra_val = Number(revFull.hra);
+      if (revFull.special_allowance !== undefined) rate_special_val = Number(revFull.special_allowance);
+      if (revFull.edu_allowance !== undefined) rate_edu_val = Number(revFull.edu_allowance);
+      if (revFull.medical_allowance !== undefined) rate_medical_val = Number(revFull.medical_allowance);
+      if (revFull.conveyance_allowance !== undefined) rate_conveyance_val = Number(revFull.conveyance_allowance);
     }
-    // When no revision applies, emp.base_salary is used as-is.
-    // This is correct because addSalaryRevision() only overwrites emp.base_salary
-    // when effective_date <= today, and revert revisions correct it back.
+    // If no revisions exist at all, emp.base_salary is the original rate — use as-is.
     let rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val);
     let rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val);
     const rate_da = 0; // DA completely removed from salary structure
