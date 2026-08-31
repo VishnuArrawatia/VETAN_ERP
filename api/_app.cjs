@@ -28792,7 +28792,8 @@ var PayrollDatabase = class _PayrollDatabase {
     const isHidden = (head) => hiddenHeads.includes(head);
     const [mYear, mMon] = month.split("-").map(Number);
     const monthEnd = `${mYear}-${String(mMon).padStart(2, "0")}-${String(new Date(mYear, mMon, 0).getDate()).padStart(2, "0")}`;
-    const applicableRevisions = (this.data.salary_revisions || []).filter((r) => r.employee_code === emp.id && r.effective_date && r.effective_date <= monthEnd).sort((a, b) => (b.effective_date || "").localeCompare(a.effective_date || ""));
+    const allEmpRevisions = (this.data.salary_revisions || []).filter((r) => r.employee_code === emp.id).sort((a, b) => (a.effective_date || "").localeCompare(b.effective_date || ""));
+    const applicableRevisions = allEmpRevisions.filter((r) => r.effective_date && r.effective_date <= monthEnd).sort((a, b) => (b.effective_date || "").localeCompare(a.effective_date || ""));
     let rate_base = emp.base_salary;
     let rate_hra_val = emp.hra ?? 0;
     let rate_special_val = emp.special_allowance ?? 0;
@@ -28808,6 +28809,12 @@ var PayrollDatabase = class _PayrollDatabase {
       if (revFull.edu_allowance !== void 0) rate_edu_val = Number(revFull.edu_allowance);
       if (revFull.medical_allowance !== void 0) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== void 0) rate_conveyance_val = Number(revFull.conveyance_allowance);
+    } else if (allEmpRevisions.length > 0) {
+      const earliestFutureRev = allEmpRevisions.find((r) => r.effective_date && r.effective_date > monthEnd);
+      if (earliestFutureRev) {
+        rate_base = Number(earliestFutureRev.old_salary);
+        console.log(`[Payroll] ${emp.id} month ${month}: using pre-increment rate \u20B9${rate_base} (next revision effective ${earliestFutureRev.effective_date})`);
+      }
     }
     let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val;
     let rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val;

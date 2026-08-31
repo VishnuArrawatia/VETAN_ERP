@@ -4547,12 +4547,16 @@ export class PayrollDatabase {
 
     // CRITICAL FIX: Look up applicable salary revision for the payroll month.
     // The most recent revision with effective_date <= end-of-month determines the salary.
-    // This ensures historical payroll uses the correct salary for each period.
+    // If no revision is applicable (all are future-dated), use the OLD salary from
+    // the earliest future revision — because emp.base_salary may have been overwritten.
     // Calculate proper month-end date (handles 28/29/30/31 day months)
     const [mYear, mMon] = month.split('-').map(Number);
     const monthEnd = `${mYear}-${String(mMon).padStart(2, '0')}-${String(new Date(mYear, mMon, 0).getDate()).padStart(2, '0')}`;
-    const applicableRevisions = (this.data.salary_revisions || [])
-      .filter(r => r.employee_code === emp.id && r.effective_date && r.effective_date <= monthEnd)
+    const allEmpRevisions = (this.data.salary_revisions || [])
+      .filter(r => r.employee_code === emp.id)
+      .sort((a, b) => (a.effective_date || '').localeCompare(b.effective_date || ''));
+    const applicableRevisions = allEmpRevisions
+      .filter(r => r.effective_date && r.effective_date <= monthEnd)
       .sort((a, b) => (b.effective_date || '').localeCompare(a.effective_date || ''));
     let rate_base = emp.base_salary;
     let rate_hra_val = emp.hra ?? 0;
@@ -4561,15 +4565,24 @@ export class PayrollDatabase {
     let rate_medical_val = (emp.medical_allowance && emp.medical_allowance > 0) ? emp.medical_allowance : 0;
     let rate_conveyance_val = (emp.conveyance_allowance && emp.conveyance_allowance > 0) ? emp.conveyance_allowance : 0;
     if (applicableRevisions.length > 0) {
+      // Found a revision effective on or before this month — use its new salary
       const latestRev = applicableRevisions[0];
       rate_base = Number(latestRev.new_salary);
-      // Use revision's full structure if available
       const revFull = latestRev as any;
       if (revFull.hra !== undefined) rate_hra_val = Number(revFull.hra);
       if (revFull.special_allowance !== undefined) rate_special_val = Number(revFull.special_allowance);
       if (revFull.edu_allowance !== undefined) rate_edu_val = Number(revFull.edu_allowance);
       if (revFull.medical_allowance !== undefined) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== undefined) rate_conveyance_val = Number(revFull.conveyance_allowance);
+    } else if (allEmpRevisions.length > 0) {
+      // No revision applies to this month, but future revisions exist.
+      // The employee master may have been overwritten — use the earliest
+      // future revision's OLD salary as the correct pre-increment rate.
+      const earliestFutureRev = allEmpRevisions.find(r => r.effective_date && r.effective_date > monthEnd);
+      if (earliestFutureRev) {
+        rate_base = Number(earliestFutureRev.old_salary);
+        console.log(`[Payroll] ${emp.id} month ${month}: using pre-increment rate ₹${rate_base} (next revision effective ${earliestFutureRev.effective_date})`);
+      }
     }
     let rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val);
     let rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val);
