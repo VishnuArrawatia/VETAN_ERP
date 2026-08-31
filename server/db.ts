@@ -4871,8 +4871,9 @@ export class PayrollDatabase {
         overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance,
         gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type,
         bonus_incentive, performance_incentive, attendance_incentive, production_incentive, reimbursement, special_allowance_addition,
-        arrear_payment, other_earnings, canteen_deduction, uniform_deduction, notice_deduction, mobile_deduction, damage_deduction, remarks
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        arrear_payment, other_earnings, canteen_deduction, uniform_deduction, notice_deduction, mobile_deduction, damage_deduction, remarks,
+        pay_days, calendar_days, rate_bonus_payable, earned_bonus_payable, ctc_salary
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         s.id, s.employee_id, s.employee_name, s.designation, s.department, s.pan, s.uan, s.bank_name, s.bank_account, s.ifsc, s.month,
         s.rate_base_salary, s.rate_hra, s.rate_special_allowance, s.rate_da, s.rate_edu_allowance || 0, s.rate_medical_allowance || 0, s.rate_conveyance_allowance || 0,
