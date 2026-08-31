@@ -28809,12 +28809,6 @@ var PayrollDatabase = class _PayrollDatabase {
       if (revFull.edu_allowance !== void 0) rate_edu_val = Number(revFull.edu_allowance);
       if (revFull.medical_allowance !== void 0) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== void 0) rate_conveyance_val = Number(revFull.conveyance_allowance);
-    } else if (allEmpRevisions.length > 0) {
-      const firstRev = allEmpRevisions[0];
-      if (firstRev && firstRev.old_salary) {
-        rate_base = Number(firstRev.old_salary);
-        console.log(`[Payroll] ${emp.id} month ${month}: no revision applicable, using original rate \u20B9${rate_base} (first revision: ${firstRev.effective_date})`);
-      }
     }
     let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val;
     let rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val;

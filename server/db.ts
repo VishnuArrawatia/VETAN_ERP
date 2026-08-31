@@ -4574,17 +4574,10 @@ export class PayrollDatabase {
       if (revFull.edu_allowance !== undefined) rate_edu_val = Number(revFull.edu_allowance);
       if (revFull.medical_allowance !== undefined) rate_medical_val = Number(revFull.medical_allowance);
       if (revFull.conveyance_allowance !== undefined) rate_conveyance_val = Number(revFull.conveyance_allowance);
-    } else if (allEmpRevisions.length > 0) {
-      // No revision applies to this month, but revisions exist for this employee.
-      // The employee master may have been overwritten by a later revision.
-      // Find the very FIRST revision for this employee and use its old_salary,
-      // which represents the original pre-increment salary.
-      const firstRev = allEmpRevisions[0];
-      if (firstRev && firstRev.old_salary) {
-        rate_base = Number(firstRev.old_salary);
-        console.log(`[Payroll] ${emp.id} month ${month}: no revision applicable, using original rate ₹${rate_base} (first revision: ${firstRev.effective_date})`);
-      }
     }
+    // When no revision applies, emp.base_salary is used as-is.
+    // This is correct because addSalaryRevision() only overwrites emp.base_salary
+    // when effective_date <= today, and revert revisions correct it back.
     let rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val);
     let rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val);
     const rate_da = 0; // DA completely removed from salary structure
