@@ -720,28 +720,30 @@ export class PayrollDatabase {
   }
 
   private cleanupOrphanedPayrollRuns() {
-    // FIX: When there are multiple payroll runs for the same month (e.g., RUN-2026-04 + RUN-2026-04-Sakar-I),
-    // keep only the most recently processed one per month.
+    // CRITICAL FIX: Group by month+company (run ID), NOT just month.
+    // Each company must have its own independent payroll run per month.
+    // RUN-2026-04-Sakar-I and RUN-2026-04-SVN-II are DIFFERENT runs and must BOTH be kept.
     if (!this.data.payroll_runs || this.data.payroll_runs.length === 0) return;
     
-    const monthMap = new Map<string, typeof this.data.payroll_runs>();
+    // Group by full run ID to detect exact duplicates only
+    const idMap = new Map<string, typeof this.data.payroll_runs>();
     for (const run of this.data.payroll_runs) {
-      const existing = monthMap.get(run.month);
+      const existing = idMap.get(run.id);
       if (!existing) {
-        monthMap.set(run.month, [run]);
+        idMap.set(run.id, [run]);
       } else {
         existing.push(run);
       }
     }
     
     const cleaned: typeof this.data.payroll_runs = [];
-    for (const [month, runs] of monthMap) {
+    for (const [runId, runs] of idMap) {
       if (runs.length === 1) {
         cleaned.push(runs[0]);
       } else {
-        // Keep the most recently processed run (latest processed_at)
+        // Exact duplicate run IDs — keep the most recently processed one
         runs.sort((a, b) => (b.processed_at || '').localeCompare(a.processed_at || ''));
-        console.log(`[Cleanup] Month ${month}: ${runs.length} runs found, keeping ${runs[0].id} (${runs[0].status})`);
+        console.log(`[Cleanup] Run ${runId}: ${runs.length} duplicates found, keeping most recent (${runs[0].status})`);
         cleaned.push(runs[0]);
       }
     }
@@ -749,11 +751,13 @@ export class PayrollDatabase {
     if (cleaned.length !== this.data.payroll_runs.length) {
       console.log(`[Cleanup] Payroll runs: ${this.data.payroll_runs.length} → ${cleaned.length}`);
       this.data.payroll_runs = cleaned;
-      // Also clean SQLite
+      // Also clean SQLite — remove duplicate run IDs
       try {
-        for (const month of monthMap.keys()) {
-          const best = monthMap.get(month)![0];
-          this.dbSqlite.run(`DELETE FROM payroll_runs WHERE month = ? AND id != ?`, [month, best.id]);
+        for (const [runId, runs] of idMap) {
+          if (runs.length > 1) {
+            const best = runs[0];
+            this.dbSqlite.run(`DELETE FROM payroll_runs WHERE id = ? AND id != ?`, [runId, best.id]);
+          }
         }
       } catch (e) { /* ignore */ }
     }
