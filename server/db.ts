@@ -6121,7 +6121,7 @@ Sakar & SVN Group`;
             overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction,
             gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type,
             pay_days, calendar_days, salary_advance
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, employee_id, employee_name, designation, department, pan, uan, bank_name, bank_account, ifsc, month,
             rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance,
