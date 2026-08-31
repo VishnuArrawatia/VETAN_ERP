@@ -16,12 +16,15 @@ async function ensureInit(httpMethod?: string) {
     // On GET: always reload for latest data
     // On POST: reload only if critical data seems missing (cold start race fix)
     if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
-      const loansCount = (dbRef.data?.loans || []).length;
       const employeesCount = (dbRef.data?.employees || []).length;
-      const needsReload = httpMethod === 'GET' || loansCount === 0 || employeesCount === 0;
+      const loansCount = (dbRef.data?.loans || []).length;
+      // Only reload if data is empty (cold start) — NOT on every GET
+      // This fixes the 2-3 second cold-start penalty on every request
+      const needsReload = loansCount === 0 || employeesCount === 0;
       if (needsReload) {
         try {
           await dbRef.reloadFromSupabase();
+          console.log('[Vercel] Reloaded from Supabase — employees:', (dbRef.data?.employees || []).length, 'loans:', (dbRef.data?.loans || []).length);
         } catch (e: any) {
           console.error('[Vercel] reloadFromSupabase failed:', e?.message);
         }
