@@ -254,6 +254,25 @@ export default function App() {
       localStorage.removeItem('vetan_logged_in_employee');
     }
   }, [loggedInEmployee]);
+
+  // CRITICAL: Sync Employee Master company filter with Active Workspace selection.
+  // When HR selects a company in the workspace dropdown, the Employee Master
+  // must ONLY show that company's employees. When GROUP/COMBINED is selected,
+  // show ALL companies.
+  useEffect(() => {
+    if (!activeCompany || activeCompany === 'COMBINED' || activeCompany === 'GROUP') {
+      setSelectedCompanyFilter('ALL');
+    } else {
+      // Map company IDs to filter values
+      const upper = activeCompany.toUpperCase();
+      if (upper === 'SAKAR-I' || upper === 'SAKAR-1') setSelectedCompanyFilter('SAKAR-I');
+      else if (upper === 'SAKAR-III' || upper === 'SAKAR-3') setSelectedCompanyFilter('SAKAR-III');
+      else if (upper === 'SVN-1' || upper === 'SVN-I') setSelectedCompanyFilter('SVN-I');
+      else if (upper === 'SVN-II' || upper === 'SVN-2') setSelectedCompanyFilter('SVN-II');
+      else setSelectedCompanyFilter('ALL');
+    }
+  }, [activeCompany]);
+
   const [activeMonth, setActiveMonth] = useState('2026-05');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy' | 'salary'>('lifecycle');
