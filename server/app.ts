@@ -3815,6 +3815,119 @@ HR Department`;
     }
   });
 
+  // ===== WORKFORCE MODULE (Phase B): MONTH-END WORKER ATTENDANCE PROCESSING =====
+
+  function parseCsvText(text: string): Array<Record<string, any>> {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+    const header = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+    const out: Array<Record<string, any>> = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
+      if (cells.length === 1 && cells[0] === '') continue;
+      const row: Record<string, any> = {};
+      header.forEach((h, idx) => { if (h) row[h] = cells[idx] ?? ''; });
+      out.push(row);
+    }
+    return out;
+  }
+
+  // Upload biometric/CSV worker attendance (uploaded CSV = authoritative input for the month)
+  app.post('/api/workforce/attendance/upload', async (req, res) => {
+    try {
+      const { company, month, source = 'CSV', fileName = 'upload.csv', text, rows, uploadedBy } = req.body || {};
+      if (!company || !month) return res.status(400).json({ error: 'company and month (YYYY-MM) are required' });
+      if (source === 'BIOMETRIC_DIRECT' && (await db.getWorkforceSettings())['direct_biometric_enabled'] !== '1') {
+        return res.status(403).json({ error: 'Direct biometric integration is disabled. Use CSV source (configured from next month).' });
+      }
+      const parsed = Array.isArray(rows) ? rows : (typeof text === 'string' ? parseCsvText(text) : []);
+      if (parsed.length === 0) return res.status(400).json({ error: 'No attendance rows received. Provide rows[] or CSV text.' });
+      const result = db.reconcileAttendanceUpload({ company, month, source, fileName, uploadedBy, rows: parsed, writeThrough: true });
+      // Branched rewrite: staff_skipped rows must never enter attendance; they don't.
+      res.json({
+        success: true,
+        matched: result.matched,
+        staffSkipped: result.staffSkipped.length,
+        missingWorkers: result.missingWorkers,
+        duplicates: result.duplicateIds,
+        exceptions: result.exceptions.filter((e: any) => e.reason !== 'Present in worker roster but NOT in uploaded CSV'),
+        batch: result.batch
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || String(e) });
+    }
+  });
+
+  // Reconciliation report: Employee Master workers VS uploaded CSV workers (Rule #7)
+  app.get('/api/workforce/reconciliation/:month', (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company } = req.query as { company?: string };
+      if (!company) return res.status(400).json({ error: 'company query param is required' });
+      res.json(db.getWorkerReconciliation(company, month));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Finalize reconciled worker attendance (only after reconciliation is reviewed)
+  app.post('/api/workforce/reconciliation/:month/finalize', async (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company, actor } = req.body || {};
+      if (!company) return res.status(400).json({ error: 'company is required' });
+      const result = db.finalizeWorkerAttendance(company, month, actor || getOperator(req));
+      await (db as any).flushPendingWrites?.();
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Generate worker payroll: paid days -> wages -> contractor bills -> company payroll -> HDFC/Cheque -> PF/ESIC challan
+  app.post('/api/workforce/:month/payroll', async (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company, actor } = req.body || {};
+      if (!company) return res.status(400).json({ error: 'company is required' });
+      const result = await db.generateWorkerPayroll(company, month, actor || getOperator(req));
+      await (db as any).flushPendingWrites?.();
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Workforce settings get/set (module flag, direct-biometric flag, min-wage default)
+  app.get('/api/workforce/settings', async (_req, res) => {
+    try {
+      res.json(await db.getWorkforceSettings());
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post('/api/workforce/settings', async (req, res) => {
+    try {
+      const { key, value } = req.body || {};
+      if (!key) return res.status(400).json({ error: 'key is required' });
+      await db.setWorkforceSetting(key, String(value));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Upload batch history
+  app.get('/api/workforce/batches', (req, res) => {
+    try {
+      const { company, month } = req.query as { company?: string; month?: string };
+      if (!company) return res.status(400).json({ error: 'company query param is required' });
+      res.json(db.getWorkerBatches(company, month));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Bulk name standardization endpoint
   app.post('/api/admin/standardize-names', async (req, res) => {
     try {

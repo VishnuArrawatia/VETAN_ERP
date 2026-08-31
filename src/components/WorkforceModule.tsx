@@ -9,7 +9,7 @@ import {
   Calendar, AlertTriangle, BarChart3, FileText,
   ChevronLeft, Printer, ArrowUpDown, Loader2, Layers
 } from 'lucide-react';
-import type { Employee, Attendance } from '../types';
+import type { Employee, Attendance, WorkerReconciliationReport, WorkerReconciliationRow } from '../types';
 import { filterEmployeesByCompany } from '../lib/offlineStore';
 import * as XLSX from 'xlsx';
 
@@ -19,7 +19,7 @@ const fmtNum = (n: number) => n.toLocaleString('en-IN');
 const monthKey = (d: string) => d.slice(0, 7);
 
 /* ─── Types ─── */
-type SubTab = 'dashboard' | 'master' | 'attendance' | 'reports';
+type SubTab = 'dashboard' | 'master' | 'attendance' | 'upload' | 'reports';
 type ReportId = 'worker_master' | 'daily_attendance' | 'monthly_summary' | 'contractor' | 'payment_group' | 'pf_nonpf' | 'joining' | 'exit' | 'ot' | 'workforce_dashboard';
 
 interface Props {
@@ -702,7 +702,203 @@ function ReportsView({ workers, attendance, activeMonth }: { workers: Employee[]
   );
 }
 
-/* ─── Main Module ─── */
+/* ─── CSV Upload + Reconciliation View (Phase B) ─── */
+function AttendanceUploadView({ activeCompany, activeMonth, setSuccessBanner, setErrorBanner }: {
+  activeCompany: string; activeMonth: string;
+  setSuccessBanner: (s: string) => void;
+  setErrorBanner: (s: string) => void;
+}) {
+  const [company, setCompany] = useState(activeCompany || 'ALL');
+  const [month, setMonth] = useState(activeMonth || new Date().toISOString().slice(0, 7));
+  const [fileText, setFileText] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [report, setReport] = useState<WorkerReconciliationReport | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [showChallan, setShowChallan] = useState(false);
+  const [payroll, setPayroll] = useState<any>(null);
+
+  const loadReport = useCallback(async (c: string, m: string) => {
+    if (!c || c === 'ALL') return;
+    try {
+      const res = await fetch(`/api/workforce/reconciliation/${m}?company=${encodeURIComponent(c)}`);
+      if (res.ok) setReport(await res.json());
+    } catch (e: any) { setErrorBanner(e.message); setTimeout(() => setErrorBanner(''), 4000); }
+  }, [setErrorBanner]);
+
+  const loadFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setFileText(String(e.target?.result || ''));
+    reader.readAsText(file);
+  };
+
+  const handleUpload = async () => {
+    if (!fileText.trim()) { setErrorBanner('Select a CSV file first'); setTimeout(() => setErrorBanner(''), 4000); return; }
+    if (company === 'ALL') { setErrorBanner('Select a company (not ALL)'); setTimeout(() => setErrorBanner(''), 4000); return; }
+    setUploading(true);
+    try {
+      const res = await fetch('/api/workforce/attendance/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company, month, source: 'CSV', fileName: 'biometric.csv', text: fileText, uploadedBy: 'HR' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      setResult(data);
+      setSuccessBanner(`Uploaded: ${data.matched} matched · ${data.staffSkipped} staff skipped · ${data.missingWorkers.length} missing → 0 days`);
+      setTimeout(() => setSuccessBanner(''), 5000);
+      await loadReport(company, month);
+    } catch (e: any) { setErrorBanner(e.message); setTimeout(() => setErrorBanner(''), 5000); }
+    finally { setUploading(false); }
+  };
+  const handleFinalize = async () => {
+    if (!window.confirm(`Finalize worker attendance for ${company} ${month}? Paid days will be locked.`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/workforce/reconciliation/${month}/finalize`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Finalize failed');
+      setSuccessBanner(`Finalized: ${data.total_paid_days} paid days (${data.zero_attendance} with 0 attendance)`);
+      setTimeout(() => setSuccessBanner(''), 5000);
+      await loadReport(company, month);
+    } catch (e: any) { setErrorBanner(e.message); setTimeout(() => setErrorBanner(''), 5000); }
+    finally { setBusy(false); }
+  };
+
+  const handlePayroll = async () => {
+    if (!window.confirm(`Generate worker payroll for ${company} ${month}?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/workforce/${month}/payroll`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Payroll failed');
+      setPayroll(data);
+      setSuccessBanner(`Payroll: ₹${data.summary.gross_wages} gross / ₹${data.summary.net_pay} net (${data.summary.contractor_bills} bills, ${data.summary.hdfc_rows} HDFC, ${data.summary.cheque_rows} cheque)`);
+      setTimeout(() => setSuccessBanner(''), 5000);
+    } catch (e: any) { setErrorBanner(e.message); setTimeout(() => setErrorBanner(''), 5000); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 block mb-1">Company</label>
+            <input value={company} onChange={e => setCompany(e.target.value)} placeholder="e.g. SVN-II" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs" />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 block mb-1">Month</label>
+            <input type="month" value={month} onChange={e => { setMonth(e.target.value); loadReport(company, e.target.value); }} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs" />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 block mb-1">Biometric CSV (authoritative)</label>
+            <input type="file" accept=".csv,.txt" onChange={e => loadFile(e.target.files?.[0])} className="w-full text-xs" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={handleUpload} disabled={uploading} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">{uploading ? 'Uploading…' : '⬆ Upload & Reconcile'}</button>
+          {report && <button onClick={() => loadReport(company, month)} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer">↻ Refresh</button>}
+          {report && <button onClick={handleFinalize} disabled={busy} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 cursor-pointer">Finalize (lock paid days)</button>}
+          {report && <button onClick={handlePayroll} disabled={busy} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 cursor-pointer">Generate Payroll</button>}
+        </div>
+      </div>
+
+      {result && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-emerald-900 grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div><div className="font-bold text-lg">{result.matched}</div>Matched</div>
+          <div><div className="font-bold text-lg">{result.staffSkipped}</div>Staff Skipped</div>
+          <div><div className="font-bold text-lg">{result.missingWorkers.length}</div>Missing → 0</div>
+          <div><div className="font-bold text-lg">{result.duplicates.length}</div>Duplicates</div>
+          <div><div className="font-bold text-lg">{result.exceptions.length}</div>Exceptions</div>
+        </div>
+      )}
+      {report && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-bold text-slate-800">Reconciliation Report — {report.company} · {report.month} · State: <span className="text-emerald-700">{report.state}</span></h3>
+            {(payroll || report.rows.length > 0) && (
+              <span className="text-[10px] text-slate-500">
+                {report.summary.roster_workers} roster · {report.summary.csv_matched} in CSV · {report.summary.csv_missing} missing→0 · {report.summary.staff_in_csv} staff in CSV · {report.summary.exceptions} exceptions
+              </span>
+            )}
+          </div>
+          <div className="overflow-x-auto max-h-[520px]">
+            <table className="w-full text-[10.5px]">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                <tr>{['Worker ID', 'Worker Name', 'Category', 'Unit', 'Contractor', 'In CSV', 'Present', 'Leave', 'WkOff', 'Holiday', 'Paid Days', 'Exceptions'].map(h => <th key={h} className="text-left px-2.5 py-2 font-semibold text-slate-600 whitespace-nowrap">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {report.rows.map((r: WorkerReconciliationRow) => (
+                  <tr key={r.worker_id} className={`border-b border-slate-100 ${r.csv_found === 'NO' ? 'bg-red-50/50' : ''}`}>
+                    <td className="px-2.5 py-1.5 font-mono font-bold text-slate-800">{r.worker_id}</td>
+                    <td className="px-2.5 py-1.5 font-semibold text-slate-800">{r.worker_name}</td>
+                    <td className="px-2.5 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${r.category === 'Staff' ? 'bg-slate-200 text-slate-600' : r.category === 'Company Worker' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>{r.category}</span></td>
+                    <td className="px-2.5 py-1.5 text-slate-600">{r.unit}</td>
+                    <td className="px-2.5 py-1.5 text-slate-600">{r.contractor || '—'}</td>
+                    <td className="px-2.5 py-1.5 font-bold">{r.csv_found}</td>
+                    <td className="px-2.5 py-1.5 text-right">{r.present}</td>
+                    <td className="px-2.5 py-1.5 text-right">{r.leave}</td>
+                    <td className="px-2.5 py-1.5 text-right">{r.weekly_off}</td>
+                    <td className="px-2.5 py-1.5 text-right">{r.holiday}</td>
+                    <td className="px-2.5 py-1.5 text-right font-bold text-slate-800">{r.paid_days}</td>
+                    <td className="px-2.5 py-1.5">{r.exceptions.length > 0 ? <span className="text-red-600 font-semibold">{r.exceptions.join(', ')}</span> : <span className="text-emerald-600">OK</span>}</td>
+                  </tr>
+                ))}
+                {report.rows.length === 0 && <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400 text-xs">No workers found on roster for this company.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {report.staff_in_csv.length > 0 && (
+            <div className="px-4 py-2 border-t border-slate-200 text-[10px] text-slate-600">
+              <b>Staff present in CSV (skipped from worker processing):</b> {report.staff_in_csv.map((s: any) => `${s.worker_id} ${s.name}`).join(' · ')}
+            </div>
+          )}
+          {report.unknown_employees.length > 0 && (
+            <div className="px-4 py-2 border-t border-slate-200 text-[10px] text-red-600">
+              <b>Unknown employees in CSV:</b> {report.unknown_employees.map((u: any) => `${u.worker_id} ${u.name || ''} (${u.reason})`).join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {payroll && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-indigo-900">Payroll Generated — ₹{payroll.summary.gross_wages} gross / ₹{payroll.summary.net_pay} net · {payroll.summary.paid_days} paid days</h4>
+            <button onClick={() => setShowChallan(!showChallan)} className="text-indigo-700 font-semibold cursor-pointer">{showChallan ? 'Hide ▼' : 'Show PF/ESIC Challan ▲'}</button>
+          </div>
+          {showChallan && (
+            <div className="overflow-x-auto bg-white rounded-lg border border-indigo-100">
+              <table className="w-full text-[10px]">
+                <thead className="bg-indigo-50"><tr>{['Worker', 'Paid', 'Gross', 'MinWage', 'Counted Days', 'Applicable', 'Business NCP', 'PF@Applicable', 'ESIC@Applicable'].map(h => <th key={h} className="text-left px-2 py-1.5">{h}</th>)}</tr></thead>
+                <tbody>
+                  {(payroll.pf_esic_challan || []).map((c: any) => (
+                    <tr key={c.worker_id} className="border-b border-slate-100">
+                      <td className="px-2 py-1 font-mono">{c.worker_id}</td>
+                      <td className="px-2 py-1 text-right">{c.paid_days}</td>
+                      <td className="px-2 py-1 text-right">{c.gross_wages}</td>
+                      <td className="px-2 py-1 text-right">{c.minimum_wage}</td>
+                      <td className="px-2 py-1 text-right">{c.counted_wage_days}</td>
+                      <td className="px-2 py-1 text-right">{c.applicable_days}</td>
+                      <td className="px-2 py-1 text-right font-bold text-red-600">{c.business_ncp}</td>
+                      <td className="px-2 py-1 text-right">{c.pf_on_applicable}</td>
+                      <td className="px-2 py-1 text-right">{c.esic_on_applicable}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function WorkforceModule(props: Props) {
   const { employees, attendance, activeCompany, activeHR, activeMonth, setActiveMonth, successBanner, setSuccessBanner, errorBanner, setErrorBanner, onRefresh } = props;
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
@@ -736,6 +932,7 @@ export default function WorkforceModule(props: Props) {
           { id: 'dashboard' as SubTab, label: 'Dashboard', icon: Layers },
           { id: 'master' as SubTab, label: 'Worker Master', icon: Users },
           { id: 'attendance' as SubTab, label: 'Attendance', icon: Calendar },
+          { id: 'upload' as SubTab, label: 'CSV Upload & Reconcile', icon: Upload },
           { id: 'reports' as SubTab, label: 'Reports', icon: BarChart3 },
         ]).map(tab => (
           <button key={tab.id} onClick={() => setSubTab(tab.id)}
@@ -749,6 +946,7 @@ export default function WorkforceModule(props: Props) {
       {subTab === 'dashboard' && <DashboardView workers={workers} attendance={attendance} activeMonth={activeMonth} employees={employees} />}
       {subTab === 'master' && <WorkerMasterView workers={workers} setWorkers={() => onRefresh()} activeCompany={activeCompany} activeHR={activeHR} successBanner={successBanner} setSuccessBanner={setSuccessBanner} errorBanner={errorBanner} setErrorBanner={setErrorBanner} />}
       {subTab === 'attendance' && <AttendanceView workers={workers} attendance={attendance} activeMonth={activeMonth} />}
+      {subTab === 'upload' && <AttendanceUploadView activeCompany={activeCompany} activeMonth={activeMonth} successBanner={successBanner} setSuccessBanner={setSuccessBanner} errorBanner={errorBanner} setErrorBanner={setErrorBanner} />}
       {subTab === 'reports' && <ReportsView workers={workers} attendance={attendance} activeMonth={activeMonth} />}
     </div>
   );

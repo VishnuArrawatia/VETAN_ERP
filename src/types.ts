@@ -232,6 +232,17 @@ export interface Attendance {
   leave_cl?: number;
   leave_sl?: number;
   compoff_used?: number;
+  pay_days?: number;
+
+  // Workforce module upload/meta fields (Phase B — worker attendance reconciliation)
+  upload_batch_id?: string;
+  upload_source?: string; // 'CSV' | 'BIOMETRIC_DIRECT' | 'EXCEL'
+  file_name?: string;
+  worker_id?: string;
+  name?: string;
+  is_company_worker?: boolean;
+  worker_category?: string; // 'Company' | 'Contractor'
+  csv_found?: number; // 1 = found in uploaded CSV, 0 = missing from uploaded CSV
 }
 
 export interface PayrollRun {
@@ -616,6 +627,81 @@ export interface AttendanceUploadBatch {
   worker_rows: number;
   duplicate_ids: string; // JSON array
   status: 'OK' | 'VALIDATED' | 'LOCKED';
+}
+
+/** One row of the Worker Attendance Reconciliation report (Rule #7). */
+export interface WorkerReconciliationRow {
+  worker_id: string;
+  worker_name: string;
+  category: 'Staff' | 'Company Worker' | 'Contractor Worker';
+  unit: string;
+  contractor: string;
+  csv_found: 'YES' | 'NO';
+  present: number;
+  leave: number;
+  weekly_off: number;
+  holiday: number;
+  paid_days: number;
+  exceptions: string[];
+}
+
+export interface WorkerReconciliationReport {
+  month: string;
+  company: string;
+  state: string;
+  last_batch?: AttendanceUploadBatch | null;
+  summary: {
+    roster_workers: number;
+    csv_matched: number;
+    csv_missing: number;
+    staff_in_csv: number;
+    exceptions: number;
+  };
+  rows: WorkerReconciliationRow[];
+  staff_in_csv: Array<{ worker_id: string; name: string; unit: string }>;
+  unknown_employees: Array<{ worker_id: string; name: string; reason: string }>;
+}
+
+export interface CompanyWorkerPayrollRecord {
+  id: string;
+  company: string;
+  month: string;
+  worker_id: string;
+  name: string;
+  category: string;
+  unit: string;
+  contractor?: string;
+  paid_days: number;
+  wage_rate: number;
+  gross_wages: number;
+  pf_employee: number;
+  pf_employer: number;
+  esic_employee: number;
+  esic_employer: number;
+  net_pay: number;
+  payment_mode: string;
+  bank_name?: string;
+  bank_account?: string;
+  ifsc?: string;
+  generated_at: string;
+}
+
+/** PF/ESIC Challan business-calculation row (Rule #15 — challan layer ONLY). */
+export interface PfEsicChallanRow {
+  worker_id: string;
+  name: string;
+  category: string;
+  paid_days: number;
+  gross_wages: number;
+  minimum_wage: number;
+  counted_wage_days: number;
+  applicable_days: number;
+  business_ncp: number;
+  applicable_wages: number;
+  pf_enabled: boolean;
+  esic_enabled: boolean;
+  pf_on_applicable: number;
+  esic_on_applicable: number;
 }
 
 
