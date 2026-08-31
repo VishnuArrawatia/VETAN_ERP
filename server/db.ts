@@ -499,6 +499,13 @@ export class PayrollDatabase {
   /** When true, persistData() will NOT push to Supabase (seed data protection). */
   private loadedFromSeed: boolean = false;
 
+  /** OPTIMISTIC CONCURRENCY: tracks the Supabase updated_at we loaded from.
+   *  On persist, we UPDATE WHERE updated_at = this value. If 0 rows affected,
+   *  another writer overwrote us — we reload and retry. */
+  private _loadedVersion: string = '';
+  private _conflictCount: number = 0;
+  private static readonly MAX_CONFLICT_RETRIES = 3;
+
   /**
    * @param supabaseAdmin  Optional Supabase client (service_role key).
    *                       When provided, init() loads from Supabase and
@@ -520,7 +527,7 @@ export class PayrollDatabase {
         );
         const queryPromise = this.supabaseAdmin
           .from('vetan_erp_store')
-          .select('payload')
+          .select('payload, updated_at')
           .eq('id', 'live')
           .maybeSingle();
 
@@ -530,6 +537,8 @@ export class PayrollDatabase {
           const payload = row.payload;
           if (Array.isArray(payload.employees) && payload.employees.length > 0) {
             this.data = { ...this.data, ...payload };
+            // OPTIMISTIC CONCURRENCY: track which version we loaded
+            this._loadedVersion = row.updated_at || '';
             // Use MockDatabase so sync calls are no-ops
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
@@ -537,7 +546,7 @@ export class PayrollDatabase {
             this.enforceCompanyCorrections();
             // FIX: Clean up orphaned payroll runs — keep only one per month
             this.cleanupOrphanedPayrollRuns();
-            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
+            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees, version: ${this._loadedVersion}).`);
             return;
           }
         }
@@ -545,23 +554,30 @@ export class PayrollDatabase {
       } catch (e: any) {
         console.error('Supabase init failed, falling back to local storage:', e.message || e);
       }
-      // Mark that we fell back to seed data — NEVER allow persistData() to push this to Supabase
+      // Mark that we fell back to seed data — NEVER allow persistData() to push stale data to Supabase
       this.loadedFromSeed = true;
       console.warn('[SAFETY] loadedFromSeed = true — persistData() will NOT push to Supabase until real data is loaded.');
     }
 
-    // 1. Try to load from persistent JSON backup first
+    // 1. Try to load from persistent JSON backup ONLY as dev fallback (no Supabase)
     const backupPath = path.join(process.cwd(), 'payroll_persisted_store.json');
     let loadedFromBackup = false;
-    if (fs.existsSync(backupPath)) {
-      try {
-        const raw = fs.readFileSync(backupPath, 'utf-8');
-        this.data = JSON.parse(raw);
-        loadedFromBackup = true;
-        console.log('Loaded schema data from JSON backup file on startup.');
-      } catch (err) {
-        console.error('Failed to parse persisted JSON store:', err);
+    if (backupPath && !this.supabaseAdmin) {
+      // Local JSON is ONLY used when Supabase is NOT configured (local dev mode)
+      if (fs.existsSync(backupPath)) {
+        try {
+          const raw = fs.readFileSync(backupPath, 'utf-8');
+          this.data = JSON.parse(raw);
+          loadedFromBackup = true;
+          console.log('[LOCAL DEV] Loaded schema data from JSON backup file (no Supabase).');
+        } catch (err) {
+          console.error('Failed to parse persisted JSON store:', err);
+        }
       }
+    } else if (backupPath && this.supabaseAdmin && this.loadedFromSeed) {
+      // Supabase is configured but failed — DO NOT load stale local JSON.
+      // Start with seed/empty state. Local JSON can be months out of date.
+      console.warn('[SAFETY] Supabase unavailable — NOT loading stale local JSON. Starting with seed data.');
     }
 
     // 2. Try to import sqlite3 dynamically
@@ -5686,9 +5702,11 @@ Sakar & SVN Group`;
   public lastPersistError: string | null = null;
   public lastPersistSuccess: boolean = true;
 
-  private async _persistToSupabaseWithRetry(maxRetries = 3): Promise<{ ok: boolean; error?: string }> {
+  private async _persistToSupabaseWithRetry(maxRetries = 3): Promise<{ ok: boolean; error?: string; conflict?: boolean }> {
     if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
     if (this.loadedFromSeed) return { ok: false, error: 'Loaded from seed — blocked' };
+
+    const newUpdatedAt = new Date().toISOString();
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -5696,14 +5714,26 @@ Sakar & SVN Group`;
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Supabase persist timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
-        const upsertPromise = this.supabaseAdmin
-          .from('vetan_erp_store')
-          .upsert(
-            { id: 'live', payload: this.data, updated_at: new Date().toISOString() },
-            { onConflict: 'id' }
-          );
 
-        const { error } = await Promise.race([upsertPromise, timeoutPromise]);
+        let writePromise: any;
+        if (this._loadedVersion) {
+          // OPTIMISTIC CONCURRENCY: only write if the version we loaded is still current
+          writePromise = this.supabaseAdmin
+            .from('vetan_erp_store')
+            .update({ payload: this.data, updated_at: newUpdatedAt })
+            .eq('id', 'live')
+            .eq('updated_at', this._loadedVersion);
+        } else {
+          // First write or no version tracked — use upsert
+          writePromise = this.supabaseAdmin
+            .from('vetan_erp_store')
+            .upsert(
+              { id: 'live', payload: this.data, updated_at: newUpdatedAt },
+              { onConflict: 'id' }
+            );
+        }
+
+        const { data: updateResult, error } = await Promise.race([writePromise, timeoutPromise]);
 
         if (error) {
           const msg = error.message || String(error);
@@ -5715,10 +5745,25 @@ Sakar & SVN Group`;
           return { ok: false, error: msg };
         }
 
-        // Success — mark persist time so reloadFromSupabase won't overwrite
+        // OPTIMISTIC CONCURRENCY CHECK: if using versioned update, verify rows were affected
+        if (this._loadedVersion && Array.isArray(updateResult) && updateResult.length === 0) {
+          // CONFLICT: another writer overwrote our data. Reload and retry.
+          this._conflictCount++;
+          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} — another writer updated. Reloading...`);
+          await this.reloadFromSupabase();
+          if (attempt < maxRetries && this._conflictCount < PayrollDatabase.MAX_CONFLICT_RETRIES) {
+            await new Promise(r => setTimeout(r, 500 * attempt));
+            continue;
+          }
+          return { ok: false, error: `OCC conflict after ${this._conflictCount} retries`, conflict: true };
+        }
+
+        // Success — update version tracker and mark persist time
+        this._loadedVersion = newUpdatedAt;
+        this._conflictCount = 0;
         this.lastPersistError = null;
         this.lastPersistSuccess = true;
-        this.lastPersistedAt = new Date().toISOString();
+        this.lastPersistedAt = newUpdatedAt;
         return { ok: true };
       } catch (e: any) {
         const msg = e?.message || String(e);
@@ -5857,9 +5902,10 @@ Sakar & SVN Group`;
         }
 
         this.data = { ...this.data, ...row.payload };
+        this._loadedVersion = remoteUpdatedAt || '';
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
-        console.log(`[Supabase] reloadFromSupabase OK — ${this.data.employees?.length || 0} employees`);
+        console.log(`[Supabase] reloadFromSupabase OK — ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
         return;
       } catch (e: any) {
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);

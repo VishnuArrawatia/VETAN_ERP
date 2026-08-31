@@ -24710,7 +24710,7 @@ var MockDatabase = class {
     if (cb) setTimeout(() => cb(null), 0);
   }
 };
-var PayrollDatabase = class {
+var PayrollDatabase = class _PayrollDatabase {
   /**
    * @param supabaseAdmin  Optional Supabase client (service_role key).
    *                       When provided, init() loads from Supabase and
@@ -24754,6 +24754,11 @@ var PayrollDatabase = class {
     this.inMemoryOnly = false;
     /** When true, persistData() will NOT push to Supabase (seed data protection). */
     this.loadedFromSeed = false;
+    /** OPTIMISTIC CONCURRENCY: tracks the Supabase updated_at we loaded from.
+     *  On persist, we UPDATE WHERE updated_at = this value. If 0 rows affected,
+     *  another writer overwrote us — we reload and retry. */
+    this._loadedVersion = "";
+    this._conflictCount = 0;
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
@@ -24772,6 +24777,9 @@ var PayrollDatabase = class {
     this.lastPersistedAt = "";
     this.supabaseAdmin = supabaseAdmin || null;
   }
+  static {
+    this.MAX_CONFLICT_RETRIES = 3;
+  }
   async init() {
     if (this.supabaseAdmin) {
       try {
@@ -24779,18 +24787,19 @@ var PayrollDatabase = class {
         const timeoutPromise = new Promise(
           (_, reject) => setTimeout(() => reject(new Error(`Supabase query timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
-        const queryPromise = this.supabaseAdmin.from("vetan_erp_store").select("payload").eq("id", "live").maybeSingle();
+        const queryPromise = this.supabaseAdmin.from("vetan_erp_store").select("payload, updated_at").eq("id", "live").maybeSingle();
         const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
         if (!error && row?.payload && typeof row.payload === "object") {
           const payload = row.payload;
           if (Array.isArray(payload.employees) && payload.employees.length > 0) {
             this.data = { ...this.data, ...payload };
+            this._loadedVersion = row.updated_at || "";
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.loadedFromSeed = false;
             this.enforceCompanyCorrections();
             this.cleanupOrphanedPayrollRuns();
-            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees).`);
+            console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees, version: ${this._loadedVersion}).`);
             return;
           }
         }
@@ -24803,15 +24812,19 @@ var PayrollDatabase = class {
     }
     const backupPath = import_path.default.join(process.cwd(), "payroll_persisted_store.json");
     let loadedFromBackup = false;
-    if (import_fs.default.existsSync(backupPath)) {
-      try {
-        const raw = import_fs.default.readFileSync(backupPath, "utf-8");
-        this.data = JSON.parse(raw);
-        loadedFromBackup = true;
-        console.log("Loaded schema data from JSON backup file on startup.");
-      } catch (err) {
-        console.error("Failed to parse persisted JSON store:", err);
+    if (backupPath && !this.supabaseAdmin) {
+      if (import_fs.default.existsSync(backupPath)) {
+        try {
+          const raw = import_fs.default.readFileSync(backupPath, "utf-8");
+          this.data = JSON.parse(raw);
+          loadedFromBackup = true;
+          console.log("[LOCAL DEV] Loaded schema data from JSON backup file (no Supabase).");
+        } catch (err) {
+          console.error("Failed to parse persisted JSON store:", err);
+        }
       }
+    } else if (backupPath && this.supabaseAdmin && this.loadedFromSeed) {
+      console.warn("[SAFETY] Supabase unavailable \u2014 NOT loading stale local JSON. Starting with seed data.");
     }
     let sqlite3Mod = null;
     try {
@@ -29873,17 +29886,23 @@ Sakar & SVN Group`;
   async _persistToSupabaseWithRetry(maxRetries = 3) {
     if (!this.supabaseAdmin) return { ok: false, error: "No Supabase client" };
     if (this.loadedFromSeed) return { ok: false, error: "Loaded from seed \u2014 blocked" };
+    const newUpdatedAt = (/* @__PURE__ */ new Date()).toISOString();
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const TIMEOUT_MS = 15e3;
         const timeoutPromise = new Promise(
           (_, reject) => setTimeout(() => reject(new Error(`Supabase persist timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
-        const upsertPromise = this.supabaseAdmin.from("vetan_erp_store").upsert(
-          { id: "live", payload: this.data, updated_at: (/* @__PURE__ */ new Date()).toISOString() },
-          { onConflict: "id" }
-        );
-        const { error } = await Promise.race([upsertPromise, timeoutPromise]);
+        let writePromise;
+        if (this._loadedVersion) {
+          writePromise = this.supabaseAdmin.from("vetan_erp_store").update({ payload: this.data, updated_at: newUpdatedAt }).eq("id", "live").eq("updated_at", this._loadedVersion);
+        } else {
+          writePromise = this.supabaseAdmin.from("vetan_erp_store").upsert(
+            { id: "live", payload: this.data, updated_at: newUpdatedAt },
+            { onConflict: "id" }
+          );
+        }
+        const { data: updateResult, error } = await Promise.race([writePromise, timeoutPromise]);
         if (error) {
           const msg = error.message || String(error);
           console.error(`[Supabase] persist attempt ${attempt}/${maxRetries} FAILED:`, msg);
@@ -29893,9 +29912,21 @@ Sakar & SVN Group`;
           }
           return { ok: false, error: msg };
         }
+        if (this._loadedVersion && Array.isArray(updateResult) && updateResult.length === 0) {
+          this._conflictCount++;
+          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} \u2014 another writer updated. Reloading...`);
+          await this.reloadFromSupabase();
+          if (attempt < maxRetries && this._conflictCount < _PayrollDatabase.MAX_CONFLICT_RETRIES) {
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+            continue;
+          }
+          return { ok: false, error: `OCC conflict after ${this._conflictCount} retries`, conflict: true };
+        }
+        this._loadedVersion = newUpdatedAt;
+        this._conflictCount = 0;
         this.lastPersistError = null;
         this.lastPersistSuccess = true;
-        this.lastPersistedAt = (/* @__PURE__ */ new Date()).toISOString();
+        this.lastPersistedAt = newUpdatedAt;
         return { ok: true };
       } catch (e) {
         const msg = e?.message || String(e);
@@ -30005,9 +30036,10 @@ Sakar & SVN Group`;
           return;
         }
         this.data = { ...this.data, ...row.payload };
+        this._loadedVersion = remoteUpdatedAt || "";
         this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
         this.inMemoryOnly = true;
-        console.log(`[Supabase] reloadFromSupabase OK \u2014 ${this.data.employees?.length || 0} employees`);
+        console.log(`[Supabase] reloadFromSupabase OK \u2014 ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
         return;
       } catch (e) {
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
