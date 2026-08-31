@@ -5309,13 +5309,41 @@ Sakar & SVN Group`;
       const effectiveDate = rev.effective_date || today;
       if (effectiveDate <= today) {
         emp.base_salary = rev.new_salary;
-        emp.hra = rev.hra !== undefined ? Number(rev.hra) : Math.round(rev.new_salary * 0.40);
-        emp.special_allowance = rev.special_allowance !== undefined ? Number(rev.special_allowance) : Math.round(rev.new_salary * 0.15);
+        // CRITICAL FIX: Component values from the revision are TOTALS (old + increment).
+        // Only use them if explicitly provided. Otherwise, scale proportionally from old values.
+        if (rev.hra !== undefined && rev.hra !== null) {
+          emp.hra = Number(rev.hra);
+        } else {
+          // Scale HRA proportionally: new_basic / old_basic * old_hra
+          const ratio = Number(rev.old_salary) > 0 ? Number(rev.new_salary) / Number(rev.old_salary) : 1;
+          emp.hra = Math.round(emp.hra * ratio);
+        }
+        if (rev.special_allowance !== undefined && rev.special_allowance !== null) {
+          emp.special_allowance = Number(rev.special_allowance);
+        } else {
+          const ratio = Number(rev.old_salary) > 0 ? Number(rev.new_salary) / Number(rev.old_salary) : 1;
+          emp.special_allowance = Math.round(emp.special_allowance * ratio);
+        }
         emp.da = 0; // DA completely removed
         
-        if (rev.conveyance_allowance !== undefined) emp.conveyance_allowance = Number(rev.conveyance_allowance);
-        if (rev.edu_allowance !== undefined) emp.edu_allowance = Number(rev.edu_allowance);
-        if (rev.medical_allowance !== undefined) emp.medical_allowance = Number(rev.medical_allowance);
+        if (rev.conveyance_allowance !== undefined && rev.conveyance_allowance !== null) {
+          emp.conveyance_allowance = Number(rev.conveyance_allowance);
+        } else {
+          const ratio = Number(rev.old_salary) > 0 ? Number(rev.new_salary) / Number(rev.old_salary) : 1;
+          emp.conveyance_allowance = Math.round((emp.conveyance_allowance || 0) * ratio);
+        }
+        if (rev.edu_allowance !== undefined && rev.edu_allowance !== null) {
+          emp.edu_allowance = Number(rev.edu_allowance);
+        } else {
+          const ratio = Number(rev.old_salary) > 0 ? Number(rev.new_salary) / Number(rev.old_salary) : 1;
+          emp.edu_allowance = Math.round((emp.edu_allowance || 0) * ratio);
+        }
+        if (rev.medical_allowance !== undefined && rev.medical_allowance !== null) {
+          emp.medical_allowance = Number(rev.medical_allowance);
+        } else {
+          const ratio = Number(rev.old_salary) > 0 ? Number(rev.new_salary) / Number(rev.old_salary) : 1;
+          emp.medical_allowance = Math.round((emp.medical_allowance || 0) * ratio);
+        }
         
         emp.ctc_salary = emp.base_salary + emp.hra + emp.special_allowance + 
                          (emp.conveyance_allowance || 0) + (emp.edu_allowance || 0) + (emp.medical_allowance || 0);
