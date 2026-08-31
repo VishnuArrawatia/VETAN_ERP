@@ -4,9 +4,6 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -29,403 +26,15 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// node_modules/file-uri-to-path/index.js
-var require_file_uri_to_path = __commonJS({
-  "node_modules/file-uri-to-path/index.js"(exports2, module2) {
-    var sep = require("path").sep || "/";
-    module2.exports = fileUriToPath;
-    function fileUriToPath(uri) {
-      if ("string" != typeof uri || uri.length <= 7 || "file://" != uri.substring(0, 7)) {
-        throw new TypeError("must pass in a file:// URI to convert to a file path");
-      }
-      var rest = decodeURI(uri.substring(7));
-      var firstSlash = rest.indexOf("/");
-      var host = rest.substring(0, firstSlash);
-      var path3 = rest.substring(firstSlash + 1);
-      if ("localhost" == host) host = "";
-      if (host) {
-        host = sep + sep + host;
-      }
-      path3 = path3.replace(/^(.+)\|/, "$1:");
-      if (sep == "\\") {
-        path3 = path3.replace(/\//g, "\\");
-      }
-      if (/^.+\:/.test(path3)) {
-      } else {
-        path3 = sep + path3;
-      }
-      return host + path3;
-    }
-  }
-});
-
-// node_modules/bindings/bindings.js
-var require_bindings = __commonJS({
-  "node_modules/bindings/bindings.js"(exports2, module2) {
-    var fs3 = require("fs");
-    var path3 = require("path");
-    var fileURLToPath = require_file_uri_to_path();
-    var join = path3.join;
-    var dirname = path3.dirname;
-    var exists = fs3.accessSync && function(path4) {
-      try {
-        fs3.accessSync(path4);
-      } catch (e) {
-        return false;
-      }
-      return true;
-    } || fs3.existsSync || path3.existsSync;
-    var defaults = {
-      arrow: process.env.NODE_BINDINGS_ARROW || " \u2192 ",
-      compiled: process.env.NODE_BINDINGS_COMPILED_DIR || "compiled",
-      platform: process.platform,
-      arch: process.arch,
-      nodePreGyp: "node-v" + process.versions.modules + "-" + process.platform + "-" + process.arch,
-      version: process.versions.node,
-      bindings: "bindings.node",
-      try: [
-        // node-gyp's linked version in the "build" dir
-        ["module_root", "build", "bindings"],
-        // node-waf and gyp_addon (a.k.a node-gyp)
-        ["module_root", "build", "Debug", "bindings"],
-        ["module_root", "build", "Release", "bindings"],
-        // Debug files, for development (legacy behavior, remove for node v0.9)
-        ["module_root", "out", "Debug", "bindings"],
-        ["module_root", "Debug", "bindings"],
-        // Release files, but manually compiled (legacy behavior, remove for node v0.9)
-        ["module_root", "out", "Release", "bindings"],
-        ["module_root", "Release", "bindings"],
-        // Legacy from node-waf, node <= 0.4.x
-        ["module_root", "build", "default", "bindings"],
-        // Production "Release" buildtype binary (meh...)
-        ["module_root", "compiled", "version", "platform", "arch", "bindings"],
-        // node-qbs builds
-        ["module_root", "addon-build", "release", "install-root", "bindings"],
-        ["module_root", "addon-build", "debug", "install-root", "bindings"],
-        ["module_root", "addon-build", "default", "install-root", "bindings"],
-        // node-pre-gyp path ./lib/binding/{node_abi}-{platform}-{arch}
-        ["module_root", "lib", "binding", "nodePreGyp", "bindings"]
-      ]
-    };
-    function bindings(opts) {
-      if (typeof opts == "string") {
-        opts = { bindings: opts };
-      } else if (!opts) {
-        opts = {};
-      }
-      Object.keys(defaults).map(function(i2) {
-        if (!(i2 in opts)) opts[i2] = defaults[i2];
-      });
-      if (!opts.module_root) {
-        opts.module_root = exports2.getRoot(exports2.getFileName());
-      }
-      if (path3.extname(opts.bindings) != ".node") {
-        opts.bindings += ".node";
-      }
-      var requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
-      var tries = [], i = 0, l = opts.try.length, n, b, err;
-      for (; i < l; i++) {
-        n = join.apply(
-          null,
-          opts.try[i].map(function(p) {
-            return opts[p] || p;
-          })
-        );
-        tries.push(n);
-        try {
-          b = opts.path ? requireFunc.resolve(n) : requireFunc(n);
-          if (!opts.path) {
-            b.path = n;
-          }
-          return b;
-        } catch (e) {
-          if (e.code !== "MODULE_NOT_FOUND" && e.code !== "QUALIFIED_PATH_RESOLUTION_FAILED" && !/not find/i.test(e.message)) {
-            throw e;
-          }
-        }
-      }
-      err = new Error(
-        "Could not locate the bindings file. Tried:\n" + tries.map(function(a) {
-          return opts.arrow + a;
-        }).join("\n")
-      );
-      err.tries = tries;
-      throw err;
-    }
-    module2.exports = exports2 = bindings;
-    exports2.getFileName = function getFileName(calling_file) {
-      var origPST = Error.prepareStackTrace, origSTL = Error.stackTraceLimit, dummy = {}, fileName;
-      Error.stackTraceLimit = 10;
-      Error.prepareStackTrace = function(e, st) {
-        for (var i = 0, l = st.length; i < l; i++) {
-          fileName = st[i].getFileName();
-          if (fileName !== __filename) {
-            if (calling_file) {
-              if (fileName !== calling_file) {
-                return;
-              }
-            } else {
-              return;
-            }
-          }
-        }
-      };
-      Error.captureStackTrace(dummy);
-      dummy.stack;
-      Error.prepareStackTrace = origPST;
-      Error.stackTraceLimit = origSTL;
-      var fileSchema = "file://";
-      if (fileName.indexOf(fileSchema) === 0) {
-        fileName = fileURLToPath(fileName);
-      }
-      return fileName;
-    };
-    exports2.getRoot = function getRoot(file) {
-      var dir = dirname(file), prev;
-      while (true) {
-        if (dir === ".") {
-          dir = process.cwd();
-        }
-        if (exists(join(dir, "package.json")) || exists(join(dir, "node_modules"))) {
-          return dir;
-        }
-        if (prev === dir) {
-          throw new Error(
-            'Could not find module root given file: "' + file + '". Do you have a `package.json` file? '
-          );
-        }
-        prev = dir;
-        dir = join(dir, "..");
-      }
-    };
-  }
-});
-
-// node_modules/sqlite3/lib/sqlite3-binding.js
-var require_sqlite3_binding = __commonJS({
-  "node_modules/sqlite3/lib/sqlite3-binding.js"(exports2, module2) {
-    module2.exports = require_bindings()("node_sqlite3.node");
-  }
-});
-
-// node_modules/sqlite3/lib/trace.js
-var require_trace = __commonJS({
-  "node_modules/sqlite3/lib/trace.js"(exports2) {
-    var util = require("util");
-    function extendTrace(object, property, pos) {
-      const old = object[property];
-      object[property] = function() {
-        const error = new Error();
-        const name = object.constructor.name + "#" + property + "(" + Array.prototype.slice.call(arguments).map(function(el) {
-          return util.inspect(el, false, 0);
-        }).join(", ") + ")";
-        if (typeof pos === "undefined") pos = -1;
-        if (pos < 0) pos += arguments.length;
-        const cb = arguments[pos];
-        if (typeof arguments[pos] === "function") {
-          arguments[pos] = function replacement() {
-            const err = arguments[0];
-            if (err && err.stack && !err.__augmented) {
-              err.stack = filter(err).join("\n");
-              err.stack += "\n--> in " + name;
-              err.stack += "\n" + filter(error).slice(1).join("\n");
-              err.__augmented = true;
-            }
-            return cb.apply(this, arguments);
-          };
-        }
-        return old.apply(this, arguments);
-      };
-    }
-    exports2.extendTrace = extendTrace;
-    function filter(error) {
-      return error.stack.split("\n").filter(function(line) {
-        return line.indexOf(__filename) < 0;
-      });
-    }
-  }
-});
-
-// node_modules/sqlite3/lib/sqlite3.js
-var require_sqlite3 = __commonJS({
-  "node_modules/sqlite3/lib/sqlite3.js"(exports2, module2) {
-    var path3 = require("path");
-    var sqlite32 = require_sqlite3_binding();
-    var EventEmitter = require("events").EventEmitter;
-    module2.exports = exports2 = sqlite32;
-    function normalizeMethod(fn) {
-      return function(sql) {
-        let errBack;
-        const args = Array.prototype.slice.call(arguments, 1);
-        if (typeof args[args.length - 1] === "function") {
-          const callback = args[args.length - 1];
-          errBack = function(err) {
-            if (err) {
-              callback(err);
-            }
-          };
-        }
-        const statement = new Statement(this, sql, errBack);
-        return fn.call(this, statement, args);
-      };
-    }
-    function inherits(target, source) {
-      for (const k in source.prototype)
-        target.prototype[k] = source.prototype[k];
-    }
-    sqlite32.cached = {
-      Database: function(file, a, b) {
-        if (file === "" || file === ":memory:") {
-          return new Database(file, a, b);
-        }
-        let db;
-        file = path3.resolve(file);
-        if (!sqlite32.cached.objects[file]) {
-          db = sqlite32.cached.objects[file] = new Database(file, a, b);
-        } else {
-          db = sqlite32.cached.objects[file];
-          const callback = typeof a === "number" ? b : a;
-          if (typeof callback === "function") {
-            let cb2 = function() {
-              callback.call(db, null);
-            };
-            var cb = cb2;
-            if (db.open) process.nextTick(cb2);
-            else db.once("open", cb2);
-          }
-        }
-        return db;
-      },
-      objects: {}
-    };
-    var Database = sqlite32.Database;
-    var Statement = sqlite32.Statement;
-    var Backup = sqlite32.Backup;
-    inherits(Database, EventEmitter);
-    inherits(Statement, EventEmitter);
-    inherits(Backup, EventEmitter);
-    Database.prototype.prepare = normalizeMethod(function(statement, params) {
-      return params.length ? statement.bind.apply(statement, params) : statement;
-    });
-    Database.prototype.run = normalizeMethod(function(statement, params) {
-      statement.run.apply(statement, params).finalize();
-      return this;
-    });
-    Database.prototype.get = normalizeMethod(function(statement, params) {
-      statement.get.apply(statement, params).finalize();
-      return this;
-    });
-    Database.prototype.all = normalizeMethod(function(statement, params) {
-      statement.all.apply(statement, params).finalize();
-      return this;
-    });
-    Database.prototype.each = normalizeMethod(function(statement, params) {
-      statement.each.apply(statement, params).finalize();
-      return this;
-    });
-    Database.prototype.map = normalizeMethod(function(statement, params) {
-      statement.map.apply(statement, params).finalize();
-      return this;
-    });
-    Database.prototype.backup = function() {
-      let backup;
-      if (arguments.length <= 2) {
-        backup = new Backup(this, arguments[0], "main", "main", true, arguments[1]);
-      } else {
-        backup = new Backup(this, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
-      }
-      backup.retryErrors = [sqlite32.BUSY, sqlite32.LOCKED];
-      return backup;
-    };
-    Statement.prototype.map = function() {
-      const params = Array.prototype.slice.call(arguments);
-      const callback = params.pop();
-      params.push(function(err, rows) {
-        if (err) return callback(err);
-        const result = {};
-        if (rows.length) {
-          const keys = Object.keys(rows[0]);
-          const key = keys[0];
-          if (keys.length > 2) {
-            for (let i = 0; i < rows.length; i++) {
-              result[rows[i][key]] = rows[i];
-            }
-          } else {
-            const value = keys[1];
-            for (let i = 0; i < rows.length; i++) {
-              result[rows[i][key]] = rows[i][value];
-            }
-          }
-        }
-        callback(err, result);
-      });
-      return this.all.apply(this, params);
-    };
-    var isVerbose = false;
-    var supportedEvents = ["trace", "profile", "change"];
-    Database.prototype.addListener = Database.prototype.on = function(type) {
-      const val = EventEmitter.prototype.addListener.apply(this, arguments);
-      if (supportedEvents.indexOf(type) >= 0) {
-        this.configure(type, true);
-      }
-      return val;
-    };
-    Database.prototype.removeListener = function(type) {
-      const val = EventEmitter.prototype.removeListener.apply(this, arguments);
-      if (supportedEvents.indexOf(type) >= 0 && !this._events[type]) {
-        this.configure(type, false);
-      }
-      return val;
-    };
-    Database.prototype.removeAllListeners = function(type) {
-      const val = EventEmitter.prototype.removeAllListeners.apply(this, arguments);
-      if (supportedEvents.indexOf(type) >= 0) {
-        this.configure(type, false);
-      }
-      return val;
-    };
-    sqlite32.verbose = function() {
-      if (!isVerbose) {
-        const trace = require_trace();
-        [
-          "prepare",
-          "get",
-          "run",
-          "all",
-          "each",
-          "map",
-          "close",
-          "exec"
-        ].forEach(function(name) {
-          trace.extendTrace(Database.prototype, name);
-        });
-        [
-          "bind",
-          "get",
-          "run",
-          "all",
-          "each",
-          "map",
-          "reset",
-          "finalize"
-        ].forEach(function(name) {
-          trace.extendTrace(Statement.prototype, name);
-        });
-        isVerbose = true;
-      }
-      return sqlite32;
-    };
-  }
-});
-
-// server/app.ts
-var app_exports = {};
-__export(app_exports, {
+// api/server-entry.ts
+var server_entry_exports = {};
+__export(server_entry_exports, {
   createApp: () => createApp,
-  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(app_exports);
+module.exports = __toCommonJS(server_entry_exports);
+
+// server/app.ts
 var import_express = __toESM(require("express"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -914,7 +523,7 @@ var PayrollDatabase = class {
     }
     let sqlite3Mod = null;
     try {
-      const imported = await Promise.resolve().then(() => __toESM(require_sqlite3(), 1));
+      const imported = await import("sqlite3");
       sqlite3Mod = imported.default || imported;
       sqlite3 = sqlite3Mod;
     } catch (err) {
@@ -2096,6 +1705,15 @@ var PayrollDatabase = class {
       staff_skipped INTEGER DEFAULT 0, worker_rows INTEGER DEFAULT 0,
       duplicate_ids TEXT, status TEXT DEFAULT 'OK'
     )`);
+    this.dbSqlite.run(`ALTER TABLE attendance_upload_batches ADD COLUMN exceptions_json TEXT`, () => {
+    });
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS company_worker_payroll (
+      id TEXT PRIMARY KEY, company TEXT, month TEXT, worker_id TEXT, name TEXT, category TEXT,
+      unit TEXT, contractor TEXT, paid_days REAL DEFAULT 0, wage_rate REAL DEFAULT 0,
+      gross_wages REAL DEFAULT 0, pf_employee REAL DEFAULT 0, pf_employer REAL DEFAULT 0,
+      esic_employee REAL DEFAULT 0, esic_employer REAL DEFAULT 0, net_pay REAL DEFAULT 0,
+      payment_mode TEXT DEFAULT 'HDFC', bank_name TEXT, bank_account TEXT, ifsc TEXT, generated_at TEXT
+    )`);
     this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('min_wage_default', '511')`);
     this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('use_min_wage_ncp', '0')`);
     this.dbSqlite.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('pf_ncp_reduces_statutory_pf', '0')`);
@@ -2389,7 +2007,7 @@ var PayrollDatabase = class {
             );
             for (const s of computedSlips) {
               this.dbSqlite.run(
-                `INSERT OR REPLACE INTO payslips (id, employee_id, employee_name, designation, department, pan, uan, bank_name, bank_account, ifsc, month, rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance, earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance, overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance, gross_salary, total_deductions, net_salary, employer_pf, employer_esic, hidden_salary_heads, salary_structure_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )`,
+                `INSERT OR REPLACE INTO payslips (id, employee_id, employee_name, designation, department, pan, uan, bank_name, bank_account, ifsc, month, rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance, earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance, overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance, gross_salary, total_deductions, net_salary, employer_pf, employer_esic, hidden_salary_heads, salary_structure_type, pay_days, calendar_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                   s.id,
                   s.employee_id,
@@ -2431,7 +2049,9 @@ var PayrollDatabase = class {
                   s.employer_pf,
                   s.employer_esic,
                   s.hidden_salary_heads || null,
-                  s.salary_structure_type || "FIXED"
+                  s.salary_structure_type || "FIXED",
+                  s.pay_days || 0,
+                  s.calendar_days || 30
                 ]
               );
             }
@@ -3362,73 +2982,95 @@ var PayrollDatabase = class {
     return this.data.attendance.filter((a) => a.employee_id === employeeId && a.month === month);
   }
   /**
-   * ===== Workforce Module (Phase A) =====
+   * ===== Workforce Module (Phase B) =====
    * Reconcile a parsed CSV/biometric upload against the worker roster for one month.
-   *
-   * Rules enforced (per user approval):
-   *  - Staff in CSV -> skipped (NOT entered into worker attendance). Counted in staff_skipped.
-   *  - Workers not in CSV -> PaidDays = 0, still visible in reconciliation + exception list.
-   *  - Existing attendance records are NOT auto-created from 'Present' (no staff payroll pollution).
-   *  - Source flag-gated? No — engine is safe-by-construction; only its WRITES are gated by
-   *    workforce_module_enabled (OFF in Phase A => preview-only, zero side effects on Staff data).
+   * Rules (per user approval):
+   *  - Uploaded CSV is the AUTHORITATIVE attendance input for the worker month.
+   *  - Staff in CSV -> skipped using Employee Master classification ONLY (never by name).
+   *  - Workers not in CSV -> Present = 0, still visible (never excluded/copied/assumed).
+   *  - Exceptions: unknown employee, duplicate, wrong month, wrong unit, contractor mismatch.
+   *  - Existing STAFF attendance/payroll is NEVER touched.
+   *  - Direct biometric remains DISABLED.
    */
   reconcileAttendanceUpload(params) {
     const { company, month, source, fileName, uploadedBy, rows } = params;
-    const isWorkerMode = this._wfEnabled();
+    const writeThrough = params.writeThrough !== false;
+    if (source === "BIOMETRIC_DIRECT" && this._flag("direct_biometric_enabled") !== "1") {
+      throw new Error("Direct biometric integration is disabled. Use CSV source (configured from next month).");
+    }
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new Error("Invalid month. Expected YYYY-MM.");
+    }
+    const calendarDays = new Date(parseInt(month.slice(0, 4), 10), parseInt(month.slice(5, 7), 10), 0).getDate();
     const existingAtt = this.data.attendance.filter((a) => a.month === month);
     const attByEmp = new Map(existingAtt.map((a) => [a.employee_id, a]));
     const allEmps = this.getEmployees(company);
-    const staffSuffix = "_STAFF";
-    const isStaffName = (n) => typeof n === "string" && n.endsWith(staffSuffix);
+    const roster = allEmps.filter((e) => this._isWorkerEmp(e));
     const staffSkipped = [];
     const duplicateIds = [];
     const seenIds = /* @__PURE__ */ new Set();
     const matchedIds = /* @__PURE__ */ new Set();
     const exceptions = [];
     const attendancePreview = [];
+    const batchId = this._nextBatchId(company, month, source);
     for (const row of rows) {
-      let workerId = (row.worker_id ?? row.emp_code ?? row.employee_id ?? row.id ?? "").toString().trim();
+      const workerId = (row.worker_id ?? row.worker_code ?? row.emp_code ?? row.employee_id ?? row.id ?? "").toString().trim();
       const name = (row.worker_name ?? row.name ?? row.employee_name ?? "").toString().trim();
-      if (name && isStaffName(name)) {
-        staffSkipped.push(row);
-        continue;
+      if (row.month != null && String(row.month).trim() !== "") {
+        const rowMonthNorm = this._parseMonth(row.month);
+        if (rowMonthNorm && rowMonthNorm !== month) {
+          exceptions.push({ employee_id: workerId, name, reason: `Wrong month: "${rowMonthNorm}" (expected "${month}")` });
+          continue;
+        }
       }
       if (!workerId) {
         exceptions.push({ employee_id: "", name, reason: "Missing worker_id/emp_code in CSV row" });
         continue;
       }
-      if (seenIds.has(workerId)) {
+      const idKey = this._norm(workerId);
+      if (seenIds.has(idKey)) {
         duplicateIds.push(workerId);
         exceptions.push({ employee_id: workerId, name, reason: "Duplicate worker_id in CSV" });
         continue;
       }
-      seenIds.add(workerId);
+      seenIds.add(idKey);
       const emp = allEmps.find((e) => e.id === workerId || e.emp_code && e.emp_code === workerId);
       if (!emp) {
-        exceptions.push({ employee_id: workerId, name, reason: "worker_id not found in company roster" });
+        exceptions.push({ employee_id: workerId, name, reason: "Unknown employee \u2014 not found in company roster" });
         continue;
       }
-      matchedIds.add(workerId);
-      if (emp.employee_category && emp.employee_category !== "Worker" && emp.employee_category !== "Contract") {
-        exceptions.push({ employee_id: workerId, name: emp.name, reason: `category ${emp.employee_category} \u2014 not a worker` });
+      matchedIds.add(emp.id);
+      if (!this._isWorkerEmp(emp)) {
+        staffSkipped.push({ ...row, employee_id: emp.id, matched_name: emp.name, reason: "Staff employee excluded from worker processing" });
         continue;
       }
-      const present = Number(row.present ?? 0) || 0;
-      const leave = Number(row.leave ?? 0) || 0;
-      const weeklyOff = Number(row.weekly_off ?? row.week_off ?? 0) || 0;
-      const holiday = Number(row.paid_holiday ?? row.holiday ?? 0) || 0;
-      const lwp = Number(row.lwp ?? 0) || 0;
-      const absent = Number(row.absent ?? 0) || 0;
-      const otHours = Number(row.ot_hours ?? row.overtime_hours ?? 0) || 0;
+      const rowUnit = row.unit != null ? String(row.unit).trim() : "";
+      if (rowUnit && !this._unitMatches(emp, rowUnit)) {
+        exceptions.push({ employee_id: emp.id, name: emp.name, reason: `Wrong unit: "${rowUnit}" (roster unit: "${this._empUnit(emp)}")` });
+        continue;
+      }
+      const rowContractor = row.contractor ?? row.contractor_name != null ? String(row.contractor ?? row.contractor_name).trim() : "";
+      if (rowContractor && this._norm(emp.contractor) && this._norm(rowContractor) !== this._norm(emp.contractor)) {
+        exceptions.push({ employee_id: emp.id, name: emp.name, reason: `Contractor mismatch: CSV "${rowContractor}", roster "${emp.contractor}"` });
+        continue;
+      }
+      const present = this._num(row.present ?? row.present_days);
+      const leave = this._num(row.leave ?? row.leave_days ?? row.paid_leave);
+      const weeklyOff = this._num(row.weekly_off ?? row.week_off ?? row.weeklyoff);
+      const holiday = this._num(row.holiday ?? row.paid_holiday ?? row.holiday_days);
+      const lwp = this._num(row.lwp ?? row.lop);
+      const absent = this._num(row.absent ?? row.absent_days);
+      const otHours = this._num(row.ot_hours ?? row.overtime ?? row.overtime_hours);
       const paidDays = present + leave + weeklyOff + holiday;
       const record = {
-        id: `ATT-${month}-${workerId}`,
-        employee_id: workerId,
+        id: `ATT-${month}-${emp.id}`,
+        employee_id: emp.id,
         month,
-        total_days: present + absent + weeklyOff + holiday + leave + lwp,
+        total_days: calendarDays,
         working_days: paidDays,
         lop_days: absent + lwp,
         overtime_hours: otHours,
+        pay_days: paidDays,
         present,
         absent,
         weekly_off: weeklyOff,
@@ -3436,81 +3078,563 @@ var PayrollDatabase = class {
         leave,
         lwp,
         ot_hours: otHours,
-        upload_batch_id: isWorkerMode ? this._nextBatchId(company, month, source) : void 0,
+        upload_batch_id: batchId,
         upload_source: source,
-        file_name: fileName,
-        worker_id: workerId,
+        file_name: fileName || null,
+        worker_id: emp.id,
         name: emp.name,
-        is_company_worker: emp.employee_category === "Worker" || !!emp.is_company_worker
+        worker_category: emp.employee_category === "Worker" || !!emp.is_company_worker ? "Company" : "Contractor",
+        is_company_worker: emp.employee_category === "Worker",
+        csv_found: 1
       };
-      const existing = attByEmp.get(workerId);
-      if (existing) {
-        Object.assign(existing, record);
-        this._updateAttendanceRow(existing);
-      } else {
-        this.data.attendance.push(record);
-        this._insertAttendanceRow(record);
+      if (writeThrough) {
+        const existing = attByEmp.get(emp.id);
+        if (existing) {
+          Object.assign(existing, record);
+          this._updateAttendanceRow(existing);
+        } else {
+          this.data.attendance.push(record);
+          this._insertAttendanceRow(record);
+        }
+        attByEmp.set(emp.id, record);
       }
       attendancePreview.push(record);
     }
     const missingWorkers = [];
-    for (const emp of allEmps) {
-      if (!matchedIds.has(emp.id) && !seenIds.has(emp.id)) {
-        const isWorker = emp.employee_category === "Worker" || emp.employee_category === "Contract" || !!emp.contractor;
-        if (isWorker) {
-          missingWorkers.push({ employee_id: emp.id, name: emp.name });
-          exceptions.push({ employee_id: emp.id, name: emp.name, reason: "Present in worker roster but NOT in attendance upload" });
-          if (isWorkerMode) {
-            const zeroRec = {
-              id: `ATT-${month}-${emp.id}`,
-              employee_id: emp.id,
-              month,
-              total_days: 0,
-              working_days: 0,
-              lop_days: 0,
-              overtime_hours: 0,
-              present: 0,
-              absent: 0,
-              weekly_off: 0,
-              paid_holiday: 0,
-              leave: 0,
-              lwp: 0,
-              ot_hours: 0,
-              upload_batch_id: this._nextBatchId(company, month, source),
-              upload_source: source,
-              file_name: fileName,
-              worker_id: emp.id,
-              name: emp.name,
-              is_company_worker: emp.employee_category === "Worker" || !!emp.is_company_worker
-            };
-            const existing = attByEmp.get(emp.id);
-            if (existing) {
-              Object.assign(existing, zeroRec);
-              this._updateAttendanceRow(existing);
-            } else {
-              this.data.attendance.push(zeroRec);
-              this._insertAttendanceRow(zeroRec);
-            }
-            attendancePreview.push(zeroRec);
-          }
+    for (const emp of roster) {
+      if (matchedIds.has(emp.id) || seenIds.has(this._norm(emp.id))) continue;
+      missingWorkers.push({ employee_id: emp.id, name: emp.name });
+      exceptions.push({ employee_id: emp.id, name: emp.name, reason: "Present in worker roster but NOT in uploaded CSV" });
+      const zeroRec = {
+        id: `ATT-${month}-${emp.id}`,
+        employee_id: emp.id,
+        month,
+        total_days: calendarDays,
+        working_days: 0,
+        lop_days: 0,
+        overtime_hours: 0,
+        pay_days: 0,
+        present: 0,
+        absent: 0,
+        weekly_off: 0,
+        paid_holiday: 0,
+        leave: 0,
+        lwp: 0,
+        ot_hours: 0,
+        upload_batch_id: batchId,
+        upload_source: source,
+        file_name: fileName || null,
+        worker_id: emp.id,
+        name: emp.name,
+        worker_category: emp.employee_category === "Worker" || !!emp.is_company_worker ? "Company" : "Contractor",
+        is_company_worker: emp.employee_category === "Worker",
+        csv_found: 0
+      };
+      if (writeThrough) {
+        const existing = attByEmp.get(emp.id);
+        if (existing) {
+          Object.assign(existing, zeroRec);
+          this._updateAttendanceRow(existing);
+        } else {
+          this.data.attendance.push(zeroRec);
+          this._insertAttendanceRow(zeroRec);
         }
+        attByEmp.set(emp.id, zeroRec);
       }
+      attendancePreview.push(zeroRec);
     }
     const batch = {
-      id: this._nextBatchId(company, month, source),
+      id: batchId,
       company,
       month,
       source,
-      file_name: fileName,
+      file_name: fileName || "",
       uploaded_by: uploadedBy,
       uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
       staff_skipped: staffSkipped.length,
       worker_rows: matchedIds.size,
       duplicate_ids: JSON.stringify(duplicateIds),
-      status: isWorkerMode ? "VALIDATED" : "OK"
+      status: writeThrough ? "VALIDATED" : "OK"
     };
+    batch.exceptions_json = JSON.stringify(exceptions.slice(0, 500));
     this._upsertBatch(batch);
+    if (writeThrough) {
+      this.setMonthStatusState(company, month, "UPLOADED", uploadedBy);
+      this.logAudit(
+        "Workforce Attendance Upload",
+        `${fileName || source} \u2192 ${company} ${month}: ${matchedIds.size} workers matched, ${staffSkipped.length} staff skipped, ${missingWorkers.length} missing (Present=0), ${exceptions.length} exceptions`,
+        uploadedBy || "HR"
+      );
+    }
     return { batch, matched: matchedIds.size, staffSkipped, missingWorkers, duplicateIds, exceptions, attendancePreview };
+  }
+  /** ===== Workforce Module (Phase B: infrastructure helpers) ===== */
+  _norm(s) {
+    return String(s == null ? "" : s).toString().trim().toLowerCase();
+  }
+  _num(v) {
+    const n = Number(v);
+    return isNaN(n) ? 0 : n;
+  }
+  _parseMonth(v) {
+    const s = String(v == null ? "" : v).trim();
+    const re1 = s.match(/^(\d{4})[-/](\d{1,2})$/);
+    if (re1) return `${re1[1]}-${String(Number(re1[2])).padStart(2, "0")}`;
+    const re2 = s.match(/^([A-Za-z]{3,9})\s*[-/]?\s*(\d{4})$/);
+    if (re2) {
+      const M = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+      const k = re2[1].slice(0, 3).toLowerCase();
+      if (M[k]) return `${re2[2]}-${M[k]}`;
+    }
+    return s;
+  }
+  _empUnit(emp) {
+    return emp.company || emp.cost_center || "";
+  }
+  _unitMatches(emp, unit) {
+    const u = this._norm(unit);
+    if (!u) return true;
+    const candidates = [emp.company, emp.cost_center];
+    const comp = this.getCompanies().find((c) => c.id === emp.company);
+    if (comp) {
+      candidates.push(comp.name, comp.unit_name);
+    }
+    return candidates.some((c) => c && this._norm(c) === u);
+  }
+  /** Worker classification from Employee Master ONLY (never from name). */
+  _isWorkerEmp(emp) {
+    const cat = String(emp.employee_category || "").trim().toLowerCase();
+    if (cat === "worker" || cat === "contract") return true;
+    if ((!emp.employee_category || cat === "staff") && (emp.contractor || emp.contractor_id)) return true;
+    return false;
+  }
+  _flag(key) {
+    try {
+      const arr = this.data.system_settings;
+      if (Array.isArray(arr)) {
+        const hit = arr.find((s) => s && s.key === key);
+        if (hit && hit.value != null) return String(hit.value);
+      }
+    } catch {
+    }
+    return "";
+  }
+  _wfEnabled() {
+    return this._flag("workforce_module_enabled") === "1";
+  }
+  _nextBatchId(company, month, source) {
+    const ts = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+    const n = (this.data.attendance_upload_batches || []).length + 1;
+    return `BATCH-${company}-${month}-${source}-${ts}-${n}`;
+  }
+  _upsertBatch(batch) {
+    const arr = this.data.attendance_upload_batches || [];
+    const idx = arr.findIndex((b) => b.id === batch.id);
+    if (idx >= 0) arr[idx] = batch;
+    else arr.push(batch);
+    if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO attendance_upload_batches (id, company, month, source, file_name, uploaded_by, uploaded_at, staff_skipped, worker_rows, duplicate_ids, exceptions_json, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [batch.id, batch.company, batch.month, batch.source, batch.file_name || "", batch.uploaded_by || null, batch.uploaded_at, batch.staff_skipped || 0, batch.worker_rows || 0, batch.duplicate_ids || "[]", batch.exceptions_json || null, batch.status || "OK"]
+      );
+    }
+  }
+  _insertAttendanceRow(record) {
+    if (!this.dbSqlite || typeof this.dbSqlite.run !== "function") return;
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, upload_batch_id, upload_source, file_name, pay_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [record.id, record.employee_id, record.month, record.total_days || 0, record.working_days || 0, record.lop_days || 0, record.ot_hours || 0, record.present ?? null, record.absent ?? null, record.weekly_off ?? null, record.paid_holiday ?? null, record.leave ?? null, record.lwp ?? null, record.ot_hours ?? null, record.upload_batch_id || null, record.upload_source || "CSV", record.file_name || null, record.pay_days ?? null]
+    );
+  }
+  _updateAttendanceRow(record) {
+    if (!this.dbSqlite || typeof this.dbSqlite.run !== "function") return;
+    this.dbSqlite.run(
+      `UPDATE attendance SET total_days = ?, working_days = ?, lop_days = ?, overtime_hours = ?, present = ?, absent = ?, weekly_off = ?, paid_holiday = ?, leave = ?, lwp = ?, ot_hours = ?, upload_batch_id = ?, upload_source = ?, file_name = ?, pay_days = ? WHERE id = ?`,
+      [record.total_days || 0, record.working_days || 0, record.lop_days || 0, record.ot_hours || 0, record.present ?? null, record.absent ?? null, record.weekly_off ?? null, record.paid_holiday ?? null, record.leave ?? null, record.lwp ?? null, record.ot_hours ?? null, record.upload_batch_id || null, record.upload_source || "CSV", record.file_name || null, record.pay_days ?? null, record.id]
+    );
+  }
+  /** ===== Workforce Module (Phase B: month workflow) ===== */
+  ensureWorkforceSettings() {
+    const defaults = [
+      ["workforce_module_enabled", "0"],
+      ["direct_biometric_enabled", "0"],
+      ["min_wage_default", "511"],
+      ["use_min_wage_ncp", "0"],
+      ["pf_ncp_reduces_statutory_pf", "0"],
+      ["esic_use_pf_ncp", "0"]
+    ];
+    const dataAny = this.data;
+    if (!Array.isArray(dataAny.system_settings)) dataAny.system_settings = [];
+    for (const [k, v] of defaults) {
+      if (!dataAny.system_settings.find((s) => s && s.key === k)) dataAny.system_settings.push({ key: k, value: v });
+    }
+  }
+  async getWorkforceSettings() {
+    this.ensureWorkforceSettings();
+    const out = {};
+    for (const s of this.data.system_settings || []) if (s && s.key) out[s.key] = String(s.value);
+    return out;
+  }
+  async setWorkforceSetting(key, value) {
+    this.ensureWorkforceSettings();
+    const arr = this.data.system_settings;
+    const hit = arr.find((s) => s && s.key === key);
+    if (hit) hit.value = value;
+    else arr.push({ key, value });
+    if (this.dbSqlite && typeof this.dbSqlite.run === "function") await this.setSystemSetting(key, value);
+  }
+  getMonthStatus(company, month) {
+    return (this.data.month_status || []).find((s) => s.company === company && s.month === month);
+  }
+  setMonthStatusState(company, month, state, actor) {
+    const arr = this.data.month_status || [];
+    let s = arr.find((m) => m.company === company && m.month === month);
+    if (!s) {
+      s = { company, month, state, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+      arr.push(s);
+    } else {
+      s.state = state;
+      s.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+      if (state === "FINALIZED" || state === "LOCKED") {
+        s.locked_by = actor;
+        s.locked_at = (/* @__PURE__ */ new Date()).toISOString();
+      }
+    }
+    if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO month_status (company, month, state, locked_by, locked_at, lock_reason, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [company, month, state, s.locked_by || null, s.locked_at || null, s.lock_reason || null, s.updated_at]
+      );
+    }
+    return s;
+  }
+  getWorkerBatches(company, month) {
+    return (this.data.attendance_upload_batches || []).filter((b) => b.company === company && (!month || b.month === month)).sort((a, b) => String(b.uploaded_at || "").localeCompare(String(a.uploaded_at || "")));
+  }
+  /** Reconciliation report — Employee Master workers VS uploaded CSV workers (Rule #7). */
+  getWorkerReconciliation(company, month) {
+    const allEmps = this.getEmployees(company);
+    const roster = allEmps.filter((e) => this._isWorkerEmp(e));
+    const monthAtt = this.data.attendance.filter((a) => a.month === month);
+    const attByEmp = new Map(monthAtt.map((a) => [a.employee_id, a]));
+    const batches = this.getWorkerBatches(company, month);
+    const latestBatch = batches[0];
+    const duplicateSet = /* @__PURE__ */ new Set();
+    const batchExceptions = [];
+    if (latestBatch) {
+      try {
+        JSON.parse(latestBatch.duplicate_ids || "[]").forEach((id) => duplicateSet.add(id));
+      } catch {
+      }
+      try {
+        const ex = JSON.parse(latestBatch.exceptions_json || "[]");
+        if (Array.isArray(ex)) batchExceptions.push(...ex);
+      } catch {
+      }
+    }
+    const rows = [];
+    for (const emp of roster) {
+      const att = attByEmp.get(emp.id);
+      const isCsv = !!(att && (att.upload_source === "CSV" || att.upload_source === "BIOMETRIC_DIRECT"));
+      const csvFound = isCsv ? att.csv_found ?? 1 : 0;
+      const present = att?.present || 0;
+      const leave = att?.leave || 0;
+      const weeklyOff = att?.weekly_off || 0;
+      const holiday = att?.paid_holiday || 0;
+      const paidDays = att?.pay_days ?? (att?.working_days || 0);
+      const exs = [];
+      if (!csvFound) exs.push("NOT IN UPLOADED CSV");
+      if (duplicateSet.has(emp.id)) exs.push("DUPLICATE");
+      const be = batchExceptions.find((x) => x && String(x.employee_id) === emp.id);
+      if (be && be.reason && be.reason !== "Present in worker roster but NOT in uploaded CSV") exs.push(be.reason);
+      rows.push({
+        worker_id: emp.id,
+        worker_name: emp.name,
+        category: emp.employee_category === "Worker" ? "Company Worker" : emp.employee_category === "Contract" ? "Contractor Worker" : "Staff",
+        unit: this._empUnit(emp),
+        contractor: emp.contractor || "",
+        csv_found: csvFound ? "YES" : "NO",
+        present,
+        leave,
+        weekly_off: weeklyOff,
+        holiday,
+        paid_days: paidDays,
+        exceptions: exs
+      });
+    }
+    const staffInCsv = [];
+    for (const a of monthAtt) {
+      if (a.upload_source === "CSV" || a.upload_source === "BIOMETRIC_DIRECT") {
+        const emp = allEmps.find((e) => e.id === a.employee_id);
+        if (emp && !this._isWorkerEmp(emp)) staffInCsv.push({ worker_id: emp.id, name: emp.name, unit: this._empUnit(emp) });
+      }
+    }
+    const unknownEmployees = [];
+    for (const x of batchExceptions) {
+      if (x && (x.employee_id === "" || !allEmps.find((e) => e.id === x.employee_id) || String(x.reason || "").includes("Unknown"))) {
+        unknownEmployees.push({ worker_id: x.employee_id, name: x.name, reason: x.reason });
+      }
+    }
+    return {
+      month,
+      company,
+      state: this.getMonthStatus(company, month)?.state || "OPEN",
+      last_batch: latestBatch || null,
+      summary: {
+        roster_workers: roster.length,
+        csv_matched: rows.filter((r) => r.csv_found === "YES").length,
+        csv_missing: rows.filter((r) => r.csv_found === "NO").length,
+        staff_in_csv: staffInCsv.length,
+        exceptions: rows.reduce((s, r) => s + r.exceptions.length, 0) + unknownEmployees.length
+      },
+      rows,
+      staff_in_csv: staffInCsv,
+      unknown_employees: unknownEmployees
+    };
+  }
+  /** Lock reconciled worker attendance into paid days (Rule #14 stage 1). */
+  finalizeWorkerAttendance(company, month, actor) {
+    if (!this._wfEnabled()) {
+      throw new Error('Workforce module is disabled. Enable setting "workforce_module_enabled".');
+    }
+    const report = this.getWorkerReconciliation(company, month);
+    for (const row of report.rows) {
+      const att = this.data.attendance.find((a) => a.month === month && a.employee_id === row.worker_id);
+      if (!att) continue;
+      att.pay_days = row.paid_days;
+      att.working_days = row.paid_days;
+      att.is_locked = true;
+      if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+        this.dbSqlite.run(`UPDATE attendance SET pay_days = ?, working_days = ?, is_locked = 1 WHERE id = ?`, [row.paid_days, row.paid_days, att.id]);
+      }
+    }
+    this.setMonthStatusState(company, month, "FINALIZED", actor);
+    this.logAudit("Workforce Finalized", `Worker attendance finalized for ${company} ${month}`, actor || "HR");
+    return {
+      month,
+      company,
+      state: "FINALIZED",
+      finalized_at: (/* @__PURE__ */ new Date()).toISOString(),
+      roster_workers: report.rows.length,
+      with_attendance: report.rows.filter((r) => r.paid_days > 0).length,
+      zero_attendance: report.rows.filter((r) => r.paid_days === 0).length,
+      total_paid_days: report.rows.reduce((s, r) => s + r.paid_days, 0)
+    };
+  }
+  /** Worker Payroll generation: paid days → wages → contractor bills → company payroll → HDFC/Cheque → PF/ESIC challan. */
+  async generateWorkerPayroll(company, month, actor) {
+    if (!this._wfEnabled()) {
+      throw new Error('Workforce module is disabled. Enable setting "workforce_module_enabled".');
+    }
+    const allEmps = this.getEmployees(company);
+    const roster = allEmps.filter((e) => this._isWorkerEmp(e));
+    const monthAtt = this.data.attendance.filter((a) => a.month === month);
+    const attByEmp = new Map(monthAtt.map((a) => [a.employee_id, a]));
+    const lines = [];
+    const totals = { gross: 0, pf: 0, esic: 0, net: 0, paidDays: 0 };
+    for (const emp of roster) {
+      const att = attByEmp.get(emp.id);
+      if (!att) continue;
+      const paidDays = att.pay_days ?? (att.present || 0) + (att.leave || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0);
+      const wageRate = emp.wage_rate || emp.base_salary || 0;
+      const gross = Math.round(paidDays * wageRate * 100) / 100;
+      const pfEmp = emp.pf_opt_in ? Math.round(gross * 0.12 * 100) / 100 : 0;
+      const pfEmployer = emp.pf_opt_in ? Math.round(gross * 0.12 * 100) / 100 : 0;
+      const esicEmp = emp.esic_opt_in ? Math.round(gross * 75e-4 * 100) / 100 : 0;
+      const esicEmployer = emp.esic_opt_in ? Math.round(gross * 0.0325 * 100) / 100 : 0;
+      const net = Math.round((gross - pfEmp - esicEmp) * 100) / 100;
+      totals.gross += gross;
+      totals.pf += pfEmp + pfEmployer;
+      totals.esic += esicEmp + esicEmployer;
+      totals.net += net;
+      totals.paidDays += paidDays;
+      lines.push({
+        worker_id: emp.id,
+        name: emp.name,
+        category: emp.employee_category === "Contract" ? "Contractor" : emp.employee_category === "Worker" || !!emp.is_company_worker ? "Company" : "Worker",
+        unit: this._empUnit(emp),
+        contractor: emp.employee_category === "Contract" ? emp.contractor || "" : "",
+        paid_days: paidDays,
+        wage_rate: wageRate,
+        gross_wages: gross,
+        pf_employee: pfEmp,
+        pf_employer: pfEmployer,
+        esic_employee: esicEmp,
+        esic_employer: esicEmployer,
+        net_pay: net,
+        payment_mode: emp.payment_mode || "HDFC",
+        bank_name: emp.bank_name || "",
+        bank_account: emp.bank_account || "",
+        ifsc: emp.ifsc || "",
+        pf_enabled: !!emp.pf_opt_in,
+        esic_enabled: !!emp.esic_opt_in
+      });
+    }
+    const contractorGroups = /* @__PURE__ */ new Map();
+    for (const l of lines.filter((x) => x.category === "Contractor" && x.contractor)) {
+      if (!contractorGroups.has(l.contractor)) contractorGroups.set(l.contractor, []);
+      contractorGroups.get(l.contractor).push(l);
+    }
+    const contractorBills = [];
+    const contractorBillLines = [];
+    for (const [ctr, lns] of contractorGroups) {
+      const billId = `BILL-${company}-${month}-${ctr.replace(/[^A-Za-z0-9]+/g, "-")}`;
+      const g = lns.reduce((s, x) => s + x.gross_wages, 0);
+      const pf = lns.reduce((s, x) => s + x.pf_employee + x.pf_employer, 0);
+      const esic = lns.reduce((s, x) => s + x.esic_employee + x.esic_employer, 0);
+      const empShare = lns.reduce((s, x) => s + x.pf_employer + x.esic_employer, 0);
+      contractorBills.push({
+        id: billId,
+        company,
+        contractor_id: ctr,
+        month,
+        status: "DRAFT",
+        total_gross: Math.round(g * 100) / 100,
+        total_pf: Math.round(pf * 100) / 100,
+        total_esic: Math.round(esic * 100) / 100,
+        net_payable: Math.round((g + empShare) * 100) / 100,
+        created_by: actor,
+        created_at: (/* @__PURE__ */ new Date()).toISOString(),
+        locked: 0
+      });
+      for (const l of lns) {
+        contractorBillLines.push({
+          id: `LIN-${billId}-${l.worker_id}`,
+          bill_id: billId,
+          employee_id: l.worker_id,
+          worker_name: l.name,
+          present_days: l.paid_days,
+          leave_days: 0,
+          weekly_off: 0,
+          holiday: 0,
+          paid_days: l.paid_days,
+          ncp_days: 0,
+          wage_rate: l.wage_rate,
+          gross_wages: l.gross_wages,
+          pf: l.pf_employee + l.pf_employer,
+          esic: l.esic_employee + l.esic_employer,
+          other_deductions: 0,
+          net_payable: Math.round((l.gross_wages + l.pf_employer + l.esic_employer) * 100) / 100
+        });
+      }
+    }
+    this.data.contractor_bills = [...(this.data.contractor_bills || []).filter((b) => !(b.company === company && b.month === month)), ...contractorBills];
+    this.data.contractor_bill_lines = [...(this.data.contractor_bill_lines || []).filter((l) => !(l.bill_id && contractorBillLines.some((nl) => nl.id === l.id))), ...contractorBillLines];
+    if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+      for (const b of contractorBills) {
+        this.dbSqlite.run(`INSERT OR REPLACE INTO contractor_bills (id, company, contractor_id, month, status, total_gross, total_pf, total_esic, net_payable, created_by, created_at, locked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [b.id, b.company, b.contractor_id, b.month, b.status, b.total_gross, b.total_pf, b.total_esic, b.net_payable, b.created_by || null, b.created_at || null, b.locked || 0]);
+      }
+      for (const l of contractorBillLines) {
+        this.dbSqlite.run(`INSERT OR REPLACE INTO contractor_bill_lines (id, bill_id, employee_id, worker_name, present_days, leave_days, weekly_off, holiday, paid_days, ncp_days, wage_rate, gross_wages, pf, esic, other_deductions, net_payable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [l.id, l.bill_id, l.employee_id, l.worker_name || null, l.present_days, l.leave_days, l.weekly_off, l.holiday, l.paid_days, l.ncp_days, l.wage_rate, l.gross_wages, l.pf, l.esic, l.other_deductions, l.net_payable]);
+      }
+    }
+    const companyLines = lines.filter((x) => x.category !== "Contractor");
+    const cpRows = companyLines.map((l) => ({
+      id: `CW-${company}-${month}-${l.worker_id}`,
+      company,
+      month,
+      worker_id: l.worker_id,
+      name: l.name,
+      category: l.category,
+      unit: l.unit,
+      contractor: l.contractor || "",
+      paid_days: l.paid_days,
+      wage_rate: l.wage_rate,
+      gross_wages: l.gross_wages,
+      pf_employee: l.pf_employee,
+      pf_employer: l.pf_employer,
+      esic_employee: l.esic_employee,
+      esic_employer: l.esic_employer,
+      net_pay: l.net_pay,
+      payment_mode: l.payment_mode,
+      bank_name: l.bank_name,
+      bank_account: l.bank_account,
+      ifsc: l.ifsc,
+      generated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }));
+    this.data.company_worker_payroll = [...(this.data.company_worker_payroll || []).filter((p) => !(p.company === company && p.month === month)), ...cpRows];
+    if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+      for (const c of cpRows) {
+        this.dbSqlite.run(`INSERT OR REPLACE INTO company_worker_payroll (id, company, month, worker_id, name, category, unit, contractor, paid_days, wage_rate, gross_wages, pf_employee, pf_employer, esic_employee, esic_employer, net_pay, payment_mode, bank_name, bank_account, ifsc, generated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [c.id, c.company, c.month, c.worker_id, c.name, c.category, c.unit, c.contractor, c.paid_days, c.wage_rate, c.gross_wages, c.pf_employee, c.pf_employer, c.esic_employee, c.esic_employer, c.net_pay, c.payment_mode, c.bank_name, c.bank_account, c.ifsc, c.generated_at]);
+      }
+    }
+    const hdfcSheet = cpRows.filter((x) => String(x.payment_mode).toUpperCase() === "HDFC").map((x) => ({ emp_code: x.worker_id, name: x.name, unit: x.unit, bank_name: x.bank_name, bank_account: x.bank_account, ifsc: x.ifsc, amount: x.net_pay }));
+    const chequeLines = cpRows.filter((x) => String(x.payment_mode).toUpperCase() !== "HDFC").map((x) => ({ ...x, company, month }));
+    for (const b of contractorBills) {
+      chequeLines.push({
+        worker_id: b.contractor_id,
+        name: b.contractor_id,
+        category: "Contractor",
+        company,
+        month,
+        paid_days: 0,
+        gross_wages: b.net_payable,
+        pf_employee: 0,
+        pf_employer: 0,
+        esic_employee: 0,
+        esic_employer: 0,
+        net_pay: b.net_payable,
+        payment_mode: "CHEQUE",
+        bank_name: "",
+        bank_account: "",
+        ifsc: ""
+      });
+    }
+    for (const c of chequeLines) {
+      const cid = `CHEQUE-${company}-${month}-${c.worker_id}`;
+      this.data.cheque_payments = (this.data.cheque_payments || []).filter((ch) => !(ch.employee_id === c.worker_id && ch.company === company && ch.month === month));
+      const cp = { id: cid, employee_id: c.worker_id, company, month, net_pay: c.net_pay, cheque_number: "", payment_date: "" };
+      this.data.cheque_payments.push(cp);
+      if (this.dbSqlite && typeof this.dbSqlite.run === "function") {
+        this.dbSqlite.run(`INSERT OR REPLACE INTO cheque_payments (id, employee_id, company, month, net_pay, cheque_number, payment_date, remarks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [cid, c.worker_id, company, month, c.net_pay, "", "", null]);
+      }
+    }
+    const pfEsicChallan = [];
+    for (const l of lines) {
+      const minWage = await this.getMinimumWage(company, { unit: l.unit, workerCategory: l.category === "Company" ? "Worker" : "Contract" });
+      const ncp = this.calculateBusinessNCP(l.paid_days, l.gross_wages, minWage);
+      const applicableWages = Math.round(ncp.applicableDays * l.wage_rate * 100) / 100;
+      pfEsicChallan.push({
+        worker_id: l.worker_id,
+        name: l.name,
+        category: l.category,
+        paid_days: l.paid_days,
+        gross_wages: l.gross_wages,
+        minimum_wage: minWage,
+        counted_wage_days: ncp.countedWageDays,
+        applicable_days: ncp.applicableDays,
+        business_ncp: ncp.businessNcp,
+        applicable_wages: applicableWages,
+        pf_enabled: l.pf_enabled,
+        esic_enabled: l.esic_enabled,
+        pf_on_applicable: l.pf_enabled ? Math.round(applicableWages * 0.12 * 100) / 100 : 0,
+        esic_on_applicable: l.esic_enabled ? Math.round(applicableWages * 75e-4 * 100) / 100 : 0
+      });
+    }
+    this.setMonthStatusState(company, month, "PAYROLL_DONE", actor);
+    this.logAudit("Workforce Payroll Generated", `Worker payroll for ${company} ${month}: ${lines.length} workers, gross \u20B9${totals.gross.toFixed(2)}, net \u20B9${totals.net.toFixed(2)}`, actor || "HR");
+    return {
+      month,
+      company,
+      state: "PAYROLL_DONE",
+      summary: {
+        workers: lines.length,
+        paid_days: Math.round(totals.paidDays * 100) / 100,
+        gross_wages: Math.round(totals.gross * 100) / 100,
+        net_pay: Math.round(totals.net * 100) / 100,
+        contractor_bills: contractorBills.length,
+        company_workers: cpRows.length,
+        hdfc_rows: hdfcSheet.length,
+        cheque_rows: chequeLines.length
+      },
+      payroll: lines,
+      contractor_bills: contractorBills,
+      contractor_bill_lines: contractorBillLines,
+      company_worker_payroll: cpRows,
+      hdfc_payment_sheet: hdfcSheet,
+      cheque_payment_sheet: chequeLines,
+      pf_esic_challan: pfEsicChallan
+    };
   }
   upsertAttendance(att) {
     const idx = this.data.attendance.findIndex((a) => a.id === att.id);
@@ -4286,8 +4410,9 @@ var PayrollDatabase = class {
         rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance,
         earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance,
         overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance,
-        gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )`,
+        gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type,
+        pay_days, calendar_days, rate_bonus_payable, earned_bonus_payable, ctc_salary
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         s.id,
         s.employee_id,
@@ -4331,7 +4456,12 @@ var PayrollDatabase = class {
         s.payment_status || "PENDING",
         s.payment_date || null,
         s.hidden_salary_heads || null,
-        s.salary_structure_type || "FIXED"
+        s.salary_structure_type || "FIXED",
+        s.pay_days || 0,
+        s.calendar_days || 30,
+        s.rate_bonus_payable || 0,
+        s.earned_bonus_payable || 0,
+        s.ctc_salary || 0
       ]
     );
     this.persistData();
@@ -4355,13 +4485,31 @@ var PayrollDatabase = class {
     const isLockedPercentage = emp.salary_structure_type === "PERCENTAGE" || isFormulaMonth;
     const hiddenHeads = (emp.hidden_salary_heads || "").split(",").map((h) => h.trim());
     const isHidden = (head) => hiddenHeads.includes(head);
+    const [mYear, mMon] = month.split("-").map(Number);
+    const monthEnd = `${mYear}-${String(mMon).padStart(2, "0")}-${String(new Date(mYear, mMon, 0).getDate()).padStart(2, "0")}`;
+    const applicableRevisions = (this.data.salary_revisions || []).filter((r) => r.employee_code === emp.id && r.effective_date && r.effective_date <= monthEnd).sort((a, b) => (b.effective_date || "").localeCompare(a.effective_date || ""));
     let rate_base = emp.base_salary;
-    let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : emp.hra ?? 0;
-    let rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : emp.special_allowance ?? 0;
+    let rate_hra_val = emp.hra ?? 0;
+    let rate_special_val = emp.special_allowance ?? 0;
+    let rate_edu_val = emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : 0;
+    let rate_medical_val = emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : 0;
+    let rate_conveyance_val = emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : 0;
+    if (applicableRevisions.length > 0) {
+      const latestRev = applicableRevisions[0];
+      rate_base = Number(latestRev.new_salary);
+      const revFull = latestRev;
+      if (revFull.hra !== void 0) rate_hra_val = Number(revFull.hra);
+      if (revFull.special_allowance !== void 0) rate_special_val = Number(revFull.special_allowance);
+      if (revFull.edu_allowance !== void 0) rate_edu_val = Number(revFull.edu_allowance);
+      if (revFull.medical_allowance !== void 0) rate_medical_val = Number(revFull.medical_allowance);
+      if (revFull.conveyance_allowance !== void 0) rate_conveyance_val = Number(revFull.conveyance_allowance);
+    }
+    let rate_hra = isHidden("hra") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : rate_hra_val;
+    let rate_special = isHidden("special_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : rate_special_val;
     const rate_da = 0;
-    let rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : emp.edu_allowance && emp.edu_allowance > 0 ? emp.edu_allowance : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100);
-    let rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : emp.medical_allowance && emp.medical_allowance > 0 ? emp.medical_allowance : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100);
-    let rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : emp.conveyance_allowance && emp.conveyance_allowance > 0 ? emp.conveyance_allowance : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100);
+    let rate_edu = isHidden("edu_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_edu_percent || 2) / 100) : rate_edu_val > 0 ? rate_edu_val : Math.round(rate_base * (sets.salary_edu_percent || 2) / 100);
+    let rate_medical = isHidden("medical_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_medical_percent || 5) / 100) : rate_medical_val > 0 ? rate_medical_val : Math.round(rate_base * (sets.salary_medical_percent || 5) / 100);
+    let rate_conveyance = isHidden("conveyance_allowance") ? 0 : isLockedPercentage ? Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100) : rate_conveyance_val > 0 ? rate_conveyance_val : Math.round(rate_base * (sets.salary_conveyance_percent || 8) / 100);
     const rate_bonus = Math.round(rate_base * 0.0833);
     const earned_base = Math.round(rate_base * proration);
     const earned_hra = Math.round(rate_hra * proration);
@@ -4692,7 +4840,12 @@ var PayrollDatabase = class {
         s.notice_deduction || 0,
         s.mobile_deduction || 0,
         s.damage_deduction || 0,
-        s.remarks || ""
+        s.remarks || "",
+        s.pay_days || 0,
+        s.calendar_days || 30,
+        s.rate_bonus_payable || 0,
+        s.earned_bonus_payable || 0,
+        s.ctc_salary || 0
       ]
     );
     this.persistData();
@@ -4801,7 +4954,7 @@ var PayrollDatabase = class {
         s.payment_status = "PENDING";
         s.payment_date = "";
         this.dbSqlite.run(
-          `INSERT OR REPLACE INTO payslips (id, employee_id, employee_name, designation, department, pan, uan, bank_name, bank_account, ifsc, month, rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance, earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance, overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance, gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO payslips (id, employee_id, employee_name, designation, department, pan, uan, bank_name, bank_account, ifsc, month, rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance, earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance, overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction, salary_advance, gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type, pay_days, calendar_days, bonus_incentive, performance_incentive, attendance_incentive, production_incentive, reimbursement, special_allowance_addition, arrear_payment, other_earnings, canteen_deduction, uniform_deduction, notice_deduction, mobile_deduction, damage_deduction, remarks, rate_bonus_payable, earned_bonus_payable, ctc_salary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             s.id,
             s.employee_id,
@@ -4845,7 +4998,26 @@ var PayrollDatabase = class {
             s.payment_status,
             s.payment_date,
             s.hidden_salary_heads || null,
-            s.salary_structure_type || "FIXED"
+            s.salary_structure_type || "FIXED",
+            s.pay_days || 0,
+            s.calendar_days || 30,
+            s.bonus_incentive || 0,
+            s.performance_incentive || 0,
+            s.attendance_incentive || 0,
+            s.production_incentive || 0,
+            s.reimbursement || 0,
+            s.special_allowance_addition || 0,
+            s.arrear_payment || 0,
+            s.other_earnings || 0,
+            s.canteen_deduction || 0,
+            s.uniform_deduction || 0,
+            s.notice_deduction || 0,
+            s.mobile_deduction || 0,
+            s.damage_deduction || 0,
+            s.remarks || "",
+            s.rate_bonus_payable || 0,
+            s.earned_bonus_payable || 0,
+            s.ctc_salary || 0
           ]
         );
       }
@@ -5029,15 +5201,19 @@ Sakar & SVN Group`;
     );
     const emp = this.getEmployeeById(rev.employee_code);
     if (emp) {
-      emp.base_salary = rev.new_salary;
-      emp.hra = rev.hra !== void 0 ? Number(rev.hra) : Math.round(rev.new_salary * 0.4);
-      emp.special_allowance = rev.special_allowance !== void 0 ? Number(rev.special_allowance) : Math.round(rev.new_salary * 0.15);
-      emp.da = 0;
-      if (rev.conveyance_allowance !== void 0) emp.conveyance_allowance = Number(rev.conveyance_allowance);
-      if (rev.edu_allowance !== void 0) emp.edu_allowance = Number(rev.edu_allowance);
-      if (rev.medical_allowance !== void 0) emp.medical_allowance = Number(rev.medical_allowance);
-      emp.ctc_salary = emp.base_salary + emp.hra + emp.special_allowance + (emp.conveyance_allowance || 0) + (emp.edu_allowance || 0) + (emp.medical_allowance || 0);
-      this.syncEmployee(emp);
+      const today = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
+      const effectiveDate = rev.effective_date || today;
+      if (effectiveDate <= today) {
+        emp.base_salary = rev.new_salary;
+        emp.hra = rev.hra !== void 0 ? Number(rev.hra) : Math.round(rev.new_salary * 0.4);
+        emp.special_allowance = rev.special_allowance !== void 0 ? Number(rev.special_allowance) : Math.round(rev.new_salary * 0.15);
+        emp.da = 0;
+        if (rev.conveyance_allowance !== void 0) emp.conveyance_allowance = Number(rev.conveyance_allowance);
+        if (rev.edu_allowance !== void 0) emp.edu_allowance = Number(rev.edu_allowance);
+        if (rev.medical_allowance !== void 0) emp.medical_allowance = Number(rev.medical_allowance);
+        emp.ctc_salary = emp.base_salary + emp.hra + emp.special_allowance + (emp.conveyance_allowance || 0) + (emp.edu_allowance || 0) + (emp.medical_allowance || 0);
+        this.syncEmployee(emp);
+      }
     }
     return newRev;
   }
@@ -5848,8 +6024,9 @@ Sakar & SVN Group`;
             rate_base_salary, rate_hra, rate_special_allowance, rate_da, rate_edu_allowance, rate_medical_allowance, rate_conveyance_allowance,
             earned_base_salary, earned_hra, earned_special_allowance, earned_da, earned_edu_allowance, earned_medical_allowance, earned_conveyance_allowance,
             overtime_pay, lop_deduction, pf_deduction, esic_deduction, professional_tax, tds, custom_deductions, loan_deduction,
-            gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            gross_salary, total_deductions, net_salary, employer_pf, employer_esic, payment_status, payment_date, hidden_salary_heads, salary_structure_type,
+            pay_days, calendar_days, salary_advance
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               employee_id,
@@ -5892,7 +6069,10 @@ Sakar & SVN Group`;
               payment_status,
               payment_date,
               hidden_salary_heads,
-              salary_structure_type
+              salary_structure_type,
+              p.pay_days || 0,
+              p.calendar_days || 30,
+              p.salary_advance || 0
             ]
           );
         }
@@ -9627,6 +9807,105 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
+  function parseCsvText(text) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return [];
+    const header = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
+    const out = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(",").map((c) => c.replace(/^"|"$/g, "").trim());
+      if (cells.length === 1 && cells[0] === "") continue;
+      const row = {};
+      header.forEach((h, idx) => {
+        if (h) row[h] = cells[idx] ?? "";
+      });
+      out.push(row);
+    }
+    return out;
+  }
+  app.post("/api/workforce/attendance/upload", async (req, res) => {
+    try {
+      const { company, month, source = "CSV", fileName = "upload.csv", text, rows, uploadedBy } = req.body || {};
+      if (!company || !month) return res.status(400).json({ error: "company and month (YYYY-MM) are required" });
+      if (source === "BIOMETRIC_DIRECT" && (await db.getWorkforceSettings())["direct_biometric_enabled"] !== "1") {
+        return res.status(403).json({ error: "Direct biometric integration is disabled. Use CSV source (configured from next month)." });
+      }
+      const parsed = Array.isArray(rows) ? rows : typeof text === "string" ? parseCsvText(text) : [];
+      if (parsed.length === 0) return res.status(400).json({ error: "No attendance rows received. Provide rows[] or CSV text." });
+      const result = db.reconcileAttendanceUpload({ company, month, source, fileName, uploadedBy, rows: parsed, writeThrough: true });
+      res.json({
+        success: true,
+        matched: result.matched,
+        staffSkipped: result.staffSkipped.length,
+        missingWorkers: result.missingWorkers,
+        duplicates: result.duplicateIds,
+        exceptions: result.exceptions.filter((e) => e.reason !== "Present in worker roster but NOT in uploaded CSV"),
+        batch: result.batch
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message || String(e) });
+    }
+  });
+  app.get("/api/workforce/reconciliation/:month", (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company } = req.query;
+      if (!company) return res.status(400).json({ error: "company query param is required" });
+      res.json(db.getWorkerReconciliation(company, month));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/workforce/reconciliation/:month/finalize", async (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company, actor } = req.body || {};
+      if (!company) return res.status(400).json({ error: "company is required" });
+      const result = db.finalizeWorkerAttendance(company, month, actor || getOperator(req));
+      await db.flushPendingWrites?.();
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/workforce/:month/payroll", async (req, res) => {
+    try {
+      const { month } = req.params;
+      const { company, actor } = req.body || {};
+      if (!company) return res.status(400).json({ error: "company is required" });
+      const result = await db.generateWorkerPayroll(company, month, actor || getOperator(req));
+      await db.flushPendingWrites?.();
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/workforce/settings", async (_req, res) => {
+    try {
+      res.json(await db.getWorkforceSettings());
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/workforce/settings", async (req, res) => {
+    try {
+      const { key, value } = req.body || {};
+      if (!key) return res.status(400).json({ error: "key is required" });
+      await db.setWorkforceSetting(key, String(value));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/workforce/batches", (req, res) => {
+    try {
+      const { company, month } = req.query;
+      if (!company) return res.status(400).json({ error: "company query param is required" });
+      res.json(db.getWorkerBatches(company, month));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.post("/api/admin/standardize-names", async (req, res) => {
     try {
       const standardizeName = (name) => {
@@ -9652,7 +9931,6 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
-var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,
