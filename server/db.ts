@@ -3740,6 +3740,30 @@ export class PayrollDatabase {
   // Leave Management operations
   public getLeaveApplications(companyFilter?: string): LeaveApplication[] {
     let apps = this.data.leave_applications || [];
+
+    // PRIORITY 3 — AUTO-ESCALATION: If PENDING_HOD > 48 hours, escalate to HR
+    const now = Date.now();
+    const ESCALATION_MS = 48 * 60 * 60 * 1000; // 48 hours
+    let escalated = false;
+    for (const app of apps) {
+      if (app.status === 'PENDING_HOD' && app.applied_date) {
+        const appliedTime = new Date(app.applied_date).getTime();
+        if (now - appliedTime > ESCALATION_MS) {
+          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR — HOD did not act within 48 hours`);
+          app.status = 'PENDING_HR';
+          app.escalated_reminder_sent = 1;
+          // Persist the escalation to DB
+          try {
+            this.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HR', escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
+          } catch (e: any) { console.error('[LeaveEscalation] DB update error:', e?.message); }
+          escalated = true;
+        }
+      }
+    }
+    if (escalated) {
+      this.persistData();
+    }
+
     if (companyFilter && companyFilter !== 'ALL') {
       apps = apps.filter(a => a.company === companyFilter);
     }
@@ -3749,7 +3773,22 @@ export class PayrollDatabase {
   public addLeaveApplication(app: LeaveApplication): LeaveApplication {
     const nextNum = Math.max(...(this.data.leave_applications || []).map(a => parseInt(a.id.replace('LV', '')) || 0), 0) + 1;
     app.id = `LV${String(nextNum).padStart(3, '0')}`;
-    
+
+    // PRIORITY 2 — BACKEND VALIDATIONS:
+    // 1. PL minimum 2 days rule (half-day PL needs special approval, but minimum is still validated)
+    if (app.leave_type === 'PL' && (app.days || 0) < 2) {
+      throw new Error('Privilege Leave (PL) must be applied for a minimum of 2 days.');
+    }
+    // 2. Leave balance check
+    const emp = this.getEmployeeById(app.employee_id);
+    if (emp) {
+      const balanceKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
+      const currentBalance = Number(emp[balanceKey]) || 0;
+      if (currentBalance < (app.days || 0)) {
+        throw new Error(`Insufficient ${app.leave_type} balance. Available: ${currentBalance} day(s), Requested: ${app.days} day(s).`);
+      }
+    }
+
     // Find employee's reporting HOD
     const hod = this.resolveReportingHodForEmployee(app.employee_id);
     if (hod) {
@@ -3885,11 +3924,16 @@ export class PayrollDatabase {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
 
-    const isSuper = actorRole === 'SUPER_HR' || override;
-    const isHR = actorRole === 'COMPANY_HR' || isSuper;
+    // STRICT HIERARCHY ENFORCEMENT:
+    // Only the assigned HOD or SUPER_HR (without override flag from HR) can approve PENDING_HOD.
+    // COMPANY_HR CANNOT approve/reject PENDING_HOD leaves under any circumstances.
+    const isSuper = actorRole === 'SUPER_HR';
+    const isHR = actorRole === 'COMPANY_HR';
+    const isHod = actorRole === 'HOD';
 
     if (app.status === 'PENDING_HOD') {
-      if (actorRole === 'HOD' || isSuper) {
+      // ONLY HOD or SUPER_HR can act on PENDING_HOD leaves. HR is strictly blocked.
+      if (isHod || isSuper) {
         if (action === 'APPROVE') {
           app.status = 'PENDING_HR';
           app.hod_approved_date = new Date().toISOString();
@@ -3899,6 +3943,10 @@ export class PayrollDatabase {
           app.hod_approved_date = new Date().toISOString();
           app.hod_id = actorId || 'HOD';
         }
+      } else {
+        // HR or any other role trying to approve PENDING_HOD — BLOCKED
+        console.warn(`[LEAVE] BLOCKED: ${actorRole} (${actorId}) tried to ${action} leave ${id} which is PENDING_HOD`);
+        return false;
       }
     } else if (app.status === 'PENDING_HR') {
       if (isHR) {

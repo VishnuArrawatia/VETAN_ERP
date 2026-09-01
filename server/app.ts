@@ -1537,8 +1537,14 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  // DEPRECATED: Legacy leave status endpoint — all leave state transitions must use /api/leaves/workflow
   app.post('/api/leaves/status', async (req, res) => {
     const { id, status } = req.body;
+    // SECURITY: Only allow this endpoint for PENDING leaves that are NOT in workflow (no HOD assigned)
+    const leaveApp = (db.data.leave_applications || []).find((l: any) => l.id === id);
+    if (leaveApp && (leaveApp.status === 'PENDING_HOD' || leaveApp.status === 'PENDING_HR')) {
+      return res.status(403).json({ error: 'This leave is in the approval workflow. Use /api/leaves/workflow endpoint instead.' });
+    }
     const success = db.updateLeaveStatus(id, status);
     if (!success) {
       return res.status(404).json({ error: 'Leave request not found' });

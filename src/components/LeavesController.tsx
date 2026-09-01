@@ -353,19 +353,26 @@ export default function LeavesController({ employees, applications, attendance, 
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      {(app.status === 'PENDING' || app.status === 'PENDING_HR' || app.status === 'PENDING_HOD') ? (
+                      {/* PENDING_HOD: HR CANNOT approve/reject — only HOD acts via Employee ESS */}
+                      {app.status === 'PENDING_HOD' ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
+                            Awaiting HOD Approval
+                          </span>
+                        </div>
+                      ) : (app.status === 'PENDING_HR' || app.status === 'PENDING') ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <button 
                             onClick={() => handleStatusUpdate(app.id, 'APPROVED')}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg p-1.5 transition cursor-pointer"
-                            title={app.status === 'PENDING_HOD' ? "HR Override Approve" : "Approve leave"}
+                            title="Approve leave"
                           >
                             <Check size={13} />
                           </button>
                           <button 
                             onClick={() => handleStatusUpdate(app.id, 'REJECTED')}
                             className="bg-rose-500 hover:bg-rose-600 text-white rounded-lg p-1.5 transition cursor-pointer"
-                            title={app.status === 'PENDING_HOD' ? "HR Override Reject" : "Reject leave"}
+                            title="Reject leave"
                           >
                             <XCircle size={13} />
                           </button>

@@ -3746,6 +3746,28 @@ var PayrollDatabase = class _PayrollDatabase {
   // Leave Management operations
   getLeaveApplications(companyFilter) {
     let apps = this.data.leave_applications || [];
+    const now = Date.now();
+    const ESCALATION_MS = 48 * 60 * 60 * 1e3;
+    let escalated = false;
+    for (const app of apps) {
+      if (app.status === "PENDING_HOD" && app.applied_date) {
+        const appliedTime = new Date(app.applied_date).getTime();
+        if (now - appliedTime > ESCALATION_MS) {
+          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR \u2014 HOD did not act within 48 hours`);
+          app.status = "PENDING_HR";
+          app.escalated_reminder_sent = 1;
+          try {
+            this.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HR', escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
+          } catch (e) {
+            console.error("[LeaveEscalation] DB update error:", e?.message);
+          }
+          escalated = true;
+        }
+      }
+    }
+    if (escalated) {
+      this.persistData();
+    }
     if (companyFilter && companyFilter !== "ALL") {
       apps = apps.filter((a) => a.company === companyFilter);
     }
@@ -3754,6 +3776,17 @@ var PayrollDatabase = class _PayrollDatabase {
   addLeaveApplication(app) {
     const nextNum = Math.max(...(this.data.leave_applications || []).map((a) => parseInt(a.id.replace("LV", "")) || 0), 0) + 1;
     app.id = `LV${String(nextNum).padStart(3, "0")}`;
+    if (app.leave_type === "PL" && (app.days || 0) < 2) {
+      throw new Error("Privilege Leave (PL) must be applied for a minimum of 2 days.");
+    }
+    const emp = this.getEmployeeById(app.employee_id);
+    if (emp) {
+      const balanceKey = `leave_balance_${app.leave_type.toLowerCase()}`;
+      const currentBalance = Number(emp[balanceKey]) || 0;
+      if (currentBalance < (app.days || 0)) {
+        throw new Error(`Insufficient ${app.leave_type} balance. Available: ${currentBalance} day(s), Requested: ${app.days} day(s).`);
+      }
+    }
     const hod = this.resolveReportingHodForEmployee(app.employee_id);
     if (hod) {
       app.reporting_hod = hod.id;
@@ -3879,10 +3912,11 @@ var PayrollDatabase = class _PayrollDatabase {
   updateLeaveWorkflowStatus(id, actorRole, action, actorId, override) {
     const app = this.data.leave_applications?.find((a) => a.id === id);
     if (!app) return false;
-    const isSuper = actorRole === "SUPER_HR" || override;
-    const isHR = actorRole === "COMPANY_HR" || isSuper;
+    const isSuper = actorRole === "SUPER_HR";
+    const isHR = actorRole === "COMPANY_HR";
+    const isHod = actorRole === "HOD";
     if (app.status === "PENDING_HOD") {
-      if (actorRole === "HOD" || isSuper) {
+      if (isHod || isSuper) {
         if (action === "APPROVE") {
           app.status = "PENDING_HR";
           app.hod_approved_date = (/* @__PURE__ */ new Date()).toISOString();
@@ -3892,6 +3926,9 @@ var PayrollDatabase = class _PayrollDatabase {
           app.hod_approved_date = (/* @__PURE__ */ new Date()).toISOString();
           app.hod_id = actorId || "HOD";
         }
+      } else {
+        console.warn(`[LEAVE] BLOCKED: ${actorRole} (${actorId}) tried to ${action} leave ${id} which is PENDING_HOD`);
+        return false;
       }
     } else if (app.status === "PENDING_HR") {
       if (isHR) {
@@ -7896,6 +7933,10 @@ async function createApp(supabaseAdmin) {
   });
   app.post("/api/leaves/status", async (req, res) => {
     const { id, status } = req.body;
+    const leaveApp = (db.data.leave_applications || []).find((l) => l.id === id);
+    if (leaveApp && (leaveApp.status === "PENDING_HOD" || leaveApp.status === "PENDING_HR")) {
+      return res.status(403).json({ error: "This leave is in the approval workflow. Use /api/leaves/workflow endpoint instead." });
+    }
     const success = db.updateLeaveStatus(id, status);
     if (!success) {
       return res.status(404).json({ error: "Leave request not found" });
