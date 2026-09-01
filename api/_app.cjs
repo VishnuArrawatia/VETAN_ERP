@@ -35,7 +35,7 @@ __export(server_entry_exports, {
 module.exports = __toCommonJS(server_entry_exports);
 
 // server/app.ts
-var import_express = __toESM(require("../node_modules/express/index.js"), 1);
+var import_express = __toESM(require("express"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
 
@@ -536,7 +536,7 @@ var PayrollDatabase = class _PayrollDatabase {
     }
     let sqlite3Mod = null;
     try {
-      const imported = await import("../node_modules/sqlite3/lib/sqlite3.js");
+      const imported = await import("sqlite3");
       sqlite3Mod = imported.default || imported;
       sqlite3 = sqlite3Mod;
     } catch (err) {
@@ -8926,16 +8926,15 @@ HR Department`;
       "Company Name",
       "Department",
       "Designation",
-      "Basic Wage Rate",
       "Calendar Days",
       "Paid Days",
-      "Earned Basic",
-      "Earned HRA",
-      "Earned Education Allowance",
-      "Earned Medical Allowance",
-      "Earned Conveyance Allowance",
+      "Basic Salary",
+      "House Rent Allowance",
       "Special Allowance",
-      "Gross Salary Earned",
+      "Education Allowance",
+      "Medical Allowance",
+      "Conveyance Allowance",
+      "Total Earnings",
       "Loss of Pay (LOP) Deduction",
       "Employee Provident Fund (EPF)",
       "ESIC Deduction",
@@ -8945,6 +8944,7 @@ HR Department`;
       "Net Salary Disbursed",
       "Employer PF Share",
       "Employer ESIC Share",
+      "Bonus",
       "Bank Name",
       "Bank Account Number",
       "Bank IFSC Code"
@@ -8952,6 +8952,8 @@ HR Department`;
     const lines = [headers.join(",")];
     for (const s of slips) {
       const emp = db.getEmployeeById(s.employee_id);
+      const fullMonthGross = (s.rate_base_salary || 0) + (s.rate_hra || 0) + (s.rate_special_allowance || 0) + (s.rate_edu_allowance || 0) + (s.rate_medical_allowance || 0) + (s.rate_conveyance_allowance || 0);
+      const totalDedWithLop = (s.total_deductions || 0) + (s.lop_deduction || 0);
       const row = [
         s.id,
         s.employee_id,
@@ -8962,22 +8964,22 @@ HR Department`;
         s.calendar_days || 30,
         s.pay_days ?? "-",
         s.rate_base_salary,
-        s.earned_base_salary,
-        s.earned_hra,
-        s.earned_edu_allowance || 0,
-        s.earned_medical_allowance || 0,
-        s.earned_conveyance_allowance || 0,
-        s.earned_special_allowance,
-        s.gross_salary,
+        s.rate_hra || 0,
+        s.rate_special_allowance || 0,
+        s.rate_edu_allowance || 0,
+        s.rate_medical_allowance || 0,
+        s.rate_conveyance_allowance || 0,
+        fullMonthGross,
         s.lop_deduction,
         s.pf_deduction,
         s.esic_deduction,
         s.professional_tax,
         s.tds,
-        s.total_deductions,
+        totalDedWithLop,
         s.net_salary,
         s.employer_pf,
         s.employer_esic,
+        s.earned_bonus_payable || s.rate_bonus_payable || 0,
         `"${s.bank_name}"`,
         `"${s.bank_account}"`,
         `"${s.ifsc}"`

@@ -91,13 +91,13 @@ export default function PayrollRegister({
       });
 
       const empCount = unitSlips.length;
-      const basicSalary = unitSlips.reduce((sum, s) => sum + (s.earned_base_salary || 0), 0);
-      const hra = unitSlips.reduce((sum, s) => sum + (s.earned_hra || 0), 0);
-      const eduAllowance = unitSlips.reduce((sum, s) => sum + (s.earned_edu_allowance || 0), 0);
-      const medicalAllowance = unitSlips.reduce((sum, s) => sum + (s.earned_medical_allowance || 0), 0);
-      const conveyanceAllowance = unitSlips.reduce((sum, s) => sum + (s.earned_conveyance_allowance || 0), 0);
-      const specialAllowance = unitSlips.reduce((sum, s) => sum + (s.earned_special_allowance || 0), 0);
-      const grossSalary = unitSlips.reduce((sum, s) => sum + (s.gross_salary || 0), 0);
+      const basicSalary = unitSlips.reduce((sum, s) => sum + (s.rate_base_salary || s.earned_base_salary || 0), 0);
+      const hra = unitSlips.reduce((sum, s) => sum + (s.rate_hra || s.earned_hra || 0), 0);
+      const eduAllowance = unitSlips.reduce((sum, s) => sum + (s.rate_edu_allowance || s.earned_edu_allowance || 0), 0);
+      const medicalAllowance = unitSlips.reduce((sum, s) => sum + (s.rate_medical_allowance || s.earned_medical_allowance || 0), 0);
+      const conveyanceAllowance = unitSlips.reduce((sum, s) => sum + (s.rate_conveyance_allowance || s.earned_conveyance_allowance || 0), 0);
+      const specialAllowance = unitSlips.reduce((sum, s) => sum + (s.rate_special_allowance || s.earned_special_allowance || 0), 0);
+      const grossSalary = unitSlips.reduce((sum, s) => sum + ((s.rate_base_salary || 0) + (s.rate_hra || 0) + (s.rate_special_allowance || 0) + (s.rate_edu_allowance || 0) + (s.rate_medical_allowance || 0) + (s.rate_conveyance_allowance || 0)), 0);
 
       const eePf = unitSlips.reduce((sum, s) => sum + (s.pf_deduction || 0), 0);
       const erPf = unitSlips.reduce((sum, s) => sum + (s.employer_pf || 0), 0);
@@ -839,30 +839,30 @@ export default function PayrollRegister({
                       {s.pay_days ?? '-'}
                     </td>
                     <td className="p-4.5 text-right font-mono text-xs text-gray-700 font-medium">
-                      ₹{s.earned_base_salary.toLocaleString('en-IN')}
+                      ₹{(s.rate_base_salary || s.earned_base_salary).toLocaleString('en-IN')}
                     </td>
                     <td className="p-4.5 text-right">
                       <div>
                         <span className="text-xs text-gray-600 block font-sans">
                           ₹{(
-                            s.earned_hra +
-                            s.earned_special_allowance +
-                            (s.earned_edu_allowance || 0) +
-                            (s.earned_medical_allowance || 0) +
-                            (s.earned_conveyance_allowance || 0)
+                            (s.rate_hra || s.earned_hra) +
+                            (s.rate_special_allowance || s.earned_special_allowance) +
+                            (s.rate_edu_allowance || s.earned_edu_allowance || 0) +
+                            (s.rate_medical_allowance || s.earned_medical_allowance || 0) +
+                            (s.rate_conveyance_allowance || s.earned_conveyance_allowance || 0)
                           ).toLocaleString('en-IN')}
                         </span>
                         <span className="text-[9px] text-gray-400 block font-mono">
-                          HRA: {s.earned_hra.toLocaleString('en-IN')}
-                          {s.earned_edu_allowance ? ` | Edu: ${s.earned_edu_allowance.toLocaleString('en-IN')}` : ''}
-                          {s.earned_medical_allowance ? ` | Med: ${s.earned_medical_allowance.toLocaleString('en-IN')}` : ''}
-                          {s.earned_conveyance_allowance ? ` | Conv: ${s.earned_conveyance_allowance.toLocaleString('en-IN')}` : ''}
-                          {s.earned_special_allowance ? ` | Spl: ${s.earned_special_allowance.toLocaleString('en-IN')}` : ''}
+                          HRA: {(s.rate_hra || s.earned_hra).toLocaleString('en-IN')}
+                          {(s.rate_edu_allowance || s.earned_edu_allowance) ? ` | Edu: ${(s.rate_edu_allowance || s.earned_edu_allowance || 0).toLocaleString('en-IN')}` : ''}
+                          {(s.rate_medical_allowance || s.earned_medical_allowance) ? ` | Med: ${(s.rate_medical_allowance || s.earned_medical_allowance || 0).toLocaleString('en-IN')}` : ''}
+                          {(s.rate_conveyance_allowance || s.earned_conveyance_allowance) ? ` | Conv: ${(s.rate_conveyance_allowance || s.earned_conveyance_allowance || 0).toLocaleString('en-IN')}` : ''}
+                          {(s.rate_special_allowance || s.earned_special_allowance) ? ` | Spl: ${(s.rate_special_allowance || s.earned_special_allowance).toLocaleString('en-IN')}` : ''}
                         </span>
                       </div>
                     </td>
                     <td className="p-4.5 text-right font-mono text-xs text-slate-800 font-semibold">
-                      ₹{s.gross_salary.toLocaleString('en-IN')}
+                      ₹{((s.rate_base_salary || 0) + (s.rate_hra || 0) + (s.rate_special_allowance || 0) + (s.rate_edu_allowance || 0) + (s.rate_medical_allowance || 0) + (s.rate_conveyance_allowance || 0)).toLocaleString('en-IN')}
                     </td>
                     <td className="p-4.5">
                       <div className="text-center font-mono">
@@ -1106,42 +1106,40 @@ export default function PayrollRegister({
                         </tr>
                       </tbody>
                     </table>
-                  </div>
-
-                  {/* Earnings deduces block */}
+                  </div>                    {/* Earnings deduces block */}
                   <div className="grid grid-cols-2 gap-x-6 border-t border-b border-gray-100 py-4 font-sans text-xs">
                     
-                    {/* Earnings column */}
+                    {/* Earnings column — show FULL MONTH rate heads (not prorated) */}
                     <div className="space-y-2">                        <span className="font-bold text-gray-900 border-b pb-1 block uppercase tracking-wider text-[10px]">Earnings</span>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Basic Salary:</span>
-                        <span className="font-mono">₹{activeSlip.earned_base_salary.toLocaleString('en-IN')}</span>
+                        <span className="font-mono">₹{(activeSlip.rate_base_salary || activeSlip.earned_base_salary).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">HRA:</span>
-                        <span className="font-mono">₹{activeSlip.earned_hra.toLocaleString('en-IN')}</span>
+                        <span className="font-mono">₹{(activeSlip.rate_hra || activeSlip.earned_hra).toLocaleString('en-IN')}</span>
                       </div>
 
                       <div className="flex justify-between">
                         <span className="text-gray-500">Special Allowance:</span>
-                        <span className="font-mono">₹{activeSlip.earned_special_allowance.toLocaleString('en-IN')}</span>
+                        <span className="font-mono">₹{(activeSlip.rate_special_allowance || activeSlip.earned_special_allowance).toLocaleString('en-IN')}</span>
                       </div>
-                      {activeSlip.earned_edu_allowance !== undefined && activeSlip.earned_edu_allowance > 0 && (
+                      {(activeSlip.rate_edu_allowance || activeSlip.earned_edu_allowance) > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Children Education Allowance:</span>
-                          <span className="font-mono">₹{activeSlip.earned_edu_allowance.toLocaleString('en-IN')}</span>
+                          <span className="font-mono">₹{(activeSlip.rate_edu_allowance || activeSlip.earned_edu_allowance || 0).toLocaleString('en-IN')}</span>
                         </div>
                       )}
-                      {activeSlip.earned_medical_allowance !== undefined && activeSlip.earned_medical_allowance > 0 && (
+                      {(activeSlip.rate_medical_allowance || activeSlip.earned_medical_allowance) > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Medical Allowance:</span>
-                          <span className="font-mono">₹{activeSlip.earned_medical_allowance.toLocaleString('en-IN')}</span>
+                          <span className="font-mono">₹{(activeSlip.rate_medical_allowance || activeSlip.earned_medical_allowance || 0).toLocaleString('en-IN')}</span>
                         </div>
                       )}
-                      {activeSlip.earned_conveyance_allowance !== undefined && activeSlip.earned_conveyance_allowance > 0 && (
+                      {(activeSlip.rate_conveyance_allowance || activeSlip.earned_conveyance_allowance) > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-500">Conveyance Allowance:</span>
-                          <span className="font-mono">₹{activeSlip.earned_conveyance_allowance.toLocaleString('en-IN')}</span>
+                          <span className="font-mono">₹{(activeSlip.rate_conveyance_allowance || activeSlip.earned_conveyance_allowance || 0).toLocaleString('en-IN')}</span>
                         </div>
                       )}
 
@@ -1220,6 +1218,12 @@ export default function PayrollRegister({
                         </div>
                       ) : (
                         <div className="space-y-2">
+                          {activeSlip.lop_deduction > 0 && (
+                            <div className="flex justify-between items-center h-7">
+                              <span className="text-gray-500">Loss of Pay (LOP):</span>
+                              <span className="font-mono text-rose-600">₹{activeSlip.lop_deduction.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between items-center h-7">
                             <span className="text-gray-500">Employee PF:</span>
                             <span className="font-mono">₹{activeSlip.pf_deduction.toLocaleString('en-IN')}</span>
@@ -1261,16 +1265,22 @@ export default function PayrollRegister({
                   </div>
 
                   {/* Sub totals */}
-                  <div className="grid grid-cols-2 gap-x-6 text-xs font-bold pt-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-900">GROSS SALARY:</span>
-                      <span className="font-mono text-gray-900">₹{activeSlip.gross_salary.toLocaleString('en-IN')}</span>
-                    </div>
-                    <div className="flex justify-between pl-6 border-l">
-                      <span className="text-gray-900">TOTAL DEDUCTIONS:</span>
-                      <span className="font-mono text-rose-600">₹{liveTotalDeductions.toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const fullMonthGross = (activeSlip.rate_base_salary || 0) + (activeSlip.rate_hra || 0) + (activeSlip.rate_special_allowance || 0) + (activeSlip.rate_edu_allowance || 0) + (activeSlip.rate_medical_allowance || 0) + (activeSlip.rate_conveyance_allowance || 0);
+                    const totalDedWithLop = liveTotalDeductions + (activeSlip.lop_deduction || 0);
+                    return (
+                      <div className="grid grid-cols-2 gap-x-6 text-xs font-bold pt-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-900">GROSS SALARY:</span>
+                          <span className="font-mono text-gray-900">₹{fullMonthGross.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between pl-6 border-l">
+                          <span className="text-gray-900">TOTAL DEDUCTIONS:</span>
+                          <span className="font-mono text-rose-600">₹{totalDedWithLop.toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Net Final transfers highlight */}
                   <div className="bg-emerald-50 p-4.5 rounded-xl border border-emerald-100 flex justify-between items-center text-emerald-900">
