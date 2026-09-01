@@ -1274,7 +1274,10 @@ var PayrollDatabase = class _PayrollDatabase {
       hr_approved_date TEXT,
       hod_id TEXT,
       hr_id TEXT,
-      escalated_reminder_sent INTEGER DEFAULT 0
+      escalated_reminder_sent INTEGER DEFAULT 0,
+      hr_override INTEGER DEFAULT 0,
+      hr_override_by TEXT,
+      hr_override_date TEXT
     )`, () => {
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN applied_date TEXT`, () => {
       });
@@ -1291,6 +1294,12 @@ var PayrollDatabase = class _PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_id TEXT`, () => {
       });
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN escalated_reminder_sent INTEGER DEFAULT 0`, () => {
+      });
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override INTEGER DEFAULT 0`, () => {
+      });
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override_by TEXT`, () => {
+      });
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override_date TEXT`, () => {
       });
     });
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS attendance_corrections (
@@ -3787,13 +3796,19 @@ var PayrollDatabase = class _PayrollDatabase {
         throw new Error(`Insufficient ${app.leave_type} balance. Available: ${currentBalance} day(s), Requested: ${app.days} day(s).`);
       }
     }
-    const hod = this.resolveReportingHodForEmployee(app.employee_id);
-    if (hod) {
-      app.reporting_hod = hod.id;
-      app.reporting_hod_name = hod.name;
-      app.status = "PENDING_HOD";
-    } else {
+    const isApplicantHod = emp && (emp.is_hod || emp.can_approve_leave);
+    if (isApplicantHod) {
       app.status = "PENDING_HR";
+      console.log(`[LEAVE] HOD employee ${emp.id} (${emp.name}) \u2014 skipping HOD stage, routing directly to PENDING_HR`);
+    } else {
+      const hod = this.resolveReportingHodForEmployee(app.employee_id);
+      if (hod) {
+        app.reporting_hod = hod.id;
+        app.reporting_hod_name = hod.name;
+        app.status = "PENDING_HOD";
+      } else {
+        app.status = "PENDING_HR";
+      }
     }
     app.applied_date = (/* @__PURE__ */ new Date()).toISOString();
     if (!this.data.leave_applications) this.data.leave_applications = [];
@@ -3926,6 +3941,14 @@ var PayrollDatabase = class _PayrollDatabase {
           app.hod_approved_date = (/* @__PURE__ */ new Date()).toISOString();
           app.hod_id = actorId || "HOD";
         }
+      } else if (isHR && action === "APPROVE") {
+        console.log(`[LEAVE-HR-OVERRIDE] HR (${actorId}) overriding HOD approval for leave ${id} (${app.employee_name})`);
+        app.status = "PENDING_HR";
+        app.hr_override = true;
+        app.hr_override_by = actorId || "HR";
+        app.hr_override_date = (/* @__PURE__ */ new Date()).toISOString();
+        app.hod_approved_date = app.hr_override_date;
+        app.hod_id = `OVERRIDE_BY_${actorId || "HR"}`;
       } else {
         console.warn(`[LEAVE] BLOCKED: ${actorRole} (${actorId}) tried to ${action} leave ${id} which is PENDING_HOD`);
         return false;
@@ -3970,8 +3993,8 @@ var PayrollDatabase = class _PayrollDatabase {
       }
     }
     this.dbSqlite.run(
-      `UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
-      [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, id]
+      `UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ?, hr_override = ?, hr_override_by = ?, hr_override_date = ? WHERE id = ?`,
+      [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, app.hr_override ? 1 : 0, app.hr_override_by || null, app.hr_override_date || null, id]
     );
     this.persistData();
     return true;
@@ -6200,7 +6223,7 @@ Sakar & SVN Group`;
       if (backupData.leave_applications && Array.isArray(backupData.leave_applications)) {
         for (const l of backupData.leave_applications) {
           await runSql(
-            `INSERT OR REPLACE INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, applied_date, status, reporting_hod, reporting_hod_name, hod_approved_date, hr_approved_date, hod_id, hr_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR REPLACE INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, applied_date, status, reporting_hod, reporting_hod_name, hod_approved_date, hr_approved_date, hod_id, hr_id, hr_override, hr_override_by, hr_override_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               l.id,
               l.employee_id,
@@ -6218,7 +6241,10 @@ Sakar & SVN Group`;
               l.hod_approved_date || null,
               l.hr_approved_date || null,
               l.hod_id || null,
-              l.hr_id || null
+              l.hr_id || null,
+              l.hr_override ? 1 : 0,
+              l.hr_override_by || null,
+              l.hr_override_date || null
             ]
           );
         }

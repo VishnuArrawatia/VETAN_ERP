@@ -121,6 +121,38 @@ export default function LeavesController({ employees, applications, attendance, 
     await onUpdateStatus(id, status);
   };
 
+  // HR OVERRIDE: Emergency bypass when HOD is unresponsive. Audit trail logged server-side.
+  const handleHrOverride = async (id: string, action: 'APPROVED' | 'REJECTED') => {
+    const confirmed = window.confirm(
+      '⚠️ HR OVERRIDE WARNING:\n\nYou are about to bypass the HOD approval step.\nThis action is permanently logged in the audit trail.\n\nProceed with HR Override?'
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch('/api/leaves/workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          actorRole: 'COMPANY_HR',
+          action: 'APPROVE',
+          actorId: 'HR',
+          override: true
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShareSuccess('HR Override applied successfully. Leave moved to HR approval queue.');
+        setTimeout(() => setShareSuccess(''), 4000);
+        // Refresh the leave list
+        window.location.reload();
+      } else {
+        alert(data.error || 'Override failed');
+      }
+    } catch (e) {
+      alert('Error applying HR override');
+    }
+  };
+
   const triggerShareAlert = (method: 'WHATSAPP' | 'EMAIL', targetName: string) => {
     setShareSuccess(`Shared leave update successfully with employee ${targetName} via direct ${method}!`);
     setTimeout(() => {
@@ -325,10 +357,17 @@ export default function LeavesController({ employees, applications, attendance, 
                     <td className="p-4">
                       <div className="flex">
                         {app.status === 'APPROVED' ? (
-                          <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                            <CheckCircle size={12} />
-                            Approved
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                              <CheckCircle size={12} />
+                              Approved
+                            </span>
+                            {(app as any).hr_override && (
+                              <span className="text-[9px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase" title={`HR Override by ${(app as any).hr_override_by} on ${(app as any).hr_override_date}`}>
+                                HR Override (HOD Bypassed)
+                              </span>
+                            )}
+                          </div>
                         ) : (app.status === 'REJECTED' || app.status === 'REJECTED_HR' || app.status === 'REJECTED_HOD') ? (
                           <span className="flex items-center gap-1.5 text-xs text-rose-500 font-semibold bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">
                             <XCircle size={12} />
@@ -353,12 +392,20 @@ export default function LeavesController({ employees, applications, attendance, 
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      {/* PENDING_HOD: HR CANNOT approve/reject — only HOD acts via Employee ESS */}
+                      {/* PENDING_HOD: HOD approval expected. HR can override in emergency. */}
                       {app.status === 'PENDING_HOD' ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                            Awaiting HOD Approval
+                            Awaiting HOD
                           </span>
+                          <button 
+                            onClick={() => handleHrOverride(app.id, 'APPROVED')}
+                            className="bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-2 py-1 text-[9px] font-bold transition cursor-pointer flex items-center gap-1"
+                            title="Emergency HR Override — bypass HOD (audit logged)"
+                          >
+                            <Check size={11} />
+                            HR Override
+                          </button>
                         </div>
                       ) : (app.status === 'PENDING_HR' || app.status === 'PENDING') ? (
                         <div className="flex items-center justify-end gap-1.5">

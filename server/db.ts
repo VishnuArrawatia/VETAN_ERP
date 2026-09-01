@@ -1284,7 +1284,10 @@ export class PayrollDatabase {
       hr_approved_date TEXT,
       hod_id TEXT,
       hr_id TEXT,
-      escalated_reminder_sent INTEGER DEFAULT 0
+      escalated_reminder_sent INTEGER DEFAULT 0,
+      hr_override INTEGER DEFAULT 0,
+      hr_override_by TEXT,
+      hr_override_date TEXT
     )`, () => {
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN applied_date TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN reporting_hod TEXT`, () => {});
@@ -1294,6 +1297,9 @@ export class PayrollDatabase {
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hod_id TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_id TEXT`, () => {});
       this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN escalated_reminder_sent INTEGER DEFAULT 0`, () => {});
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override INTEGER DEFAULT 0`, () => {});
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override_by TEXT`, () => {});
+      this.dbSqlite.run(`ALTER TABLE leave_applications ADD COLUMN hr_override_date TEXT`, () => {});
     });
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS attendance_corrections (
@@ -3789,14 +3795,22 @@ export class PayrollDatabase {
       }
     }
 
-    // Find employee's reporting HOD
-    const hod = this.resolveReportingHodForEmployee(app.employee_id);
-    if (hod) {
-      app.reporting_hod = hod.id;
-      app.reporting_hod_name = hod.name;
-      app.status = 'PENDING_HOD';
+    // HOD ROUTING LOGIC:
+    // If the applicant IS an HOD, skip PENDING_HOD and go directly to PENDING_HR.
+    // Only regular employees go through HOD approval.
+    const isApplicantHod = emp && (emp.is_hod || emp.can_approve_leave);
+    if (isApplicantHod) {
+      app.status = 'PENDING_HR'; // HOD goes directly to HR — no HOD approval needed
+      console.log(`[LEAVE] HOD employee ${emp.id} (${emp.name}) — skipping HOD stage, routing directly to PENDING_HR`);
     } else {
-      app.status = 'PENDING_HR'; // Directly route to HR if no HOD assigned
+      const hod = this.resolveReportingHodForEmployee(app.employee_id);
+      if (hod) {
+        app.reporting_hod = hod.id;
+        app.reporting_hod_name = hod.name;
+        app.status = 'PENDING_HOD';
+      } else {
+        app.status = 'PENDING_HR'; // No HOD assigned — route directly to HR
+      }
     }
     app.applied_date = new Date().toISOString();
     
@@ -3932,8 +3946,8 @@ export class PayrollDatabase {
     const isHod = actorRole === 'HOD';
 
     if (app.status === 'PENDING_HOD') {
-      // ONLY HOD or SUPER_HR can act on PENDING_HOD leaves. HR is strictly blocked.
       if (isHod || isSuper) {
+        // Standard HOD approval — moves to PENDING_HR
         if (action === 'APPROVE') {
           app.status = 'PENDING_HR';
           app.hod_approved_date = new Date().toISOString();
@@ -3943,8 +3957,19 @@ export class PayrollDatabase {
           app.hod_approved_date = new Date().toISOString();
           app.hod_id = actorId || 'HOD';
         }
+      } else if (isHR && action === 'APPROVE') {
+        // EMERGENCY HR OVERRIDE: HR can bypass HOD when HOD is unresponsive.
+        // Audit trail: hr_override flag + timestamp + who did it.
+        console.log(`[LEAVE-HR-OVERRIDE] HR (${actorId}) overriding HOD approval for leave ${id} (${app.employee_name})`);
+        app.status = 'PENDING_HR';
+        app.hr_override = true;
+        app.hr_override_by = actorId || 'HR';
+        app.hr_override_date = new Date().toISOString();
+        // Also mark as HOD-approved with override timestamp so it flows to final HR approval
+        app.hod_approved_date = app.hr_override_date;
+        app.hod_id = `OVERRIDE_BY_${actorId || 'HR'}`;
       } else {
-        // HR or any other role trying to approve PENDING_HOD — BLOCKED
+        // HR trying to REJECT at PENDING_HOD — not allowed, must wait for HOD
         console.warn(`[LEAVE] BLOCKED: ${actorRole} (${actorId}) tried to ${action} leave ${id} which is PENDING_HOD`);
         return false;
       }
@@ -3988,8 +4013,8 @@ export class PayrollDatabase {
       }
     }
 
-    this.dbSqlite.run(`UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
-      [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, id]
+    this.dbSqlite.run(`UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ?, hr_override = ?, hr_override_by = ?, hr_override_date = ? WHERE id = ?`,
+      [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, app.hr_override ? 1 : 0, app.hr_override_by || null, app.hr_override_date || null, id]
     );
     this.persistData();
     return true;
@@ -6307,11 +6332,11 @@ Sakar & SVN Group`;
     if (backupData.leave_applications && Array.isArray(backupData.leave_applications)) {
       for (const l of backupData.leave_applications) {
         await runSql(
-          `INSERT OR REPLACE INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, applied_date, status, reporting_hod, reporting_hod_name, hod_approved_date, hr_approved_date, hod_id, hr_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT OR REPLACE INTO leave_applications (id, employee_id, employee_name, company, leave_type, start_date, end_date, days, reason, applied_date, status, reporting_hod, reporting_hod_name, hod_approved_date, hr_approved_date, hod_id, hr_id, hr_override, hr_override_by, hr_override_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             l.id, l.employee_id, l.employee_name, l.company, l.leave_type, l.start_date, l.end_date, l.days, l.reason, l.applied_date,
             l.status, l.reporting_hod || null, l.reporting_hod_name || null, l.hod_approved_date || null, l.hr_approved_date || null,
-            l.hod_id || null, l.hr_id || null
+            l.hod_id || null, l.hr_id || null, l.hr_override ? 1 : 0, l.hr_override_by || null, l.hr_override_date || null
           ]
         );
       }
