@@ -6131,13 +6131,17 @@ Sakar & SVN Group`;
 
         const remoteUpdatedAt = row.updated_at || '';
 
-        // FIX 3: Don't reload if we just persisted newer data locally
+        // CRITICAL FIX: On cold start (lastPersistedAt is empty), ALWAYS load from Supabase
+        // Don't skip based on timestamps — seed data may be outdated
+        // Only skip reload during warm starts if we just persisted newer data
         if (this.lastPersistedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastPersistedAt) {
-          console.log(`[Supabase] reloadFromSupabase SKIPPED — remote (${remoteUpdatedAt}) <= last persisted (${this.lastPersistedAt})`);
+          console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) — remote (${remoteUpdatedAt}) <= last persisted (${this.lastPersistedAt})`);
           return;
         }
-        if (this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
-          console.log(`[Supabase] reloadFromSupabase SKIPPED — remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
+        // During warm start, only skip if remote is genuinely older than what we have in memory
+        // But on cold start (lastPersistedAt empty), ALWAYS load from Supabase
+        if (this.lastPersistedAt && this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
+          console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) — remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
           return;
         }
 

@@ -12,14 +12,20 @@ let dbRef: any = null;
 
 async function ensureInit(httpMethod?: string) {
   if (app) {
-    // FIX: Always reload from Supabase to ensure fresh data (loans, attendance, etc.)
+    // CRITICAL FIX: On EVERY cold start or stale instance, reload from Supabase
+    // The seed data may contain outdated employee records
+    // Only skip reload if we JUST persisted data (lastPersistedAt < 5 seconds ago)
     if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
-      const employeesCount = (dbRef.data?.employees || []).length;
-      const loansCount = (dbRef.data?.loans || []).length;
-      const needsReload = loansCount === 0 || employeesCount === 0;
-      if (needsReload) {
+      const lastPersisted = dbRef.lastPersistedAt || '';
+      const now = new Date().toISOString();
+      const secondsSincePersist = lastPersisted ? 
+        (new Date(now).getTime() - new Date(lastPersisted).getTime()) / 1000 : Infinity;
+      
+      // Always reload if: first request after cold start OR data seems stale
+      if (!dbRef._didReloadAfterColdStart || secondsSincePersist > 30) {
         try {
           await dbRef.reloadFromSupabase();
+          dbRef._didReloadAfterColdStart = true;
           console.log('[Vercel] Reloaded from Supabase — employees:', (dbRef.data?.employees || []).length, 'loans:', (dbRef.data?.loans || []).length);
         } catch (e: any) {
           console.error('[Vercel] reloadFromSupabase failed:', e?.message);
@@ -56,6 +62,19 @@ async function ensureInit(httpMethod?: string) {
 
     app = await createApp(supabaseAdmin);
     dbRef = typeof getAppDb === 'function' ? getAppDb() : null;
+    
+    // CRITICAL: Reload from Supabase immediately on cold start
+    // Don't trust seed data — Supabase is the source of truth
+    if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
+      try {
+        await dbRef.reloadFromSupabase();
+        dbRef._didReloadAfterColdStart = true;
+        console.log('[Vercel] Cold start reload — employees:', (dbRef.data?.employees || []).length, 'loans:', (dbRef.data?.loans || []).length);
+      } catch (e: any) {
+        console.error('[Vercel] Cold start reload FAILED:', e?.message);
+      }
+    }
+    
     console.log('[Vercel] Express app initialized with all ERP routes.');
   } catch (err: any) {
     console.error('[Vercel] FATAL: Failed to initialize Express app:', err?.message || String(err));
@@ -100,6 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         if (dbRef && typeof dbRef.deleteSalaryRevision === 'function') {
           dbRef.deleteSalaryRevision(body.id);
+          if (typeof dbRef.persistDataSync === 'function') await dbRef.persistDataSync();
           return res.json({ success: true, action: 'deleted' });
         }
       } catch (e: any) {
@@ -117,6 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             reason: body.reason,
             remarks: body.remarks,
           });
+          if (typeof dbRef.persistDataSync === 'function') await dbRef.persistDataSync();
           return res.json({ success: true, action: 'updated' });
         }
       } catch (e: any) {
@@ -135,8 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!run) return res.status(404).json({ error: 'Payroll run not found' });
           run.status = 'DRAFT';
           if (dbRef.dbSqlite) dbRef.dbSqlite.run(`UPDATE payroll_runs SET status = 'DRAFT' WHERE id = ?`, [run.id]);
-          if (typeof dbRef.persistData === 'function') dbRef.persistData();
-          if (typeof dbRef.flushPendingWrites === 'function') await dbRef.flushPendingWrites();
+          if (typeof dbRef.persistDataSync === 'function') await dbRef.persistDataSync();
           return res.json({ success: true, action: 'unlocked' });
         }
       } catch (e: any) {

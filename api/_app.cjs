@@ -30212,11 +30212,11 @@ Sakar & SVN Group`;
         }
         const remoteUpdatedAt = row.updated_at || "";
         if (this.lastPersistedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastPersistedAt) {
-          console.log(`[Supabase] reloadFromSupabase SKIPPED \u2014 remote (${remoteUpdatedAt}) <= last persisted (${this.lastPersistedAt})`);
+          console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) \u2014 remote (${remoteUpdatedAt}) <= last persisted (${this.lastPersistedAt})`);
           return;
         }
-        if (this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
-          console.log(`[Supabase] reloadFromSupabase SKIPPED \u2014 remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
+        if (this.lastPersistedAt && this.lastLoadedAt && remoteUpdatedAt && remoteUpdatedAt <= this.lastLoadedAt) {
+          console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) \u2014 remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
           return;
         }
         this.data = { ...this.data, ...row.payload };
