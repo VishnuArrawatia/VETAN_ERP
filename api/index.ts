@@ -85,6 +85,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     req.url = matchedPath;
   }
 
+  // Health check — keep-warm cron target (no DB needed)
+  if (req.url === '/api/health' || req.url === '/health') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  }
+
   try {
     await ensureInit(req.method);
   } catch (err: any) {
