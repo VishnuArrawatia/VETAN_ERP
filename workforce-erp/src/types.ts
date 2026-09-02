@@ -20,6 +20,18 @@ export interface ContractorRec {
   tdsRate: number;
 }
 
+export interface WageRevision {
+  id: string;
+  workerId: string;
+  effectiveFrom: string; // month key e.g. "2026-08"
+  rateBasic: number;
+  rateHra: number;
+  rateOther: number;
+  rateDay: number;
+  reason?: string;
+  createdAt: string;
+}
+
 export interface WorkerRec {
   id: string;
   code: string;
@@ -44,6 +56,7 @@ export interface WorkerRec {
   pf: boolean;
   esic: boolean;
   active: boolean;
+  revisions?: WageRevision[];
 }
 
 export interface AttendanceRec {

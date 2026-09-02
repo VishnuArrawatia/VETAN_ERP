@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Printer } from 'lucide-react';
-import { useStore, unitName, companyName } from '../lib/store';
+import { useStore, unitName, companyName, effRates } from '../lib/store';
 import { calcPayroll, totals } from '../lib/payroll';
 import { monthLabel, monthDays, fmtINR, fmtINR2 } from '../lib/months';
 import { WorkerRec } from '../types';
@@ -88,7 +88,7 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
           {rows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                <Td>Total</Td><Td colSpan={2}>{rows.length} workers</Td>
+                <Td>Total</Td><td colSpan={2} className="px-3 py-2.5 text-sm text-left">{rows.length} workers</td>
                 <Td right className="tabular-nums">{total.payDays}</Td>
                 <Td right /><Td right className="tabular-nums">₹{fmtINR(total.basic)}</Td>
                 <Td right /><Td right />
@@ -122,6 +122,7 @@ function PayslipModal({
 }) {
   const { state } = useStore();
   const company = companyName(state, worker.companyId);
+  const rt = effRates(state, worker, monthKey);
   return (
     <Modal title="Payslip" open onClose={onClose} wide>
       <div className="print-area rounded-xl border border-slate-200 p-6 space-y-4">
@@ -178,7 +179,7 @@ function PayslipModal({
           <span className="text-xl font-extrabold text-emerald-700 tabular-nums">₹{fmtINR2(net)}</span>
         </div>
         <div className="text-[11px] text-slate-400">
-          Rate/day ₹{fmtINR(worker.rateDay)} (Basic ₹{fmtINR(worker.rateBasic)} + HRA ₹{fmtINR(worker.rateHra)} + Other ₹{fmtINR(worker.rateOther)}) · Bank: {worker.bank || '—'} {worker.ac || ''}
+          Effective rate/day ₹{fmtINR(rt.rateDay)} (Basic ₹{fmtINR(rt.rateBasic)} + HRA ₹{fmtINR(rt.rateHra)} + Other ₹{fmtINR(rt.rateOther)}) · Bank: {worker.bank || '—'} {worker.ac || ''}
         </div>
       </div>
       <div className="mt-4 flex justify-end gap-2 no-print">

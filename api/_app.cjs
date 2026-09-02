@@ -34475,9 +34475,6 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString(), db: !!db });
-  });
   app.locals = app.locals || {};
   app.locals.db = db;
   return app;

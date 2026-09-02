@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
-import { useStore, unitName, contractorName, addWorker, updateWorker } from '../lib/store';
+import { Plus, Pencil, Trash2, Search, History } from 'lucide-react';
+import { useStore, unitName, contractorName, addWorker, updateWorker, addWageRevision } from '../lib/store';
 import { WorkerRec, AppState } from '../types';
-import { fmtINR } from '../lib/months';
-import { Card, Btn, Input, Select, Badge, Modal, Empty, Th, Td, Table } from './ui';
+import { fmtINR, monthLabel, MONTHS } from '../lib/months';
+import { Card, CardHeader, Btn, Input, Select, Badge, Modal, Empty, Th, Td, Table } from './ui';
 
 export default function Workers() {
   const { state, set } = useStore();
@@ -11,6 +11,7 @@ export default function Workers() {
   const [unit, setUnit] = useState('all');
   const [mode, setMode] = useState('all');
   const [editId, setEditId] = useState<string | null>(null);
+  const [revId, setRevId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
   const filtered = state.workers.filter((w) => {
@@ -90,6 +91,9 @@ export default function Workers() {
                 <Td>{w.esic ? <Badge tone="green">ESIC</Badge> : <span className="text-xs text-slate-300">—</span>}</Td>
                 <Td>
                   <div className="flex gap-1">
+                    <button onClick={() => setRevId(w.id)} className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100" title="Wage Revisions">
+                      <History size={14} />
+                    </button>
                     <button onClick={() => setEditId(w.id)} className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-slate-100" title="Edit">
                       <Pencil size={14} />
                     </button>
@@ -172,6 +176,13 @@ export default function Workers() {
             setEditId(null);
           }}
           onClose={() => setEditId(null)}
+        />
+      )}
+
+      {revId && (
+        <WageRevisionModal
+          worker={state.workers.find((w) => w.id === revId)!}
+          onClose={() => setRevId(null)}
         />
       )}
     </div>
@@ -278,6 +289,92 @@ export function WorkerForm({
           <Btn variant="secondary" onClick={onClose}>Cancel</Btn>
           <Btn onClick={() => onSave({ ...f, contractor: f.mode === 'Contractor' ? f.contractor : '' })}>Save</Btn>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function WageRevisionModal({ worker, onClose }: { worker: WorkerRec; onClose: () => void }) {
+  const { set } = useStore();
+  const [showForm, setShowForm] = useState(false);
+  const [ef, setEf] = useState('2026-09');
+  const [rb, setRb] = useState(worker.rateBasic.toString());
+  const [rh, setRh] = useState(worker.rateHra.toString());
+  const [ro, setRo] = useState(worker.rateOther.toString());
+  const [reason, setReason] = useState('');
+  const n = (v: string) => Math.max(0, parseFloat(v) || 0);
+  const revs = [...(worker.revisions || [])].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const save = () => {
+    if (!ef) return;
+    set((s) => addWageRevision(s, worker.id, {
+      effectiveFrom: ef,
+      rateBasic: n(rb),
+      rateHra: n(rh),
+      rateOther: n(ro),
+      reason: reason.trim() || undefined
+    }));
+    setShowForm(false);
+  };
+  return (
+    <Modal title={`Wage Revisions — ${worker.name} (${worker.code})`} open onClose={onClose} wide>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-500">
+            Current rate/day: ₹{fmtINR(worker.rateDay)} (Basic ₹{fmtINR(worker.rateBasic)} + HRA ₹{fmtINR(worker.rateHra)} + Other ₹{fmtINR(worker.rateOther)})
+          </div>
+          <Btn onClick={() => setShowForm((v) => !v)}><Plus size={14} /> {showForm ? 'Close Form' : 'Add Revision'}</Btn>
+        </div>
+
+        {showForm && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <label className="block"><span className="text-xs font-semibold text-slate-500">Effective From (month)</span>
+                <Select value={ef} onChange={(e) => setEf(e.target.value)} className="mt-1 w-full">
+                  {MONTHS.map((m) => <option key={m.key} value={m.key}>{monthLabel(m.key)}</option>)}
+                </Select></label>
+              <label className="block"><span className="text-xs font-semibold text-slate-500">Basic/Day</span>
+                <Input type="number" min={0} value={rb} onChange={(e) => setRb(e.target.value)} className="mt-1 w-full" /></label>
+              <label className="block"><span className="text-xs font-semibold text-slate-500">HRA/Day</span>
+                <Input type="number" min={0} value={rh} onChange={(e) => setRh(e.target.value)} className="mt-1 w-full" /></label>
+              <label className="block"><span className="text-xs font-semibold text-slate-500">Other/Day</span>
+                <Input type="number" min={0} value={ro} onChange={(e) => setRo(e.target.value)} className="mt-1 w-full" /></label>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <label className="block md:col-span-2"><span className="text-xs font-semibold text-slate-500">Reason (optional)</span>
+                <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. May increment, Diwali bonus revision…" className="mt-1 w-full" /></label>
+              <div className="flex items-center justify-between gap-2 md:justify-end">
+                <span className="text-sm text-slate-500">Total/day: <strong className="text-indigo-700">₹{fmtINR(n(rb) + n(rh) + n(ro))}</strong></span>
+                <Btn onClick={save}>Save Revision</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Card className="overflow-hidden">
+          <CardHeader title="Revision History" subtitle="New rates apply from the selected month onward — earlier months keep their old rates" />
+          <Table>
+            <thead className="bg-slate-50">
+              <tr>
+                <Th>Effective From</Th><Th right>Basic/Day</Th><Th right>HRA/Day</Th><Th right>Other/Day</Th><Th right>Total/Day</Th><Th>Reason</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {revs.length === 0 && (
+                <tr><td colSpan={6}><Empty message="No revisions yet — worker keeps its master rates for all months." /></td></tr>
+              )}
+              {revs.map((r) => (
+                <tr key={r.id} className="border-t border-slate-100">
+                  <Td className="font-mono text-xs">{monthLabel(r.effectiveFrom)}</Td>
+                  <Td right>₹{fmtINR(r.rateBasic)}</Td>
+                  <Td right>₹{fmtINR(r.rateHra)}</Td>
+                  <Td right>₹{fmtINR(r.rateOther)}</Td>
+                  <Td right className="font-semibold">₹{fmtINR(r.rateDay)}</Td>
+                  <Td>{r.reason || '—'}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
       </div>
     </Modal>
   );

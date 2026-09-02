@@ -4,7 +4,7 @@
   "framework": "vite",
   "crons": [
     {
-      "path": "/api/health",
+      "path": "/api/leaves",
       "schedule": "*/5 * * * *"
     }
   ],

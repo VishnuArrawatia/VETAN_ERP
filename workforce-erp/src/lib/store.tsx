@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from 'react';
-import { AppState, WorkerRec, AttendanceRec, ContractorRec } from '../types';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { AppState, WorkerRec, AttendanceRec, ContractorRec, WageRevision } from '../types';
 import { seed } from '../data/seed';
 
 const KEY = 'wf-erp-v1';
@@ -105,4 +105,49 @@ export function addWorker(s: AppState, w: WorkerRec): AppState {
 
 export function updateWorker(s: AppState, id: string, patch: Partial<WorkerRec>): AppState {
   return { ...s, workers: s.workers.map((w) => (w.id === id ? { ...w, ...patch } : w)) };
+}
+
+/** Rates applied to a worker for a given month: most recent revision effective on/before that month, else the worker's current/original rates. */
+export function effRates(
+  s: AppState,
+  w: WorkerRec,
+  monthKey: string
+): { rateBasic: number; rateHra: number; rateOther: number; rateDay: number } {
+  const revs = (w.revisions || [])
+    .filter((r) => r.effectiveFrom <= monthKey)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const r = revs[0];
+  return r
+    ? { rateBasic: r.rateBasic, rateHra: r.rateHra, rateOther: r.rateOther, rateDay: r.rateDay }
+    : { rateBasic: w.rateBasic, rateHra: w.rateHra, rateOther: w.rateOther, rateDay: w.rateDay };
+}
+
+/** Record a wage revision effective from a given month and update the worker's current rates (forward-looking). Past payroll months are never touched because they use effRates() by month. */
+export function addWageRevision(
+  s: AppState,
+  workerId: string,
+  rev: Omit<WageRevision, 'id' | 'workerId' | 'createdAt' | 'rateDay'>): AppState {
+  const now = new Date().toISOString();
+  const entry: WageRevision = {
+    id: 'wr' + Date.now(),
+    workerId,
+    createdAt: now,
+    ...rev,
+    rateDay: rev.rateBasic + rev.rateHra + rev.rateOther
+  };
+  return {
+    ...s,
+    workers: s.workers.map((w) => {
+      if (w.id !== workerId) return w;
+      const revisions = [...(w.revisions || []), entry];
+      return {
+        ...w,
+        revisions,
+        rateBasic: entry.rateBasic,
+        rateHra: entry.rateHra,
+        rateOther: entry.rateOther,
+        rateDay: entry.rateDay
+      };
+    })
+  };
 }

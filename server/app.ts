@@ -3998,11 +3998,6 @@ HR Department`;
     }
   });
 
-  // Health check endpoint — used by Vercel cron to keep serverless function warm
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), db: !!db });
-  });
-
   // Expose db instance for Vercel handler to call reloadFromSupabase()
   (app as any).locals = (app as any).locals || {};
   (app as any).locals.db = db;

@@ -6,7 +6,7 @@ import { Card, CardHeader, Btn, Input, Select, Badge, Empty, Th, Td, Table } fro
 
 export default function Leave() {
   const { state, set } = useStore();
-  const monthsPresent = [...new Set(state.leave.map((l) => l.monthKey))].sort().reverse();
+  const monthsPresent: string[] = [...new Set(state.leave.map((l) => l.monthKey))].sort().reverse();
   const [m, setM] = useState(monthsPresent[0] || '2026-07');
   const [q, setQ] = useState('');
   const [unit, setUnit] = useState('all');

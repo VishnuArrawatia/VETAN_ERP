@@ -25,7 +25,7 @@ export default function Dashboard({ monthKey }: { monthKey: string }) {
     return { unit: u, count: ws.length, gross: pay.reduce((s, r) => s + r.gross, 0), net: pay.reduce((s, r) => s + r.net, 0) };
   });
 
-  const byDept = Object.entries(
+  const byDept: [string, number][] Object.entries(
     active.reduce<Record<string, number>>((acc, w) => {
       const d = w.department || 'Other';
       acc[d] = (acc[d] || 0) + 1;

@@ -72,17 +72,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end();
   }
 
-  // Health check — keep-warm cron target (no DB needed, no cold start)
-  // CRITICAL: Check BEFORE x-matched-path overwrite, since Vercel rewrites
-  // may set req.url to /api/index before this handler runs
-  const originalUrl = req.url || '';
-  const originalMatchedPath = (req.headers['x-matched-path'] as string) || '';
-  if (originalUrl.includes('health') || originalMatchedPath.includes('health')) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ status: 'ok', timestamp: new Date().toISOString(), service: 'VETAN ERP' });
-  }
-
   const matchedPath = req.headers['x-matched-path'] as string | undefined;
   if (matchedPath && matchedPath !== req.url) {
     req.url = matchedPath;

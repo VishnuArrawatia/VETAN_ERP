@@ -1,4 +1,5 @@
 import { AppState, WorkerRec, AttendanceRec } from '../types';
+import { effRates } from './store';
 
 export interface PayRow {
   worker: WorkerRec;
@@ -29,13 +30,14 @@ export function calcPayroll(
       ) || null;
     const payDays =
       (att?.present || 0) + (att?.paidHoliday || 0) + (att?.leave || 0);
-    const otPay = Math.round((att?.otHours || 0) * (w.rateDay / 8) * 100) / 100;
-    const basic = Math.round(w.rateBasic * payDays * 100) / 100;
-    const hra = Math.round(w.rateHra * payDays * 100) / 100;
-    const other = Math.round(w.rateOther * payDays * 100) / 100;
+const rt = effRates(s, w, monthKey);
+    const otPay = Math.round((att?.otHours || 0) * (rt.rateDay / 8) * 100) / 100;
+    const basic = Math.round(rt.rateBasic * payDays * 100) / 100;
+    const hra = Math.round(rt.rateHra * payDays * 100) / 100;
+    const other = Math.round(rt.rateOther * payDays * 100) / 100;
     const gross = Math.round((basic + hra + other + otPay) * 100) / 100;
     const pf = w.pf
-      ? Math.round(w.rateBasic * payDays * s.settings.pfEmp * 100) / 100
+      ? Math.round(rt.rateBasic * payDays * s.settings.pfEmp * 100) / 100
       : 0;
     const esic = w.esic
       ? Math.round(gross * s.settings.esicEmp * 100) / 100
