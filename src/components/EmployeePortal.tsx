@@ -2287,7 +2287,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                   {form16Data && (
                     <button 
                       onClick={() => window.print()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-650 hover:bg-emerald-700 text-xs text-white font-bold rounded-xl transition cursor-pointer shadow-sm select-none"
+                      className="flex items-center gap-1.5 px-3 py-2.5 sm:py-1.5 bg-emerald-650 hover:bg-emerald-700 text-xs text-white font-bold rounded-xl transition cursor-pointer shadow-sm select-none min-h-[44px] sm:min-h-0"
                     >
                       <Printer size={13} />
                       Print Exemption Ledger
@@ -2550,14 +2550,14 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                           <div className="flex gap-2 pt-1">
                             <button
                               onClick={() => handleHodLeaveAction(app.id, 'APPROVE')}
-                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono"
+                              className="flex-1 py-2.5 sm:py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono min-h-[44px] sm:min-h-0"
                             >
                               <CheckCircle size={12} />
                               Approve
                             </button>
                             <button
                               onClick={() => handleHodLeaveAction(app.id, 'REJECT')}
-                              className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono"
+                              className="flex-1 py-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono min-h-[44px] sm:min-h-0"
                             >
                               <XCircle size={12} />
                               Reject
@@ -2630,14 +2630,14 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                           <div className="flex gap-2 pt-1">
                             <button
                               onClick={() => handleHodMissPunchAction(corr.id, 'APPROVE')}
-                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono"
+                              className="flex-1 py-2.5 sm:py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono min-h-[44px] sm:min-h-0"
                             >
                               <CheckCircle size={12} />
                               Approve
                             </button>
                             <button
                               onClick={() => handleHodMissPunchAction(corr.id, 'REJECT')}
-                              className="flex-1 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono"
+                              className="flex-1 py-2.5 sm:py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer shadow-xs font-mono min-h-[44px] sm:min-h-0"
                             >
                               <XCircle size={12} />
                               Reject
@@ -2959,13 +2959,13 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleHodLeaveAction(app.id, 'APPROVE')}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-2.5 sm:py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1 min-h-[44px] sm:min-h-0"
                             >
                               <CheckCircle size={11} /> Approve
                             </button>
                             <button
                               onClick={() => handleHodLeaveAction(app.id, 'REJECT')}
-                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-2.5 sm:py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1 min-h-[44px] sm:min-h-0"
                             >
                               <XCircle size={11} /> Reject
                             </button>
@@ -2975,7 +2975,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                                 setActiveTab('hod_approvals');
                                 fetchHodApprovals();
                               }}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer"
+                              className="p-2.5 sm:p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
                               title="View full details"
                             >
                               <Info size={11} />
@@ -3013,13 +3013,13 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleHodMissPunchAction(corr.id, 'APPROVE')}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-2.5 sm:py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1 min-h-[44px] sm:min-h-0"
                             >
                               <CheckCircle size={11} /> Approve
                             </button>
                             <button
                               onClick={() => handleHodMissPunchAction(corr.id, 'REJECT')}
-                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-2.5 sm:py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1 min-h-[44px] sm:min-h-0"
                             >
                               <XCircle size={11} /> Reject
                             </button>
@@ -3029,7 +3029,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                                 setActiveTab('hod_approvals');
                                 fetchHodApprovals();
                               }}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer"
+                              className="p-2.5 sm:p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer min-h-[44px] sm:min-h-0 flex items-center justify-center"
                               title="View full details"
                             >
                               <Info size={11} />
