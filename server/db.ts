@@ -3725,6 +3725,8 @@ export class PayrollDatabase {
       // Try trimming trailing spaces
       const emp2 = this.getEmployeeById(trimmed.replace(/\s+$/, ''));
       if (emp2) return { id: emp2.id, name: emp2.name };
+      // ID is valid format but employee not found — still return as ID (not name)
+      return { id: trimmed, name: trimmed };
     }
     
     // It's a name — find the employee by matching name
@@ -3835,20 +3837,21 @@ export class PayrollDatabase {
   public getLeaveApplications(companyFilter?: string): LeaveApplication[] {
     let apps = this.data.leave_applications || [];
 
-    // PRIORITY 3 — AUTO-ESCALATION: If PENDING_HOD > 7 days, escalate to HR
+    // PRIORITY 3 — AUTO-ESCALATION: If PENDING_HOD > 7 days, mark as escalated (NOTIFICATION ONLY)
+    // CRITICAL: Do NOT change status from PENDING_HOD. HOD approval is MANDATORY.
+    // Auto-escalation only sets a flag so HR can see it's overdue.
     const now = Date.now();
-    const ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — HOD gets adequate time
+    const ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
     let escalated = false;
     for (const app of apps) {
-      if (app.status === 'PENDING_HOD' && app.applied_date) {
+      if (app.status === 'PENDING_HOD' && app.applied_date && !app.escalated_reminder_sent) {
         const appliedTime = new Date(app.applied_date).getTime();
         if (now - appliedTime > ESCALATION_MS) {
-          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR — HOD did not act within 7 days`);
-          app.status = 'PENDING_HR';
+          console.log(`[LEAVE-ESCALATION] Marking leave ${app.id} (${app.employee_name}) as ESCALATED — HOD did not act within 7 days. Status stays PENDING_HOD.`);
           app.escalated_reminder_sent = 1;
-          // Persist the escalation to DB
+          // Persist the escalation flag to DB — DO NOT change status
           try {
-            this.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HR', escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
+            this.dbSqlite.run(`UPDATE leave_applications SET escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
           } catch (e: any) { console.error('[LeaveEscalation] DB update error:', e?.message); }
           escalated = true;
         }

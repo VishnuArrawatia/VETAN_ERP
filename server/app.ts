@@ -3476,6 +3476,30 @@ HR Department`;
     }
   });
 
+  // One-time fix: Reset incorrectly auto-escalated leaves back to PENDING_HOD
+  app.post('/api/admin/fix-escalated-leaves', async (req, res) => {
+    try {
+      const apps = db.data.leave_applications || [];
+      let fixed = 0;
+      for (const app of apps) {
+        // If leave was auto-escalated (escalated_reminder_sent=1) but still has a HOD assigned
+        // and status was changed to PENDING_HR, reset it back to PENDING_HOD
+        if (app.status === 'PENDING_HR' && app.escalated_reminder_sent === 1 && app.reporting_hod) {
+          console.log(`[FIX-ESCALATION] Resetting ${app.id} (${app.employee_name}) from PENDING_HR back to PENDING_HOD — HOD: ${app.reporting_hod}`);
+          app.status = 'PENDING_HOD';
+          try {
+            db.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HOD' WHERE id = ?`, [app.id]);
+          } catch (e: any) { console.error('[FIX-ESCALATION] DB error:', e?.message); }
+          fixed++;
+        }
+      }
+      if (fixed > 0) db.persistData();
+      res.json({ success: true, fixed, message: `Reset ${fixed} incorrectly escalated leave(s) back to PENDING_HOD` });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/backup', (req, res) => {
     try {
       const dbPath = path.join(process.cwd(), 'Payroll.db');

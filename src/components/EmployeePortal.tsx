@@ -2517,6 +2517,11 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                             <div>
                               <h5 className="font-extrabold text-xs text-slate-900">{app.employee_name}</h5>
                               <p className="text-[10px] text-slate-400 font-mono">Code: {app.employee_id}</p>
+                              {app.escalated_reminder_sent === 1 && (
+                                <span className="inline-flex items-center gap-0.5 mt-1 px-1.5 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 text-[8px] font-black rounded animate-pulse">
+                                  <AlertTriangle size={9} /> ESCALATED — Overdue
+                                </span>
+                              )}
                             </div>
                             <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-150 text-indigo-800 text-[9px] font-bold rounded uppercase tracking-wide">
                               {app.leave_type} Leave

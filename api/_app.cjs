@@ -24318,15 +24318,14 @@ var require_sqlite3 = __commonJS({
   }
 });
 
-// api/server-entry.ts
-var server_entry_exports = {};
-__export(server_entry_exports, {
+// server/app.ts
+var app_exports = {};
+__export(app_exports, {
   createApp: () => createApp,
+  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(server_entry_exports);
-
-// server/app.ts
+module.exports = __toCommonJS(app_exports);
 var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -28033,6 +28032,7 @@ var PayrollDatabase = class _PayrollDatabase {
       if (emp) return { id: emp.id, name: emp.name };
       const emp2 = this.getEmployeeById(trimmed.replace(/\s+$/, ""));
       if (emp2) return { id: emp2.id, name: emp2.name };
+      return { id: trimmed, name: trimmed };
     }
     const nameLower = trimmed.toLowerCase().replace(/^mr\.?\s*/i, "").replace(/^mrs\.?\s*/i, "").replace(/\s+/g, " ").trim();
     const allEmps = this.data.employees || [];
@@ -28126,14 +28126,13 @@ var PayrollDatabase = class _PayrollDatabase {
     const ESCALATION_MS = 7 * 24 * 60 * 60 * 1e3;
     let escalated = false;
     for (const app of apps) {
-      if (app.status === "PENDING_HOD" && app.applied_date) {
+      if (app.status === "PENDING_HOD" && app.applied_date && !app.escalated_reminder_sent) {
         const appliedTime = new Date(app.applied_date).getTime();
         if (now - appliedTime > ESCALATION_MS) {
-          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR \u2014 HOD did not act within 7 days`);
-          app.status = "PENDING_HR";
+          console.log(`[LEAVE-ESCALATION] Marking leave ${app.id} (${app.employee_name}) as ESCALATED \u2014 HOD did not act within 7 days. Status stays PENDING_HOD.`);
           app.escalated_reminder_sent = 1;
           try {
-            this.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HR', escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
+            this.dbSqlite.run(`UPDATE leave_applications SET escalated_reminder_sent = 1 WHERE id = ?`, [app.id]);
           } catch (e) {
             console.error("[LeaveEscalation] DB update error:", e?.message);
           }
@@ -33952,6 +33951,28 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
+  app.post("/api/admin/fix-escalated-leaves", async (req, res) => {
+    try {
+      const apps = db.data.leave_applications || [];
+      let fixed = 0;
+      for (const app2 of apps) {
+        if (app2.status === "PENDING_HR" && app2.escalated_reminder_sent === 1 && app2.reporting_hod) {
+          console.log(`[FIX-ESCALATION] Resetting ${app2.id} (${app2.employee_name}) from PENDING_HR back to PENDING_HOD \u2014 HOD: ${app2.reporting_hod}`);
+          app2.status = "PENDING_HOD";
+          try {
+            db.dbSqlite.run(`UPDATE leave_applications SET status = 'PENDING_HOD' WHERE id = ?`, [app2.id]);
+          } catch (e) {
+            console.error("[FIX-ESCALATION] DB error:", e?.message);
+          }
+          fixed++;
+        }
+      }
+      if (fixed > 0) db.persistData();
+      res.json({ success: true, fixed, message: `Reset ${fixed} incorrectly escalated leave(s) back to PENDING_HOD` });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/backup", (req, res) => {
     try {
       const dbPath = import_path2.default.join(process.cwd(), "Payroll.db");
@@ -34458,6 +34479,7 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
+var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,
