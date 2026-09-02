@@ -837,17 +837,27 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
               </span>
             </div>
 
-            {/* Notification center trigger */}
+            {/* Notification center trigger — badge shows ACTIONABLE approvals only */}
             <button
-              onClick={() => setShowNotificationDrawer(true)}
+              onClick={() => {
+                const totalApprovals = hodPendingLeaves.length + hodPendingCorrections.length;
+                if (totalApprovals > 0) {
+                  // Directly navigate to HOD Approvals tab for quick action
+                  setActiveTab('hod_approvals');
+                  fetchHodApprovals();
+                } else {
+                  // No pending approvals → open notification drawer for info
+                  setShowNotificationDrawer(true);
+                }
+              }}
               className="relative p-2 text-slate-300 hover:text-emerald-400 hover:bg-slate-800/80 rounded-xl transition cursor-pointer border border-slate-700/50"
-              title="Notification Center"
+              title={hodPendingLeaves.length + hodPendingCorrections.length > 0 ? `${hodPendingLeaves.length + hodPendingCorrections.length} pending approval(s) — click to review` : 'Notification Center'}
               id="notification-bell"
             >
               <Bell size={16} />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-slate-900 animate-bounce">
-                  {unreadNotifications}
+              {(hodPendingLeaves.length + hodPendingCorrections.length) > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[8px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-slate-900 animate-bounce shadow-lg shadow-rose-500/40">
+                  {hodPendingLeaves.length + hodPendingCorrections.length}
                 </span>
               )}
             </button>
@@ -2884,7 +2894,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
         )}
       </AnimatePresence>
 
-      {/* ==================== DRAWER: NOTIFICATION CENTER ==================== */}
+      {/* ==================== DRAWER: NOTIFICATION CENTER — ACTIONABLE APPROVALS ==================== */}
       <AnimatePresence>
         {showNotificationDrawer && (
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex justify-end no-print">
@@ -2896,10 +2906,16 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
               className="bg-white w-full max-w-md shadow-2xl h-full flex flex-col"
               id="notification-drawer"
             >
-              <div className="bg-slate-950 p-4 text-white flex justify-between items-center text-xs font-bold border-b border-emerald-500/20">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-4 text-white flex justify-between items-center text-xs font-bold border-b border-emerald-500/20">
                 <div className="flex items-center gap-1.5">
                   <Bell size={15} className="text-emerald-400" />
-                  <span>Sakar SVN HRMS Notification Center</span>
+                  <span>Notifications & Approvals</span>
+                  {(hodPendingLeaves.length + hodPendingCorrections.length) > 0 && (
+                    <span className="bg-rose-500 text-white text-[8px] font-black rounded-full px-1.5 py-0.5 animate-pulse">
+                      {hodPendingLeaves.length + hodPendingCorrections.length} pending
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowNotificationDrawer(false)}
@@ -2909,37 +2925,199 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                 </button>
               </div>
 
-              {/* Scrollable Alerts feed */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-                {notificationList.map(notif => (
-                  <div key={notif.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition space-y-2">
-                    <div className="flex justify-between items-start gap-3">
-                      <span className={`p-1.5 rounded-lg ${
-                        notif.type === 'success' ? 'bg-emerald-50 text-emerald-700' :
-                        notif.type === 'alert' ? 'bg-rose-50 text-rose-700' :
-                        notif.type === 'announcement' ? 'bg-indigo-50 text-indigo-700' :
-                        'bg-blue-50 text-blue-700'
-                      }`}>
-                        {notif.type === 'success' ? <CheckCircle size={13} /> :
-                         notif.type === 'alert' ? <AlertCircle size={13} /> :
-                         notif.type === 'announcement' ? <Building2 size={13} /> :
-                         <Info size={13} />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex justify-between items-center gap-2">
-                          <strong className="text-[11px] text-slate-900 block font-extrabold">{notif.title}</strong>
-                          <span className="text-[8px] text-slate-400 font-mono tracking-wider shrink-0 font-bold">{notif.date}</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 leading-relaxed mt-1">{notif.desc}</p>
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+                {/* === ACTIONABLE: Pending Leave Approvals (HOD) === */}
+                {hodPendingLeaves.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="p-1 bg-amber-50 rounded-lg">
+                        <Calendar size={12} className="text-amber-600" />
                       </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Pending Leave Approvals ({hodPendingLeaves.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {hodPendingLeaves.map(app => (
+                        <div key={app.id} className="p-3 rounded-xl border border-amber-200/60 bg-amber-50/30 hover:bg-amber-50 transition space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-[11px] text-slate-900 block font-extrabold truncate">{app.employee_name}</strong>
+                              <p className="text-[9px] text-slate-500 mt-0.5">
+                                {app.leave_type} • {app.days} day(s) • {app.start_date}
+                              </p>
+                              {app.reason && (
+                                <p className="text-[9px] text-slate-400 mt-0.5 italic truncate">"{app.reason}"</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleHodLeaveAction(app.id, 'APPROVE')}
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <CheckCircle size={11} /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleHodLeaveAction(app.id, 'REJECT')}
+                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <XCircle size={11} /> Reject
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowNotificationDrawer(false);
+                                setActiveTab('hod_approvals');
+                                fetchHodApprovals();
+                              }}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer"
+                              title="View full details"
+                            >
+                              <Info size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* === ACTIONABLE: Pending Miss Punch Approvals (HOD) === */}
+                {hodPendingCorrections.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="p-1 bg-orange-50 rounded-lg">
+                        <Clock size={12} className="text-orange-600" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Pending Miss Punch Approvals ({hodPendingCorrections.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {hodPendingCorrections.map(corr => (
+                        <div key={corr.id} className="p-3 rounded-xl border border-orange-200/60 bg-orange-50/30 hover:bg-orange-50 transition space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-[11px] text-slate-900 block font-extrabold truncate">{corr.employee_name}</strong>
+                              <p className="text-[9px] text-slate-500 mt-0.5">
+                                {corr.correction_date} • {corr.requested_status}
+                              </p>
+                              {corr.reason && (
+                                <p className="text-[9px] text-slate-400 mt-0.5 italic truncate">"{corr.reason}"</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleHodMissPunchAction(corr.id, 'APPROVE')}
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <CheckCircle size={11} /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleHodMissPunchAction(corr.id, 'REJECT')}
+                              className="flex-1 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold py-1.5 px-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <XCircle size={11} /> Reject
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowNotificationDrawer(false);
+                                setActiveTab('hod_approvals');
+                                fetchHodApprovals();
+                              }}
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition cursor-pointer"
+                              title="View full details"
+                            >
+                              <Info size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* === No pending approvals === */}
+                {hodPendingLeaves.length === 0 && hodPendingCorrections.length === 0 && (
+                  <div className="text-center py-8 space-y-2">
+                    <CheckCircle size={28} className="mx-auto text-emerald-400/50" />
+                    <p className="text-[11px] font-semibold text-slate-500">All caught up!</p>
+                    <p className="text-[9px] text-slate-400">No pending approvals at this time.</p>
+                  </div>
+                )}
+
+                {/* === Info: Leave Status Updates === */}
+                {notificationList.filter(n => n.type === 'info' || n.type === 'alert').length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="p-1 bg-blue-50 rounded-lg">
+                        <Info size={12} className="text-blue-600" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Leave Updates</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {notificationList.filter(n => n.type === 'info' || n.type === 'alert').map(notif => (
+                        <div key={notif.id} className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/50 transition">
+                          <div className="flex items-start gap-2">
+                            <span className={`p-1 rounded-md shrink-0 ${notif.type === 'alert' ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
+                              {notif.type === 'alert' ? <AlertCircle size={10} /> : <Info size={10} />}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-[10px] text-slate-800 block font-bold">{notif.title}</strong>
+                              <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{notif.desc}</p>
+                            </div>
+                            <span className="text-[8px] text-slate-400 font-mono shrink-0">{notif.date}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* === Announcements === */}
+                {notificationList.filter(n => n.type === 'announcement').length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="p-1 bg-indigo-50 rounded-lg">
+                        <Building2 size={12} className="text-indigo-600" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Announcements</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {notificationList.filter(n => n.type === 'announcement').map(notif => (
+                        <div key={notif.id} className="p-2.5 rounded-xl border border-indigo-100/60 bg-indigo-50/30 transition">
+                          <div className="flex items-start gap-2">
+                            <span className="p-1 bg-indigo-50 text-indigo-600 rounded-md shrink-0">
+                              <Building2 size={10} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <strong className="text-[10px] text-slate-800 block font-bold">{notif.title}</strong>
+                              <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{notif.desc}</p>
+                            </div>
+                            <span className="text-[8px] text-slate-400 font-mono shrink-0">{notif.date}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="p-4 border-t border-slate-100 bg-slate-50 text-center select-none text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                End of synchronized alerts
-              </div>
+              {/* Footer with quick link to full HOD tab */}
+              {(hodPendingLeaves.length + hodPendingCorrections.length) > 0 && (
+                <div className="p-3 border-t border-slate-100 bg-slate-50">
+                  <button
+                    onClick={() => {
+                      setShowNotificationDrawer(false);
+                      setActiveTab('hod_approvals');
+                      fetchHodApprovals();
+                    }}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <UserCheck size={12} />
+                    View All Approvals ({hodPendingLeaves.length + hodPendingCorrections.length})
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
