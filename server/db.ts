@@ -3713,12 +3713,71 @@ export class PayrollDatabase {
     this.persistData();
   }
 
+  // CRITICAL: Resolve a reporting_hod value (which may be a name or ID) to a valid employee ID
+  private resolveHodIdToEmployeeId(hodValue: string): { id: string; name: string } | null {
+    if (!hodValue) return null;
+    const trimmed = hodValue.trim();
+    
+    // Check if it already looks like an employee ID (e.g. SK1ST0024, SV1ST0001)
+    if (/^[A-Z]{2}\d{2}[A-Z]\d{4}/.test(trimmed)) {
+      const emp = this.getEmployeeById(trimmed);
+      if (emp) return { id: emp.id, name: emp.name };
+      // Try trimming trailing spaces
+      const emp2 = this.getEmployeeById(trimmed.replace(/\s+$/, ''));
+      if (emp2) return { id: emp2.id, name: emp2.name };
+    }
+    
+    // It's a name — find the employee by matching name
+    const nameLower = trimmed.toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '').replace(/\s+/g, ' ').trim();
+    const allEmps = this.data.employees || [];
+    
+    // Exact match first
+    let match = allEmps.find(e => {
+      const eName = e.name.toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '').replace(/\s+/g, ' ').trim();
+      return eName === nameLower;
+    });
+    if (match) return { id: match.id, name: match.name };
+    
+    // Partial match (contains)
+    match = allEmps.find(e => {
+      const eName = e.name.toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '').replace(/\s+/g, ' ').trim();
+      return eName.includes(nameLower) || nameLower.includes(eName);
+    });
+    if (match) return { id: match.id, name: match.name };
+    
+    // First name match
+    match = allEmps.find(e => {
+      const firstName = e.name.toLowerCase().split(/\s+/)[0];
+      return firstName === nameLower.split(/\s+/)[0];
+    });
+    if (match) return { id: match.id, name: match.name };
+    
+    // Not found — return the name as-is but log warning
+    console.warn(`[HOD-RESOLVE] Could not resolve name '${trimmed}' to employee ID`);
+    return { id: trimmed, name: trimmed };
+  }
+
   public resolveReportingHodForEmployee(employeeId: string): { id: string; name: string } | null {
     const emp = this.getEmployeeById(employeeId);
     if (!emp) return null;
 
     if (emp.reporting_hod) {
-      return { id: emp.reporting_hod, name: emp.reporting_hod_name || 'HOD' };
+      // CRITICAL FIX: Always resolve to employee ID, never return raw name
+      const resolved = this.resolveHodIdToEmployeeId(emp.reporting_hod);
+      if (resolved && resolved.id !== emp.reporting_hod) {
+        // Auto-normalize: update the employee master reporting_hod to correct ID
+        emp.reporting_hod = resolved.id;
+        emp.reporting_hod_name = resolved.name;
+        try {
+          this.dbSqlite.run(`UPDATE employees SET reporting_hod = ?, reporting_hod_name = ? WHERE id = ?`, [resolved.id, resolved.name, emp.id]);
+          // Also update Supabase if available
+          if (this.supabaseAdmin) {
+            this.supabaseAdmin.from('vetan_employees').update({ reporting_hod: resolved.id, reporting_hod_name: resolved.name }).eq('id', emp.id).then(() => {});
+          }
+        } catch (e) { console.warn('[HOD-AUTO-NORMALIZE] Failed to persist:', e); }
+        console.log(`[HOD-AUTO-NORMALIZE] ${emp.id} reporting_hod: '${emp.reporting_hod}' → '${resolved.id}' (${resolved.name})`);
+      }
+      return resolved || { id: emp.reporting_hod, name: emp.reporting_hod_name || 'HOD' };
     }
 
     // Lookup HOD by department and company
@@ -3743,19 +3802,48 @@ export class PayrollDatabase {
     return null;
   }
 
+  // Bulk normalize ALL employees' reporting_hod from names to IDs
+  public normalizeAllReportingHods(): { total: number; normalized: number; alreadyCorrect: number; failed: string[] } {
+    const allEmps = this.data.employees || [];
+    let normalized = 0;
+    let alreadyCorrect = 0;
+    const failed: string[] = [];
+
+    for (const emp of allEmps) {
+      if (!emp.reporting_hod) continue;
+      const resolved = this.resolveHodIdToEmployeeId(emp.reporting_hod);
+      if (!resolved) { failed.push(`${emp.id}: could not resolve '${emp.reporting_hod}'`); continue; }
+      if (resolved.id === emp.reporting_hod.replace(/\s+$/, '')) { alreadyCorrect++; continue; }
+      
+      // Update employee master
+      emp.reporting_hod = resolved.id;
+      emp.reporting_hod_name = resolved.name;
+      try {
+        this.dbSqlite.run(`UPDATE employees SET reporting_hod = ?, reporting_hod_name = ? WHERE id = ?`, [resolved.id, resolved.name, emp.id]);
+      } catch (e) { failed.push(`${emp.id}: sqlite update failed`); }
+      normalized++;
+    }
+
+    // Persist to Supabase
+    this.persistData();
+
+    console.log(`[HOD-NORMALIZE] Total: ${allEmps.length}, Normalized: ${normalized}, Already correct: ${alreadyCorrect}, Failed: ${failed.length}`);
+    return { total: allEmps.length, normalized, alreadyCorrect, failed };
+  }
+
   // Leave Management operations
   public getLeaveApplications(companyFilter?: string): LeaveApplication[] {
     let apps = this.data.leave_applications || [];
 
-    // PRIORITY 3 — AUTO-ESCALATION: If PENDING_HOD > 48 hours, escalate to HR
+    // PRIORITY 3 — AUTO-ESCALATION: If PENDING_HOD > 7 days, escalate to HR
     const now = Date.now();
-    const ESCALATION_MS = 48 * 60 * 60 * 1000; // 48 hours
+    const ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — HOD gets adequate time
     let escalated = false;
     for (const app of apps) {
       if (app.status === 'PENDING_HOD' && app.applied_date) {
         const appliedTime = new Date(app.applied_date).getTime();
         if (now - appliedTime > ESCALATION_MS) {
-          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR — HOD did not act within 48 hours`);
+          console.log(`[LEAVE-ESCALATION] Auto-escalating leave ${app.id} (${app.employee_name}) from PENDING_HOD to PENDING_HR — HOD did not act within 7 days`);
           app.status = 'PENDING_HR';
           app.escalated_reminder_sent = 1;
           // Persist the escalation to DB

@@ -3466,6 +3466,16 @@ HR Department`;
     }
   });
 
+  // Admin: Normalize ALL employees' reporting_hod from names to IDs
+  app.post('/api/admin/normalize-hod', async (req, res) => {
+    try {
+      const result = db.normalizeAllReportingHods();
+      res.json({ success: true, ...result, message: `Normalized ${result.normalized} employees, ${result.alreadyCorrect} already correct, ${result.failed.length} failed` });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/backup', (req, res) => {
     try {
       const dbPath = path.join(process.cwd(), 'Payroll.db');

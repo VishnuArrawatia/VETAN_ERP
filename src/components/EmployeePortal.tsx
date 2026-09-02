@@ -160,9 +160,8 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
     fetchBroadcasts();
     fetchAttendance();
     fetchCorrections();
-    if (employee.is_hod) {
-      fetchHodApprovals();
-    }
+    // Always fetch HOD approvals — even non-is_hod employees may be assigned as reporting_hod
+    fetchHodApprovals();
   }, [employee.id]);
 
   const fetchPayslips = async () => {
@@ -235,19 +234,40 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
   };
 
   const fetchHodApprovals = async () => {
-    if (!employee.is_hod) return;
+    // Always check for pending leaves assigned to this employee as HOD
     setLoadingHodApprovals(true);
     try {
       // Fetch all leaves to filter HOD pending ones
       const leaveRes = await fetch(`/api/leaves`);
       const allLeaves = await leaveRes.json();
-      const hodLeaves = allLeaves.filter((l: any) => l.reporting_hod === employee.id && l.status === 'PENDING_HOD');
+      // Match by ID (normal) OR by name (legacy data) — covers both ID-based and name-based reporting_hod
+      const hodLeaves = allLeaves.filter((l: any) => {
+        if (l.status !== 'PENDING_HOD') return false;
+        // Normal match: reporting_hod is an employee ID
+        if (l.reporting_hod === employee.id) return true;
+        // Legacy match: reporting_hod contains employee name (e.g. 'Mr. Vishnu Arrawatia')
+        const empNameLower = employee.name.toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        const hodNameLower = (l.reporting_hod || '').toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        const hodDisplayNameLower = (l.reporting_hod_name || '').toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        if (hodNameLower === empNameLower || hodDisplayNameLower === empNameLower) return true;
+        // Partial match on first name
+        const firstName = empNameLower.split(/\s+/)[0];
+        if (hodNameLower.includes(firstName) || hodDisplayNameLower.includes(firstName)) return true;
+        return false;
+      });
       setHodPendingLeaves(hodLeaves);
 
       // Fetch all attendance corrections to filter HOD pending ones
       const corrRes = await fetch(`/api/attendance/corrections`);
       const allCorrs = await corrRes.json();
-      const hodCorrs = allCorrs.filter((c: any) => c.reporting_hod === employee.id && c.status === 'PENDING_HOD');
+      const hodCorrs = allCorrs.filter((c: any) => {
+        if (c.status !== 'PENDING_HOD') return false;
+        if (c.reporting_hod === employee.id) return true;
+        const empNameLower = employee.name.toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        const hodNameLower = (c.reporting_hod || '').toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        const hodDisplayNameLower = (c.reporting_hod_name || '').toLowerCase().replace(/^mr\.?\s*/i, '').replace(/^mrs\.?\s*/i, '');
+        return hodNameLower === empNameLower || hodDisplayNameLower === empNameLower;
+      });
       setHodPendingCorrections(hodCorrs);
     } catch (e) {
       console.error('Failed loading HOD approvals', e);
@@ -927,7 +947,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
               <span>Security</span>
             </button>
 
-            {employee.is_hod && (
+            {(employee.is_hod || hodPendingLeaves.length > 0 || hodPendingCorrections.length > 0) && (
               <button
                 onClick={() => {
                   setActiveTab('hod_approvals');
