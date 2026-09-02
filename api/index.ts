@@ -13,13 +13,9 @@ let dbRef: any = null;
 async function ensureInit(httpMethod?: string) {
   if (app) {
     // FIX: Always reload from Supabase to ensure fresh data (loans, attendance, etc.)
-    // On GET: always reload for latest data
-    // On POST: reload only if critical data seems missing (cold start race fix)
     if (dbRef && typeof dbRef.reloadFromSupabase === 'function') {
       const employeesCount = (dbRef.data?.employees || []).length;
       const loansCount = (dbRef.data?.loans || []).length;
-      // Only reload if data is empty (cold start) — NOT on every GET
-      // This fixes the 2-3 second cold-start penalty on every request
       const needsReload = loansCount === 0 || employeesCount === 0;
       if (needsReload) {
         try {
@@ -43,13 +39,9 @@ async function ensureInit(httpMethod?: string) {
     if (supabaseUrl && supabaseKey) {
       const { createClient } = await import('@supabase/supabase-js');
       supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
-        // FIX 3: Add connection timeout + retry for serverless resilience
-        db: {
-          schema: 'public'
-        },
+        db: { schema: 'public' },
         global: {
           fetch: (url: any, options: any) => {
-            // Add timeout to prevent hanging serverless functions
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15_000);
             return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
@@ -80,17 +72,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end();
   }
 
+  // Health check — keep-warm cron target (no DB needed, no cold start)
+  // CRITICAL: Check BEFORE x-matched-path overwrite, since Vercel rewrites
+  // may set req.url to /api/index before this handler runs
+  const originalUrl = req.url || '';
+  const originalMatchedPath = (req.headers['x-matched-path'] as string) || '';
+  if (originalUrl.includes('health') || originalMatchedPath.includes('health')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ status: 'ok', timestamp: new Date().toISOString(), service: 'VETAN ERP' });
+  }
+
   const matchedPath = req.headers['x-matched-path'] as string | undefined;
   if (matchedPath && matchedPath !== req.url) {
     req.url = matchedPath;
-  }
-
-  // Health check — keep-warm cron target (no DB needed)
-  const url = req.url || '';
-  const matchedPath = (req.headers['x-matched-path'] as string) || '';
-  if (url.includes('health') || matchedPath.includes('health')) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(200).json({ status: 'ok', timestamp: new Date().toISOString(), url, matchedPath });
   }
 
   try {
@@ -103,16 +98,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
-
-  // FIX 1: Disable all caching — force live data from Supabase
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('Surrogate-Control', 'no-store');
 
-  // ── Action interceptors (before Express) ──
-  // Vercel may cache api/index.ts with old code. These interceptors
-  // handle critical actions before Express routing.
+  // Action interceptors (before Express)
   const body: any = req.body;
   if (req.method === 'POST' && body && typeof body.action === 'string') {
 
