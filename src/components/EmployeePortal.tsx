@@ -38,11 +38,13 @@ import {
   ShieldAlert,
   Sliders,
   DollarSign,
+  Smartphone,
   Award,
   BookOpen
 } from 'lucide-react';
-import { Employee, LeaveApplication, Payslip, Form16Calculation, Loan, Attendance } from '../types';
+import { Employee, LeaveApplication, Payslip, Form16Calculation, Loan, Attendance, EmployeeAsset } from '../types';
 import { CompanyLogo, getCompanyName } from './CompanyLogos';
+import { computePrepaidStatus, hydratePrepaidAsset, isPrepaidSim, prepaidStatusLabel } from '../lib/prepaidStatus';
 
 interface EmployeePortalProps {
   employee: Employee;
@@ -58,6 +60,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
   const [leaveHistory, setLeaveHistory] = useState<LeaveApplication[]>([]);
   const [form16Data, setForm16Data] = useState<Form16Calculation | null>(null);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [prepaidSims, setPrepaidSims] = useState<EmployeeAsset[]>([]);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<Attendance[]>([]);
 
@@ -157,6 +160,7 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
     fetchLeaveHistory();
     fetchForm16();
     fetchLoans();
+    fetchPrepaid();
     fetchBroadcasts();
     fetchAttendance();
     fetchCorrections();
@@ -218,6 +222,17 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
       console.error('Failed loading loans', e);
     } finally {
       setLoadingLoans(false);
+    }
+  };
+
+  const fetchPrepaid = async () => {
+    try {
+      const res = await fetch(`/api/assets?employee_id=${employee.id}`);
+      const data = await res.json();
+      const list = (Array.isArray(data) ? data : []).map(hydratePrepaidAsset).filter(isPrepaidSim);
+      setPrepaidSims(list);
+    } catch (e) {
+      console.error('Failed loading prepaid SIMs', e);
     }
   };
 
@@ -1141,6 +1156,38 @@ export default function EmployeePortal({ employee, onLogout }: EmployeePortalPro
                   <div className="flex items-center justify-between text-[10px] text-emerald-600 font-extrabold mt-4 border-t border-slate-100 pt-2.5">
                     <span>View Loan Statement</span>
                     <ChevronRight size={11} className="group-hover:translate-x-0.5 transition" />
+                  </div>
+                </div>
+
+                <div
+                  className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between"
+                  id="metric-prepaid"
+                >
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Prepaid SIM</span>
+                      <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                        <Smartphone size={13} />
+                      </span>
+                    </div>
+                    {prepaidSims.filter(s => computePrepaidStatus(s) !== 'SURRENDERED').length === 0 ? (
+                      <strong className="text-lg font-black font-sans text-slate-500 block mt-2">Not issued</strong>
+                    ) : (
+                      prepaidSims.filter(s => computePrepaidStatus(s) !== 'SURRENDERED').slice(0, 1).map(sim => {
+                        const live = computePrepaidStatus(sim);
+                        return (
+                          <div key={sim.id} className="mt-2">
+                            <strong className="text-lg font-black font-sans text-slate-900 block">{prepaidStatusLabel(live)}</strong>
+                            <div className="mt-1 text-[10px] text-slate-500 font-mono">
+                              {sim.operator || 'SIM'} · {sim.mobile_number || sim.serial_number}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Validity: {sim.validity_date || '—'}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 

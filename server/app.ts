@@ -3352,13 +3352,14 @@ HR Department`;
     }
   });
 
-  app.post('/api/assets', (req, res) => {
+  app.post('/api/assets', async (req, res) => {
     try {
       const asset = req.body;
       if (!asset.id) {
         asset.id = 'AST-' + Math.random().toString(36).substring(2, 11).toUpperCase();
       }
       db.saveAsset(asset);
+      await db.forcePersistToSupabase();
       db.logAudit('Save Asset', `Saved asset ${asset.asset_name} (${asset.serial_number}) for employee ${asset.employee_name}`, getOperator(req));
       res.json({ success: true, asset });
     } catch (e: any) {
@@ -3366,10 +3367,11 @@ HR Department`;
     }
   });
 
-  app.delete('/api/assets/:id', (req, res) => {
+  app.delete('/api/assets/:id', async (req, res) => {
     try {
       const { id } = req.params;
       db.deleteAsset(id);
+      await db.forcePersistToSupabase();
       db.logAudit('Delete Asset', `Deleted asset ID ${id}`, getOperator(req));
       res.json({ success: true });
     } catch (e: any) {

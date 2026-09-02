@@ -43,6 +43,60 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
+
+// src/lib/prepaidStatus.ts
+var PREPAID_SIM_TYPE = "PREPAID_SIM";
+function packPrepaidMeta(asset) {
+  return JSON.stringify({
+    operator: asset.operator || "",
+    mobile_number: asset.mobile_number || "",
+    plan_name: asset.plan_name || "",
+    plan_amount: Number(asset.plan_amount || 0),
+    last_recharge_date: asset.last_recharge_date || "",
+    validity_date: asset.validity_date || "",
+    monthly_recovery: Number(asset.monthly_recovery || 0),
+    company: asset.company || "",
+    remarks: asset.remarks || ""
+  });
+}
+function hydratePrepaidAsset(raw) {
+  let meta = {};
+  if (raw?.prepaid_meta) {
+    if (typeof raw.prepaid_meta === "string") {
+      try {
+        meta = JSON.parse(raw.prepaid_meta) || {};
+      } catch {
+        meta = {};
+      }
+    } else if (typeof raw.prepaid_meta === "object") {
+      meta = raw.prepaid_meta;
+    }
+  }
+  return {
+    id: raw.id,
+    employee_id: raw.employee_id,
+    employee_name: raw.employee_name,
+    asset_name: raw.asset_name || meta.plan_name || "Corporate Prepaid SIM",
+    serial_number: raw.serial_number || meta.mobile_number || "",
+    type: raw.type || PREPAID_SIM_TYPE,
+    issue_date: raw.issue_date || "",
+    return_date: raw.return_date || void 0,
+    status: raw.status || "ISSUED",
+    condition: raw.condition || "Good",
+    operator: raw.operator || meta.operator || "",
+    mobile_number: raw.mobile_number || meta.mobile_number || raw.serial_number || "",
+    plan_name: raw.plan_name || meta.plan_name || "",
+    plan_amount: Number(raw.plan_amount ?? meta.plan_amount ?? 0),
+    last_recharge_date: raw.last_recharge_date || meta.last_recharge_date || "",
+    validity_date: raw.validity_date || meta.validity_date || "",
+    monthly_recovery: Number(raw.monthly_recovery ?? meta.monthly_recovery ?? 0),
+    company: raw.company || meta.company || "",
+    remarks: raw.remarks || meta.remarks || "",
+    prepaid_meta: typeof raw.prepaid_meta === "string" ? raw.prepaid_meta : packPrepaidMeta({ ...meta, ...raw })
+  };
+}
+
+// server/db.ts
 var sqlite3 = null;
 var DB_SQLITE_FILE = import_path.default.join(process.cwd(), "Payroll.db");
 var SEED_EMPLOYEES = [
@@ -1490,6 +1544,8 @@ var PayrollDatabase = class _PayrollDatabase {
       status TEXT,
       condition TEXT
     )`);
+    this.dbSqlite.run(`ALTER TABLE assets ADD COLUMN prepaid_meta TEXT`, () => {
+    });
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS travel_reimbursements (
       id TEXT PRIMARY KEY,
       employee_id TEXT,
@@ -5526,7 +5582,7 @@ Sakar & SVN Group`;
   }
   // --- Assets tracking ---
   getAssets(employeeId) {
-    const list = this.data.assets || [];
+    const list = (this.data.assets || []).map(hydratePrepaidAsset);
     if (employeeId) {
       return list.filter((a) => a.employee_id === employeeId);
     }
@@ -5534,22 +5590,29 @@ Sakar & SVN Group`;
   }
   saveAsset(asset) {
     if (!this.data.assets) this.data.assets = [];
-    const index = this.data.assets.findIndex((a) => a.id === asset.id);
+    const packed = hydratePrepaidAsset({
+      ...asset,
+      serial_number: asset.serial_number || asset.mobile_number || "",
+      prepaid_meta: packPrepaidMeta(asset)
+    });
+    const index = this.data.assets.findIndex((a) => a.id === packed.id);
     if (index >= 0) {
-      this.data.assets[index] = asset;
+      this.data.assets[index] = packed;
     } else {
-      this.data.assets.push(asset);
+      this.data.assets.push(packed);
     }
     this.dbSqlite.run(
-      `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [asset.id, asset.employee_id, asset.employee_name, asset.asset_name, asset.serial_number, asset.type, asset.issue_date, asset.return_date || null, asset.status, asset.condition]
+      `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [packed.id, packed.employee_id, packed.employee_name, packed.asset_name, packed.serial_number, packed.type, packed.issue_date, packed.return_date || null, packed.status, packed.condition, packed.prepaid_meta || packPrepaidMeta(packed)]
     );
+    this.persistData();
   }
   deleteAsset(id) {
     if (this.data.assets) {
       this.data.assets = this.data.assets.filter((a) => a.id !== id);
     }
     this.dbSqlite.run(`DELETE FROM assets WHERE id = ?`, [id]);
+    this.persistData();
   }
   // --- Travel Allowance ---
   getTravelReimbursements(employeeId) {
@@ -6320,9 +6383,10 @@ Sakar & SVN Group`;
           const return_date = as.return_date || null;
           const status = as.status || "ASSIGNED";
           const condition = as.condition || "";
+          const prepaid_meta = as.prepaid_meta || packPrepaidMeta(as);
           await runSql(
-            `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition]
+            `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta]
           );
         }
       }
@@ -9476,23 +9540,25 @@ HR Department`;
       res.status(500).json({ error: e.message });
     }
   });
-  app.post("/api/assets", (req, res) => {
+  app.post("/api/assets", async (req, res) => {
     try {
       const asset = req.body;
       if (!asset.id) {
         asset.id = "AST-" + Math.random().toString(36).substring(2, 11).toUpperCase();
       }
       db.saveAsset(asset);
+      await db.forcePersistToSupabase();
       db.logAudit("Save Asset", `Saved asset ${asset.asset_name} (${asset.serial_number}) for employee ${asset.employee_name}`, getOperator(req));
       res.json({ success: true, asset });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
   });
-  app.delete("/api/assets/:id", (req, res) => {
+  app.delete("/api/assets/:id", async (req, res) => {
     try {
       const { id } = req.params;
       db.deleteAsset(id);
+      await db.forcePersistToSupabase();
       db.logAudit("Delete Asset", `Deleted asset ID ${id}`, getOperator(req));
       res.json({ success: true });
     } catch (e) {

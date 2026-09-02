@@ -40,6 +40,7 @@ import {
   CompanyWorkerPayrollRecord,
   PfEsicChallanRow
 } from '../src/types';
+import { hydratePrepaidAsset, packPrepaidMeta } from '../src/lib/prepaidStatus';
 
 const DB_SQLITE_FILE = path.join(process.cwd(), 'Payroll.db');
 
@@ -1470,6 +1471,7 @@ export class PayrollDatabase {
       status TEXT,
       condition TEXT
     )`);
+    this.dbSqlite.run(`ALTER TABLE assets ADD COLUMN prepaid_meta TEXT`, () => {});
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS travel_reimbursements (
       id TEXT PRIMARY KEY,
@@ -5643,7 +5645,7 @@ Sakar & SVN Group`;
 
   // --- Assets tracking ---
   public getAssets(employeeId?: string): EmployeeAsset[] {
-    const list = this.data.assets || [];
+    const list = (this.data.assets || []).map(hydratePrepaidAsset);
     if (employeeId) {
       return list.filter(a => a.employee_id === employeeId);
     }
@@ -5652,17 +5654,23 @@ Sakar & SVN Group`;
 
   public saveAsset(asset: EmployeeAsset): void {
     if (!this.data.assets) this.data.assets = [];
-    const index = this.data.assets.findIndex(a => a.id === asset.id);
+    const packed = hydratePrepaidAsset({
+      ...asset,
+      serial_number: asset.serial_number || asset.mobile_number || '',
+      prepaid_meta: packPrepaidMeta(asset)
+    });
+    const index = this.data.assets.findIndex(a => a.id === packed.id);
     if (index >= 0) {
-      this.data.assets[index] = asset;
+      this.data.assets[index] = packed;
     } else {
-      this.data.assets.push(asset);
+      this.data.assets.push(packed);
     }
 
     this.dbSqlite.run(
-      `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [asset.id, asset.employee_id, asset.employee_name, asset.asset_name, asset.serial_number, asset.type, asset.issue_date, asset.return_date || null, asset.status, asset.condition]
+      `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [packed.id, packed.employee_id, packed.employee_name, packed.asset_name, packed.serial_number, packed.type, packed.issue_date, packed.return_date || null, packed.status, packed.condition, packed.prepaid_meta || packPrepaidMeta(packed)]
     );
+    this.persistData();
   }
 
   public deleteAsset(id: string): void {
@@ -5670,6 +5678,7 @@ Sakar & SVN Group`;
       this.data.assets = this.data.assets.filter(a => a.id !== id);
     }
     this.dbSqlite.run(`DELETE FROM assets WHERE id = ?`, [id]);
+    this.persistData();
   }
 
   // --- Travel Allowance ---
@@ -6408,9 +6417,10 @@ Sakar & SVN Group`;
         const status = as.status || 'ASSIGNED';
         const condition = as.condition || '';
 
+        const prepaid_meta = as.prepaid_meta || packPrepaidMeta(as);
         await runSql(
-          `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition]
+          `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition, prepaid_meta]
         );
       }
     }

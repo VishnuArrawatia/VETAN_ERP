@@ -43,7 +43,8 @@ import {
   XCircle,
   ArrowRightLeft,
   Edit2,
-  Gift
+  Gift,
+  Smartphone
 } from 'lucide-react';
 
 import { 
@@ -96,6 +97,7 @@ import ArrearWorking from './components/ArrearWorking';
 import BulkSalaryRevisionUpload from './components/BulkSalaryRevisionUpload';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
+import PrepaidSimRegister from './components/PrepaidSimRegister';
 import WorkforceModule from './components/WorkforceModule';
 import { fetchJsonWithOfflineFallback, filterEmployeesByCompany } from './lib/offlineStore';
 
@@ -274,7 +276,7 @@ export default function App() {
   }, [activeCompany]);
 
   const [activeMonth, setActiveMonth] = useState('2026-05');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'prepaid' | 'accounting' | 'bonus' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy' | 'salary'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
@@ -2830,6 +2832,16 @@ export default function App() {
             </button>
 
             <button
+              id="sidebar-tab-prepaid"
+              disabled={activeHR.role === 'ATTENDANCE_ONLY_HR'}
+              onClick={() => setActiveTab('prepaid')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between ${activeHR.role === 'ATTENDANCE_ONLY_HR' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'cursor-pointer'} ${activeTab==='prepaid' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
+            >
+              <span>Prepaid SIM Register</span>
+              {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <Smartphone size={14} />}
+            </button>
+
+            <button
               id="sidebar-tab-accounting"
               disabled={activeHR.role === 'ATTENDANCE_ONLY_HR'}
               onClick={() => setActiveTab('accounting')}
@@ -3461,6 +3473,14 @@ export default function App() {
                     fetchEmployees();
                     fetchLoans();
                   }}
+                  activeHRRole={activeHR.role}
+                />
+              )}
+
+              {activeTab === 'prepaid' && (
+                <PrepaidSimRegister
+                  employees={employees}
+                  activeCompany={activeCompany}
                   activeHRRole={activeHR.role}
                 />
               )}

@@ -493,6 +493,17 @@ export interface EmployeeAsset {
   return_date?: string;
   status: 'ISSUED' | 'RETURNED' | 'LOST' | 'DAMAGED';
   condition: string;
+  /** Corporate prepaid SIM extras (also packed into prepaid_meta for SQLite). */
+  operator?: string;
+  mobile_number?: string;
+  plan_name?: string;
+  plan_amount?: number;
+  last_recharge_date?: string;
+  validity_date?: string;
+  monthly_recovery?: number;
+  company?: string;
+  remarks?: string;
+  prepaid_meta?: string;
 }
 
 export interface TravelReimbursement {
