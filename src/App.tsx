@@ -607,9 +607,13 @@ export default function App() {
             if (stats && stats.employeesCount > 0) {
               setBackupStats(stats);
               
-              // Trigger auto-restore if the server has dummy/seeded data but backup has real data,
-              // OR if the backup has more employees than current server state
-              const shouldRestoreSilently = (isServerDummy && !isBackupDummy) || (stats.employeesCount > currentCount);
+              // Trigger auto-restore ONLY when the server clearly got reset
+              // (dummy seed data or zero employees) while the browser backup holds
+              // real data. A healthy server that simply has fewer employees (e.g.
+              // legitimate separations) must NEVER be overwritten by a stale backup.
+              const serverLooksReset = isServerDummy || currentCount === 0;
+              const shouldRestoreSilently =
+                serverLooksReset && !isBackupDummy && stats.employeesCount > 0;
               
               if (shouldRestoreSilently) {
                 console.log(`[Auto-Restore] Silent auto-restore triggered: Server is dummy/reset, but local backup contains real data.`);

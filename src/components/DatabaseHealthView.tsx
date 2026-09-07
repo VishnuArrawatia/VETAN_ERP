@@ -77,18 +77,22 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
     setMsg(null);
     try {
       const store = await loadOfflineStore();
-      await saveStoreEverywhere(store);
+      const push = await saveStoreEverywhere(store);
       const label = `manual-${new Date().toISOString().slice(0, 19)}`;
       const backup = await createSupabaseBackup(store, label, 'Manual backup from Database Health');
       localStorage.setItem('vetan_last_save_time', new Date().toISOString());
       localStorage.setItem('vetan_last_backup_time', new Date().toISOString());
       await refreshSupabaseStatus();
-      setMsg({
-        type: backup.ok ? 'success' : 'error',
-        text: backup.ok
-          ? `Cloud sync OK. Live store + backup saved (${store.employees?.length || 0} employees).`
-          : `Live store saved, backup issue: ${backup.error || 'unknown'}`
-      });
+      if (!push.ok) {
+        setMsg({ type: 'error', text: `Live store NOT saved: ${push.error || 'unknown'}` });
+      } else {
+        setMsg({
+          type: backup.ok ? 'success' : 'error',
+          text: backup.ok
+            ? `Cloud sync OK. Live store + backup saved (${store.employees?.length || 0} employees).`
+            : `Live store saved, backup issue: ${backup.error || 'unknown'}`
+        });
+      }
       onRefreshAll();
     } catch (e: any) {
       setMsg({ type: 'error', text: e?.message || 'Supabase sync failed. Did you run supabase/schema.sql?' });
@@ -142,7 +146,7 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
       // Prefer full local/Supabase path on Vercel (no Express /api)
       const store = await loadOfflineStore();
       if (store?.employees?.length) {
-        await saveStoreEverywhere(store);
+        const push = await saveStoreEverywhere(store);
         const label = new Date().toISOString().slice(0, 7);
         await createSupabaseBackup(store, `sync-${label}-${Date.now()}`, 'Manual sync from Database Health');
         const nowStr = new Date().toISOString();
@@ -151,8 +155,10 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
         loadTimes();
         await refreshSupabaseStatus();
         setMsg({
-          type: 'success',
-          text: `Saved to browser + Supabase cloud. Verified ${store.employees.length} employees.`
+          type: push.ok ? 'success' : 'error',
+          text: push.ok
+            ? `Saved to browser + Supabase cloud. Verified ${store.employees.length} employees.`
+            : `Live store NOT saved to cloud: ${push.error || 'unknown'}`
         });
         onRefreshAll();
         return;
@@ -170,12 +176,14 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
           const nowStr = new Date().toISOString();
           localStorage.setItem('vetan_last_save_time', nowStr);
           localStorage.setItem('vetan_last_backup_time', nowStr);
-          await saveStoreEverywhere(data);
+          const push = await saveStoreEverywhere(data);
           loadTimes();
           await refreshSupabaseStatus();
           setMsg({
-            type: 'success',
-            text: `Database sync snapshot saved successfully! Backup verified for ${data.employees.length} employees.`
+            type: push.ok ? 'success' : 'error',
+            text: push.ok
+              ? `Database sync snapshot saved successfully! Backup verified for ${data.employees.length} employees.`
+              : `Live store NOT saved to cloud: ${push.error || 'unknown'}`
           });
           onRefreshAll();
         } else {

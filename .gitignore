@@ -11,6 +11,10 @@ coverage/
 Payroll.db
 Payroll.db-journal
 payroll_persisted_store.json
+payroll_persisted_store.prev.json
+
+# Rotating safety snapshots (daily + pre-restore/pre-purge copies)
+data-backups/
 
 # Codebuff internal
 .freebuff/

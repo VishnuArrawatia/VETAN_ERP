@@ -24334,6 +24334,100 @@ var import_fs2 = __toESM(require("fs"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
+
+// src/lib/storeMerge.ts
+function recordTime(item) {
+  if (!item || typeof item !== "object") return null;
+  let best = null;
+  for (const field of ["updated_at", "modified_at", "updatedAt", "modifiedAt", "created_at", "createdAt"]) {
+    const v = item[field];
+    if (v == null || v === "") continue;
+    const t = typeof v === "number" ? v : Date.parse(String(v));
+    if (!Number.isNaN(t) && (best === null || t > best)) best = t;
+  }
+  return best;
+}
+function stableStringify(value) {
+  if (value === null || value === void 0) return String(value);
+  if (typeof value !== "object") return String(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const out = [];
+  for (const key of Object.keys(value).sort()) {
+    const v = value[key];
+    if (v === void 0) continue;
+    out.push(`${JSON.stringify(key)}:${stableStringify(v)}`);
+  }
+  return `{${out.join(",")}}`;
+}
+function recordKey(item) {
+  if (item === null || item === void 0) return "";
+  if (typeof item === "string") return `s:${item}`;
+  if (typeof item !== "object") return `${typeof item}:${String(item)}`;
+  for (const field of ["id", "username", "code", "key", "name"]) {
+    const v = item[field];
+    if (v !== void 0 && v !== null && v !== "") return `${field}:${String(v)}`;
+  }
+  return `json:${stableStringify(item)}`;
+}
+function mergeRecordArrays(base, incoming, prefer) {
+  const resultMap = /* @__PURE__ */ new Map();
+  const order = [];
+  const add = (item, source) => {
+    if (item === null || item === void 0) return;
+    const key = recordKey(item);
+    if (!key) return;
+    const existing = resultMap.get(key);
+    if (existing === void 0) {
+      resultMap.set(key, item);
+      order.push(key);
+      return;
+    }
+    if (existing === item) return;
+    if (source !== "incoming") return;
+    const t1 = recordTime(existing);
+    const t2 = recordTime(item);
+    if (t1 !== null && t2 !== null && t1 !== t2) {
+      if (t2 > t1) resultMap.set(key, item);
+      return;
+    }
+    if (prefer === "incoming") resultMap.set(key, item);
+  };
+  for (const it of base ?? []) add(it, "base");
+  for (const it of incoming ?? []) add(it, "incoming");
+  return order.map((k) => resultMap.get(k));
+}
+function pickScalar(base, incoming, prefer) {
+  if (base === void 0) return incoming;
+  if (incoming === void 0) return base;
+  const bJson = typeof base === "object" ? stableStringify(base) : null;
+  const iJson = typeof incoming === "object" ? stableStringify(incoming) : null;
+  if (bJson !== null || iJson !== null) {
+    if (bJson === iJson) return base;
+    const t1 = recordTime(base);
+    const t2 = recordTime(incoming);
+    if (t1 !== null && t2 !== null && t1 !== t2) return t2 > t1 ? incoming : base;
+    return prefer === "incoming" ? incoming : base;
+  }
+  return prefer === "incoming" ? incoming : base;
+}
+function mergeStores(base, incoming, prefer = "incoming") {
+  if (!base || typeof base !== "object") return incoming ? { ...incoming } : {};
+  if (!incoming || typeof incoming !== "object") return { ...base };
+  const keys = /* @__PURE__ */ new Set([...Object.keys(base), ...Object.keys(incoming)]);
+  const merged = {};
+  for (const key of keys) {
+    const b = base[key];
+    const i = incoming[key];
+    if (Array.isArray(b) || Array.isArray(i)) {
+      merged[key] = mergeRecordArrays(Array.isArray(b) ? b : [], Array.isArray(i) ? i : [], prefer);
+    } else {
+      merged[key] = pickScalar(b, i, prefer);
+    }
+  }
+  return merged;
+}
+
+// server/db.ts
 var sqlite3 = null;
 var DB_SQLITE_FILE = import_path.default.join(process.cwd(), "Payroll.db");
 var SEED_EMPLOYEES = [
@@ -24761,6 +24855,8 @@ var PayrollDatabase = class _PayrollDatabase {
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
+    /** Create one cloud snapshot per calendar day (once/day guard in memory). */
+    this._lastDailyCloudKey = "";
     /** Track pending Supabase persist so API handlers can await it. */
     this._pendingPersist = null;
     /** Track when we last loaded from Supabase to avoid stale reloads. */
@@ -24799,6 +24895,7 @@ var PayrollDatabase = class _PayrollDatabase {
             this.enforceCompanyCorrections();
             this.cleanupOrphanedPayrollRuns();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees, version: ${this._loadedVersion}).`);
+            void this.maybeDailyCloudSnapshot();
             return;
           }
         }
@@ -30067,6 +30164,129 @@ Sakar & SVN Group`;
   getFullBackupJSON() {
     return this.data;
   }
+  /** Absolute path of the local JSON mirror written by persistData(). */
+  get localJsonPath() {
+    return import_path.default.join(process.cwd(), "payroll_persisted_store.json");
+  }
+  /** Directory holding dated snapshots so a bad save can always be rolled back. */
+  get backupDir() {
+    return import_path.default.join(process.cwd(), "data-backups");
+  }
+  /** Small synchronous sleep for the rename retry (Atomics.wait works in Node main thread). */
+  syncSleep(ms) {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+      }
+    }
+  }
+  /**
+   * Write a JSON file atomically (tmp file + rename) so a crash never corrupts it.
+   * On Windows a transient lock (antivirus scan, another writer, OneDrive) can make
+   * rename-over-existing fail with EPERM — retry briefly, then fall back to a
+   * direct write (same behavior as the original code) rather than losing the save.
+   */
+  writeJsonAtomic(filePath, obj) {
+    const tmpPath = filePath + ".tmp";
+    import_fs.default.mkdirSync(import_path.default.dirname(filePath), { recursive: true });
+    try {
+      import_fs.default.writeFileSync(tmpPath, JSON.stringify(obj, null, 2), "utf-8");
+    } catch (e) {
+      import_fs.default.writeFileSync(filePath, JSON.stringify(obj, null, 2), "utf-8");
+      return;
+    }
+    let renamed = false;
+    for (let attempt = 1; attempt <= 3 && !renamed; attempt++) {
+      try {
+        import_fs.default.renameSync(tmpPath, filePath);
+        renamed = true;
+      } catch (e) {
+        if (e?.code === "EPERM" || e?.code === "EBUSY" || e?.code === "EACCES") {
+          if (attempt < 3) this.syncSleep(120 * attempt);
+        } else {
+          break;
+        }
+      }
+    }
+    if (!renamed) {
+      try {
+        import_fs.default.writeFileSync(filePath, JSON.stringify(obj, null, 2), "utf-8");
+        console.warn(`[Persist] Atomic rename unavailable for ${import_path.default.basename(filePath)} \u2014 used direct write fallback.`);
+      } finally {
+        try {
+          if (import_fs.default.existsSync(tmpPath)) import_fs.default.unlinkSync(tmpPath);
+        } catch {
+        }
+      }
+    }
+  }
+  /** Keep a dated snapshot of every day the app runs + the previous state file. */
+  rotateLocalSnapshots() {
+    try {
+      const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+      const dir = this.backupDir;
+      const dailyFile = import_path.default.join(dir, `store_${today}.json`);
+      if (!import_fs.default.existsSync(dailyFile)) {
+        this.writeJsonAtomic(dailyFile, this.data);
+      }
+      try {
+        const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1e3;
+        for (const f of import_fs.default.readdirSync(dir)) {
+          if (!/^store_\d{4}-\d{2}-\d{2}\.json$/.test(f)) continue;
+          const p = import_path.default.join(dir, f);
+          if (import_fs.default.statSync(p).mtimeMs < cutoff) import_fs.default.unlinkSync(p);
+        }
+      } catch {
+      }
+    } catch (e) {
+      console.error("Failed to rotate local snapshots:", e);
+    }
+  }
+  /** Persist a safety snapshot (local file) — used before destructive operations. */
+  writeLocalSnapshot(label) {
+    try {
+      const safe = String(label).replace(/[^a-zA-Z0-9._-]/g, "_");
+      this.writeJsonAtomic(import_path.default.join(this.backupDir, `${safe}.json`), this.data);
+    } catch (e) {
+      console.error("Failed to write local safety snapshot:", e);
+    }
+  }
+  /**
+   * Insert a point-in-time backup row into Supabase (vetan_erp_backups).
+   * Best-effort — used before restore/purge and for daily cloud snapshots.
+   */
+  async createCloudSnapshot(label, note) {
+    if (!this.supabaseAdmin) return { ok: false, error: "No Supabase client" };
+    try {
+      const { error } = await this.supabaseAdmin.from("vetan_erp_backups").insert({
+        label,
+        payload: this.data,
+        employee_count: Array.isArray(this.data?.employees) ? this.data.employees.length : 0,
+        note: note || null
+      });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+  async maybeDailyCloudSnapshot() {
+    if (!this.supabaseAdmin || this.loadedFromSeed) return;
+    const key = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    if (this._lastDailyCloudKey === key) return;
+    this._lastDailyCloudKey = key;
+    try {
+      const { data: existing, error } = await this.supabaseAdmin.from("vetan_erp_backups").select("id").eq("label", `auto-${key}`).limit(1);
+      if (error) return;
+      if (!existing || existing.length === 0) {
+        const res = await this.createCloudSnapshot(`auto-${key}`, "Automatic daily cloud snapshot");
+        if (res.ok) console.log(`[Supabase] Daily cloud snapshot auto-${key} created.`);
+      }
+    } catch {
+    }
+  }
   async _persistToSupabaseWithRetry(maxRetries = 3) {
     if (!this.supabaseAdmin) return { ok: false, error: "No Supabase client" };
     if (this.loadedFromSeed) return { ok: false, error: "Loaded from seed \u2014 blocked" };
@@ -30079,7 +30299,7 @@ Sakar & SVN Group`;
         );
         let writePromise;
         if (this._loadedVersion) {
-          writePromise = this.supabaseAdmin.from("vetan_erp_store").update({ payload: this.data, updated_at: newUpdatedAt }).eq("id", "live").eq("updated_at", this._loadedVersion);
+          writePromise = this.supabaseAdmin.from("vetan_erp_store").update({ payload: this.data, updated_at: newUpdatedAt }).eq("id", "live").eq("updated_at", this._loadedVersion).select("id");
         } else {
           writePromise = this.supabaseAdmin.from("vetan_erp_store").upsert(
             { id: "live", payload: this.data, updated_at: newUpdatedAt },
@@ -30098,8 +30318,18 @@ Sakar & SVN Group`;
         }
         if (this._loadedVersion && Array.isArray(updateResult) && updateResult.length === 0) {
           this._conflictCount++;
-          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} \u2014 another writer updated. Reloading...`);
-          await this.reloadFromSupabase();
+          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} \u2014 another writer updated. Merging instead of overwriting...`);
+          try {
+            const remoteRow = await this._fetchCloudRowOnce();
+            if (remoteRow && remoteRow.payload && typeof remoteRow.payload === "object") {
+              const beforeEmployees = this.data?.employees?.length || 0;
+              this.data = mergeStores(this.data, remoteRow.payload, "base");
+              this._loadedVersion = remoteRow.updated_at || "";
+              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} \u2192 ${this.data?.employees?.length || 0} employees).`);
+            }
+          } catch (mergeErr) {
+            console.error("[Supabase] Conflict merge failed:", mergeErr?.message || mergeErr);
+          }
           if (attempt < maxRetries && this._conflictCount < _PayrollDatabase.MAX_CONFLICT_RETRIES) {
             await new Promise((r) => setTimeout(r, 500 * attempt));
             continue;
@@ -30128,8 +30358,16 @@ Sakar & SVN Group`;
   }
   persistData() {
     try {
-      const dbPath = import_path.default.join(process.cwd(), "payroll_persisted_store.json");
-      import_fs.default.writeFileSync(dbPath, JSON.stringify(this.data, null, 2), "utf-8");
+      const dbPath = this.localJsonPath;
+      try {
+        if (import_fs.default.existsSync(dbPath)) {
+          import_fs.default.copyFileSync(dbPath, dbPath.replace(/\.json$/i, ".prev.json"));
+        }
+      } catch (e) {
+        console.error("Failed to keep previous JSON state:", e);
+      }
+      this.writeJsonAtomic(dbPath, this.data);
+      this.rotateLocalSnapshots();
     } catch (e) {
       console.error("Failed to persist data to JSON:", e);
     }
@@ -30219,7 +30457,7 @@ Sakar & SVN Group`;
           console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) \u2014 remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
           return;
         }
-        this.data = { ...this.data, ...row.payload };
+        this.data = mergeStores(this.data, row.payload, "incoming");
         this._loadedVersion = remoteUpdatedAt || "";
         this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
         this.inMemoryOnly = true;
@@ -30229,6 +30467,22 @@ Sakar & SVN Group`;
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
         if (attempt < MAX_RETRIES) await new Promise((r) => setTimeout(r, 500 * attempt));
       }
+    }
+  }
+  /** Single best-effort fetch of the live cloud row (payload + updated_at). */
+  async _fetchCloudRowOnce() {
+    if (!this.supabaseAdmin) return null;
+    try {
+      const TIMEOUT_MS = 1e4;
+      const timeoutPromise = new Promise(
+        (_, reject) => setTimeout(() => reject(new Error("_fetchCloudRowOnce timeout")), TIMEOUT_MS)
+      );
+      const queryPromise = this.supabaseAdmin.from("vetan_erp_store").select("payload, updated_at").eq("id", "live").maybeSingle();
+      const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error || !row?.payload || typeof row.payload !== "object") return null;
+      return { payload: row.payload, updated_at: row.updated_at || "" };
+    } catch {
+      return null;
     }
   }
   /** Force an awaited upsert to Supabase (for critical writes). */
@@ -30241,6 +30495,21 @@ Sakar & SVN Group`;
     return this._persistToSupabaseWithRetry(3);
   }
   async restoreFullBackupJSON(backupData) {
+    if (!backupData || typeof backupData !== "object" || Array.isArray(backupData)) {
+      throw new Error("Invalid backup payload: expected an ERP store object");
+    }
+    if (!Array.isArray(backupData.employees)) {
+      throw new Error("Invalid backup payload: employees[] missing");
+    }
+    const jsonSize = JSON.stringify(backupData).length;
+    if (jsonSize > 250 * 1024 * 1024) {
+      throw new Error(`Backup payload too large (${Math.round(jsonSize / 1024 / 1024)} MB)`);
+    }
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+    const snapRes = await this.createCloudSnapshot(`pre-restore-${stamp}`, "Automatic safety snapshot before JSON restore");
+    if (!snapRes.ok) console.warn("[restoreFullBackupJSON] Cloud pre-restore snapshot failed:", snapRes.error);
+    this.writeLocalSnapshot(`pre-restore-${stamp}`);
+    console.log(`[restoreFullBackupJSON] Pre-restore safety snapshot saved (${this.data?.employees?.length || 0} employees in current state).`);
     this.data = { ...this.data, ...backupData };
     const runSql = (sql, params = []) => {
       return new Promise((resolve, reject) => {
@@ -30816,6 +31085,11 @@ Sakar & SVN Group`;
     this.persistData();
   }
   async purgeEmployees() {
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+    const snapRes = await this.createCloudSnapshot(`pre-purge-${stamp}`, "Automatic safety snapshot before employee purge");
+    if (!snapRes.ok) console.warn("[purgeEmployees] Cloud pre-purge snapshot failed:", snapRes.error);
+    this.writeLocalSnapshot(`pre-purge-${stamp}`);
+    console.log(`[purgeEmployees] Pre-purge safety snapshot saved (${this.data?.employees?.length || 0} employees).`);
     const runSql = (query, params = []) => {
       return new Promise((resolve, reject) => {
         this.dbSqlite.run(query, params, (err) => err ? reject(err) : resolve());

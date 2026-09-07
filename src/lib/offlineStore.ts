@@ -6,7 +6,8 @@
 import {
   bootstrapSupabaseFromLocal,
   pullStoreFromSupabase,
-  pushStoreToSupabase
+  pushStoreToSupabase,
+  type PushResult
 } from './supabaseData';
 
 export type OfflineStore = {
@@ -228,13 +229,28 @@ export async function upsertOfflineCompany(company: Record<string, any>): Promis
   }
   const next = { ...store, companies };
   persistLocal(next);
-  void pushStoreToSupabase(next);
+  // CAS union push — cloud-only records are preserved, never overwritten.
+  void pushStoreToSupabase(next).then((res) => {
+    if (!res.ok) console.warn('[Store] Company save to Supabase did not complete:', res.error);
+    else if (res.merged) persistLocal(normalizeCompanyNames(res.merged as OfflineStore));
+  });
   return companies;
 }
 
-/** Persist any patched store (employees/attendance/etc.) to local + Supabase. */
-export async function saveStoreEverywhere(store: OfflineStore): Promise<void> {
+/**
+ * Persist any patched store (employees/attendance/etc.) to browser + Supabase.
+ * Supabase write is a compare-and-swap UNION (see pushStoreToSupabase), so cloud
+ * records this browser does not know about are never wiped. On success the merged
+ * result is written back to the browser backup so the two sides converge.
+ */
+export async function saveStoreEverywhere(store: OfflineStore): Promise<PushResult> {
   const normalized = normalizeCompanyNames(store);
   persistLocal(normalized);
-  await pushStoreToSupabase(normalized);
+  const res = await pushStoreToSupabase(normalized);
+  if (res.ok && res.merged) {
+    persistLocal(normalizeCompanyNames(res.merged as OfflineStore));
+  } else if (!res.ok) {
+    console.warn('[Store] Supabase push did not complete:', res.error);
+  }
+  return res;
 }

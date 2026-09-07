@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { mergeStores } from './storeMerge';
 
 type ErpStorePayload = {
   employees?: any[];
@@ -39,28 +40,98 @@ export async function pullStoreFromSupabase(): Promise<ErpStorePayload | null> {
   }
 }
 
-/** Save the full ERP store to Supabase live row. */
-export async function pushStoreToSupabase(store: ErpStorePayload): Promise<{ ok: boolean; error?: string }> {
+export type PushResult = { ok: boolean; error?: string; conflict?: boolean; merged?: ErpStorePayload };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Save the full ERP store to the Supabase live row using COMPARE-AND-SWAP:
+ *
+ * 1. Read the current remote row (payload + updated_at).
+ * 2. If the remote already has data, UNION-MERGE it with the local store instead
+ *    of overwriting — records that exist only on the remote (loans, payslips,
+ *    HODs, another machine's edits) can never be wiped by this browser.
+ * 3. Write with `.eq('updated_at', <version we read>)`. If 0 rows matched,
+ *    another writer moved the version → refetch, re-merge, and retry.
+ */
+export async function pushStoreToSupabase(store: ErpStorePayload): Promise<PushResult> {
   if (!hasAnonKey()) {
     return { ok: false, error: 'Missing VITE_SUPABASE_ANON_KEY' };
   }
-  try {
-    const { error } = await supabase.from('vetan_erp_store').upsert(
-      {
-        id: LIVE_ID,
-        payload: store,
-        updated_at: new Date().toISOString()
-      },
-      { onConflict: 'id' }
-    );
-    if (error) {
-      console.warn('[Supabase] push failed:', error.message);
-      return { ok: false, error: error.message };
+  const MAX_ATTEMPTS = 3;
+  let lastError = 'Supabase push failed';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      // 1) Read current remote version.
+      const { data: row, error: readErr } = await supabase
+        .from('vetan_erp_store')
+        .select('payload, updated_at')
+        .eq('id', LIVE_ID)
+        .maybeSingle();
+      if (readErr) {
+        lastError = readErr.message;
+        if (attempt < MAX_ATTEMPTS) { await sleep(600 * attempt); continue; }
+        return { ok: false, error: readErr.message };
+      }
+
+      const remotePayload = row?.payload as ErpStorePayload | undefined;
+      const remoteUpdatedAt = row?.updated_at || '';
+      const remoteEmpty =
+        !remotePayload || typeof remotePayload !== 'object' || employeeCount(remotePayload) === 0;
+
+      let payload = store;
+      if (!remoteEmpty) {
+        // Union-merge: keep every record the remote has that we don't know about.
+        // Same-ID conflicts prefer our copy ('base' = the store being pushed),
+        // unless the remote copy carries a strictly newer embedded timestamp.
+        payload = mergeStores(store, remotePayload, 'base');
+      }
+
+      const newUpdatedAt = new Date().toISOString();
+
+      // 2) Write.
+      if (remoteEmpty) {
+        // First bootstrap — no version to guard against.
+        const { error } = await supabase.from('vetan_erp_store').upsert(
+          { id: LIVE_ID, payload, updated_at: newUpdatedAt },
+          { onConflict: 'id' }
+        );
+        if (error) {
+          lastError = error.message;
+          if (attempt < MAX_ATTEMPTS) { await sleep(600 * attempt); continue; }
+          return { ok: false, error: error.message };
+        }
+        return { ok: true, merged: payload };
+      }
+
+      const { data: updated, error: updErr } = await supabase
+        .from('vetan_erp_store')
+        .update({ payload, updated_at: newUpdatedAt })
+        .eq('id', LIVE_ID)
+        .eq('updated_at', remoteUpdatedAt)
+        .select('id');
+
+      if (updErr) {
+        lastError = updErr.message;
+        if (attempt < MAX_ATTEMPTS) { await sleep(600 * attempt); continue; }
+        return { ok: false, error: updErr.message };
+      }
+      if (Array.isArray(updated) && updated.length === 0) {
+        // CAS conflict — another writer moved the version. Re-read + re-merge + retry.
+        lastError = `Concurrent update conflict (attempt ${attempt}/${MAX_ATTEMPTS})`;
+        console.warn(`[Supabase] push conflict attempt ${attempt}, re-merging...`);
+        if (attempt < MAX_ATTEMPTS) { await sleep(700 * attempt); continue; }
+        return { ok: false, error: lastError, conflict: true };
+      }
+      return { ok: true, merged: payload };
+    } catch (e: any) {
+      lastError = e?.message || String(e);
+      if (attempt < MAX_ATTEMPTS) { await sleep(600 * attempt); continue; }
+      return { ok: false, error: lastError };
     }
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || String(e) };
   }
+  return { ok: false, error: lastError };
 }
 
 /** Create a dated backup row (for April 2026+ archive safety). */

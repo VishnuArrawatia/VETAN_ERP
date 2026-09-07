@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { mergeStores } from '../src/lib/storeMerge';
 
 let sqlite3: any = null;
 import {
@@ -547,6 +548,8 @@ export class PayrollDatabase {
             // FIX: Clean up orphaned payroll runs — keep only one per month
             this.cleanupOrphanedPayrollRuns();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees, version: ${this._loadedVersion}).`);
+            // Fire-and-forget: ensure one dated cloud snapshot exists per calendar day.
+            void this.maybeDailyCloudSnapshot();
             return;
           }
         }
@@ -5942,6 +5945,140 @@ Sakar & SVN Group`;
   public lastPersistError: string | null = null;
   public lastPersistSuccess: boolean = true;
 
+  /** Absolute path of the local JSON mirror written by persistData(). */
+  private get localJsonPath(): string {
+    return path.join(process.cwd(), 'payroll_persisted_store.json');
+  }
+
+  /** Directory holding dated snapshots so a bad save can always be rolled back. */
+  private get backupDir(): string {
+    return path.join(process.cwd(), 'data-backups');
+  }
+
+  /** Small synchronous sleep for the rename retry (Atomics.wait works in Node main thread). */
+  private syncSleep(ms: number): void {
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    } catch {
+      const end = Date.now() + ms;
+      while (Date.now() < end) { /* busy fallback */ }
+    }
+  }
+
+  /**
+   * Write a JSON file atomically (tmp file + rename) so a crash never corrupts it.
+   * On Windows a transient lock (antivirus scan, another writer, OneDrive) can make
+   * rename-over-existing fail with EPERM — retry briefly, then fall back to a
+   * direct write (same behavior as the original code) rather than losing the save.
+   */
+  private writeJsonAtomic(filePath: string, obj: any): void {
+    const tmpPath = filePath + '.tmp';
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch (e) {
+      // tmp write itself failed — try writing the destination directly.
+      fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+      return;
+    }
+    let renamed = false;
+    for (let attempt = 1; attempt <= 3 && !renamed; attempt++) {
+      try {
+        fs.renameSync(tmpPath, filePath);
+        renamed = true;
+      } catch (e: any) {
+        if (e?.code === 'EPERM' || e?.code === 'EBUSY' || e?.code === 'EACCES') {
+          if (attempt < 3) this.syncSleep(120 * attempt);
+        } else {
+          break;
+        }
+      }
+    }
+    if (!renamed) {
+      try {
+        // Final fallback: direct write (non-atomic but matches legacy behavior).
+        fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+        console.warn(`[Persist] Atomic rename unavailable for ${path.basename(filePath)} — used direct write fallback.`);
+      } finally {
+        try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch { /* best-effort */ }
+      }
+    }
+  }
+
+  /** Keep a dated snapshot of every day the app runs + the previous state file. */
+  private rotateLocalSnapshots(): void {
+    try {
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const dir = this.backupDir;
+      const dailyFile = path.join(dir, `store_${today}.json`);
+      if (!fs.existsSync(dailyFile)) {
+        this.writeJsonAtomic(dailyFile, this.data);
+      }
+      // Prune snapshots older than 60 days so the folder never grows unbounded.
+      try {
+        const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+        for (const f of fs.readdirSync(dir)) {
+          if (!/^store_\d{4}-\d{2}-\d{2}\.json$/.test(f)) continue;
+          const p = path.join(dir, f);
+          if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
+        }
+      } catch { /* prune is best-effort */ }
+    } catch (e) {
+      console.error('Failed to rotate local snapshots:', e);
+    }
+  }
+
+  /** Persist a safety snapshot (local file) — used before destructive operations. */
+  private writeLocalSnapshot(label: string): void {
+    try {
+      const safe = String(label).replace(/[^a-zA-Z0-9._-]/g, '_');
+      this.writeJsonAtomic(path.join(this.backupDir, `${safe}.json`), this.data);
+    } catch (e) {
+      console.error('Failed to write local safety snapshot:', e);
+    }
+  }
+
+  /**
+   * Insert a point-in-time backup row into Supabase (vetan_erp_backups).
+   * Best-effort — used before restore/purge and for daily cloud snapshots.
+   */
+  public async createCloudSnapshot(label: string, note?: string): Promise<{ ok: boolean; error?: string }> {
+    if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
+    try {
+      const { error } = await this.supabaseAdmin.from('vetan_erp_backups').insert({
+        label,
+        payload: this.data,
+        employee_count: Array.isArray(this.data?.employees) ? this.data.employees.length : 0,
+        note: note || null
+      });
+      if (error) return { ok: false, error: error.message };
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
+  /** Create one cloud snapshot per calendar day (once/day guard in memory). */
+  private _lastDailyCloudKey = '';
+  public async maybeDailyCloudSnapshot(): Promise<void> {
+    if (!this.supabaseAdmin || this.loadedFromSeed) return; // never snapshot seed data
+    const key = new Date().toISOString().slice(0, 10);
+    if (this._lastDailyCloudKey === key) return;
+    this._lastDailyCloudKey = key;
+    try {
+      const { data: existing, error } = await this.supabaseAdmin
+        .from('vetan_erp_backups')
+        .select('id')
+        .eq('label', `auto-${key}`)
+        .limit(1);
+      if (error) return;
+      if (!existing || existing.length === 0) {
+        const res = await this.createCloudSnapshot(`auto-${key}`, 'Automatic daily cloud snapshot');
+        if (res.ok) console.log(`[Supabase] Daily cloud snapshot auto-${key} created.`);
+      }
+    } catch { /* best-effort */ }
+  }
+
   private async _persistToSupabaseWithRetry(maxRetries = 3): Promise<{ ok: boolean; error?: string; conflict?: boolean }> {
     if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
     if (this.loadedFromSeed) return { ok: false, error: 'Loaded from seed — blocked' };
@@ -5957,12 +6094,15 @@ Sakar & SVN Group`;
 
         let writePromise: any;
         if (this._loadedVersion) {
-          // OPTIMISTIC CONCURRENCY: only write if the version we loaded is still current
+          // OPTIMISTIC CONCURRENCY: only write if the version we loaded is still current.
+          // .select('id') is REQUIRED — without it supabase-js returns data:null and
+          // we cannot detect that 0 rows matched (another writer moved the version).
           writePromise = this.supabaseAdmin
             .from('vetan_erp_store')
             .update({ payload: this.data, updated_at: newUpdatedAt })
             .eq('id', 'live')
-            .eq('updated_at', this._loadedVersion);
+            .eq('updated_at', this._loadedVersion)
+            .select('id');
         } else {
           // First write or no version tracked — use upsert
           writePromise = this.supabaseAdmin
@@ -5985,12 +6125,25 @@ Sakar & SVN Group`;
           return { ok: false, error: msg };
         }
 
-        // OPTIMISTIC CONCURRENCY CHECK: if using versioned update, verify rows were affected
+        // OPTIMISTIC CONCURRENCY CHECK: verify rows were actually updated.
+        // Empty result = another writer moved the version between our load and write.
         if (this._loadedVersion && Array.isArray(updateResult) && updateResult.length === 0) {
-          // CONFLICT: another writer overwrote our data. Reload and retry.
           this._conflictCount++;
-          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} — another writer updated. Reloading...`);
-          await this.reloadFromSupabase();
+          console.warn(`[Supabase] OCC CONFLICT #${this._conflictCount} — another writer updated. Merging instead of overwriting...`);
+          // NEVER drop our in-flight changes on a conflict. Pull the remote row and
+          // UNION-merge it with our local state (records only on either side survive),
+          // then retry against the freshly loaded version.
+          try {
+            const remoteRow = await this._fetchCloudRowOnce();
+            if (remoteRow && remoteRow.payload && typeof remoteRow.payload === 'object') {
+              const beforeEmployees = this.data?.employees?.length || 0;
+              this.data = mergeStores(this.data, remoteRow.payload, 'base');
+              this._loadedVersion = remoteRow.updated_at || '';
+              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} → ${this.data?.employees?.length || 0} employees).`);
+            }
+          } catch (mergeErr: any) {
+            console.error('[Supabase] Conflict merge failed:', mergeErr?.message || mergeErr);
+          }
           if (attempt < maxRetries && this._conflictCount < PayrollDatabase.MAX_CONFLICT_RETRIES) {
             await new Promise(r => setTimeout(r, 500 * attempt));
             continue;
@@ -6024,10 +6177,21 @@ Sakar & SVN Group`;
   private _pendingPersist: Promise<any> | null = null;
 
   private persistData() {
-    // 1. Local JSON file (existing behavior for local dev)
+    // 1. Local JSON file — ATOMIC (tmp + rename) so a crash mid-write can never
+    //    corrupt the store, plus a .prev copy of the last-known-good state and a
+    //    once-per-day dated snapshot under data-backups/.
     try {
-      const dbPath = path.join(process.cwd(), 'payroll_persisted_store.json');
-      fs.writeFileSync(dbPath, JSON.stringify(this.data, null, 2), 'utf-8');
+      const dbPath = this.localJsonPath;
+      // Keep previous state so even a buggy future save can be reverted.
+      try {
+        if (fs.existsSync(dbPath)) {
+          fs.copyFileSync(dbPath, dbPath.replace(/\.json$/i, '.prev.json'));
+        }
+      } catch (e) {
+        console.error('Failed to keep previous JSON state:', e);
+      }
+      this.writeJsonAtomic(dbPath, this.data);
+      this.rotateLocalSnapshots();
     } catch (e) {
       console.error('Failed to persist data to JSON:', e);
     }
@@ -6145,7 +6309,12 @@ Sakar & SVN Group`;
           return;
         }
 
-        this.data = { ...this.data, ...row.payload };
+        // UNION-MERGE instead of wholesale replace: adopt every remote record, but
+        // never drop records that only exist in this instance's memory (e.g. a
+        // mutation whose cloud write was still in flight, or data a previous persist
+        // failed to upload). Same-ID conflicts prefer the remote copy on an idle
+        // reload because the remote is the shared source of truth.
+        this.data = mergeStores(this.data, row.payload, 'incoming');
         this._loadedVersion = remoteUpdatedAt || '';
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
@@ -6155,6 +6324,27 @@ Sakar & SVN Group`;
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
         if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 500 * attempt));
       }
+    }
+  }
+
+  /** Single best-effort fetch of the live cloud row (payload + updated_at). */
+  private async _fetchCloudRowOnce(): Promise<{ payload: any; updated_at: string } | null> {
+    if (!this.supabaseAdmin) return null;
+    try {
+      const TIMEOUT_MS = 10_000;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('_fetchCloudRowOnce timeout')), TIMEOUT_MS)
+      );
+      const queryPromise = this.supabaseAdmin
+        .from('vetan_erp_store')
+        .select('payload, updated_at')
+        .eq('id', 'live')
+        .maybeSingle();
+      const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error || !row?.payload || typeof row.payload !== 'object') return null;
+      return { payload: row.payload, updated_at: row.updated_at || '' };
+    } catch {
+      return null;
     }
   }
 
@@ -6169,6 +6359,27 @@ Sakar & SVN Group`;
   }
 
   public async restoreFullBackupJSON(backupData: any): Promise<void> {
+    // SAFETY: validate the payload BEFORE wiping anything — a malformed body must
+    // never be able to clear the live database.
+    if (!backupData || typeof backupData !== 'object' || Array.isArray(backupData)) {
+      throw new Error('Invalid backup payload: expected an ERP store object');
+    }
+    if (!Array.isArray(backupData.employees)) {
+      throw new Error('Invalid backup payload: employees[] missing');
+    }
+    const jsonSize = JSON.stringify(backupData).length;
+    if (jsonSize > 250 * 1024 * 1024) {
+      throw new Error(`Backup payload too large (${Math.round(jsonSize / 1024 / 1024)} MB)`);
+    }
+
+    // SAFETY: snapshot current state (cloud + local) BEFORE the destructive restore
+    // so a wrong/old backup can always be rolled back.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const snapRes = await this.createCloudSnapshot(`pre-restore-${stamp}`, 'Automatic safety snapshot before JSON restore');
+    if (!snapRes.ok) console.warn('[restoreFullBackupJSON] Cloud pre-restore snapshot failed:', snapRes.error);
+    this.writeLocalSnapshot(`pre-restore-${stamp}`);
+    console.log(`[restoreFullBackupJSON] Pre-restore safety snapshot saved (${this.data?.employees?.length || 0} employees in current state).`);
+
     // 1. Update in-memory data
     this.data = { ...this.data, ...backupData };
 
@@ -6652,6 +6863,13 @@ Sakar & SVN Group`;
   }
 
   public async purgeEmployees(): Promise<void> {
+    // SAFETY: snapshot before permanently wiping all employee/ledger records.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const snapRes = await this.createCloudSnapshot(`pre-purge-${stamp}`, 'Automatic safety snapshot before employee purge');
+    if (!snapRes.ok) console.warn('[purgeEmployees] Cloud pre-purge snapshot failed:', snapRes.error);
+    this.writeLocalSnapshot(`pre-purge-${stamp}`);
+    console.log(`[purgeEmployees] Pre-purge safety snapshot saved (${this.data?.employees?.length || 0} employees).`);
+
     const runSql = (query: string, params: any[] = []): Promise<void> => {
       return new Promise((resolve, reject) => {
         this.dbSqlite.run(query, params, (err: any) => err ? reject(err) : resolve());
