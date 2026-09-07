@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MIS Portal - Sales, PL/BS &amp; Analysis</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f4f6f9; color: #1f2937; }
+  header { background: linear-gradient(135deg, #1e3a5f, #2c5f8a); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .meta { font-size: 12px; opacity: 0.85; }
+  nav { display: flex; gap: 4px; background: #fff; border-bottom: 1px solid #e5e7eb; padding: 0 16px; flex-wrap: wrap; }
+  nav button { border: none; background: none; padding: 12px 16px; font-size: 14px; cursor: pointer; color: #6b7280; border-bottom: 3px solid transparent; }
+  nav button.active { color: #1e3a5f; border-bottom-color: #1e3a5f; font-weight: 600; }
+  .toolbar { display: flex; gap: 10px; padding: 14px 24px; align-items: center; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .toolbar select, .toolbar input { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #fff; }
+  .toolbar button { padding: 8px 16px; border: none; border-radius: 6px; background: #1e3a5f; color: #fff; cursor: pointer; font-size: 13px; }
+  .toolbar button.secondary { background: #059669; }
+  .toolbar button.warn { background: #b45309; }
+  main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+  .card .value { font-size: 22px; font-weight: 700; color: #1e3a5f; margin-top: 6px; }
+  .card .sub { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+  .wrap { overflow-x: auto; max-height: 72vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th { background: #1e3a5f; color: #fff; padding: 9px 10px; text-align: left; position: sticky; top: 0; white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+  tr:hover td { background: #f8fafc; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .total-row td { background: #eef2f7; font-weight: 700; }
+  .group-row td { background: #dde7f2; font-weight: 700; cursor: pointer; }
+  .bar { height: 8px; background: #2c5f8a; border-radius: 4px; min-width: 2px; display: inline-block; vertical-align: middle; }
+  .hidden { display: none; }
+  #loading { text-align: center; padding: 40px; color: #6b7280; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .pill.user { background: #dbeafe; color: #1e40af; }
+  .pill.tb { background: #f3f4f6; color: #6b7280; }
+  .pill.pl { background: #fef3c7; color: #92400e; }
+  .pill.bs { background: #d1fae5; color: #065f46; }
+  .map-row td { background: #fffbeb; }
+  select.mapSel { padding: 4px 6px; font-size: 12px; }
+  footer { text-align: center; padding: 20px; font-size: 12px; color: #9ca3af; }
+  .note { font-size: 13px; color: #6b7280; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>MIS Portal — Sales, PL/BS &amp; Analysis</h1><div class="meta" id="metaLine">Loading…</div></div>
+  <div style="font-size:12px;opacity:.8;text-align:right">Data (F: drive): <span id="metaWb"></span><br><span style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:12px;padding:3px 12px;font-weight:600;letter-spacing:0.3px">⚡ Powered by: Vishnu Intelligence Services</span></div>
+</header>
+
+<nav>
+  <button data-tab="dashboard" class="active">📊 Dashboard</button>
+  <button data-tab="tbreview" id="tbReviewBtn">🛡️ TB Review</button>
+  <select id="fView" style="margin:6px 8px 0 0;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px"><option value="ENTITY">Company-wise</option><option value="GROUP">🏢 Group (Sakar+SVN combined)</option></select>
+  <button data-tab="pl">📈 PL Statement</button>
+  <button data-tab="bs">⚖️ BS Statement</button>
+  <button data-tab="sales">💰 Sales</button>
+  <button data-tab="matrix">📅 Month-wise</button>
+  <button data-tab="fg">🏭 FG Analysis</button>
+  <button data-tab="rej">↩️ Rejections</button>
+  <button data-tab="stock">📦 Stock</button>
+  <button data-tab="dscr">💳 DSCR</button>
+  <button data-tab="compare">🔄 Compare (YoY)</button>
+  <button data-tab="budget">🎯 Budget vs Actual</button>
+  <button data-tab="c360">👤 Customer 360</button>
+  <button data-tab="cgroup">👥 Group Customers</button>
+</nav>
+
+<div class="toolbar">
+  <label>FY: <select id="fYear"><option value="ALL">All Years</option></select></label>
+  <label>Entity: <select id="fEntity"><option value="ALL">All</option><option>SAKAR</option><option>SVN</option></select></label>
+  <label id="monthWrap">Month: <select id="fMonth"><option value="ALL">All</option></select></label>
+  <label id="groupWrap">Group by: <select id="fGroup"><option value="item">Item</option><option value="customer">Customer</option></select></label>
+  <label id="stmtWrap">Statement: <select id="fStmt"><option value="PL">PL</option><option value="BS">BS</option></select></label>
+  <label id="fromWrap">From: <select id="fFrom"></select></label>
+  <label id="toWrap">To: <select id="fTo"></select></label>
+  <label id="viewWrap" style="display:none">Statement view: <select id="plbsView"><option value="company">Company-wise</option><option value="group">🏢 Group consolidated</option></select></label>
+  <input id="fSearch" placeholder="Search…" style="width:160px" />
+  <button onclick="loadTab()">Apply</button>
+  <button class="secondary" onclick="exportExcel()">⬇ Excel Export</button>
+  <button class="warn" onclick="reloadData()">🔄 Reload Data</button>
+</div>
+
+<main>
+  <div id="loading">Loading data…</div>
+
+  <section id="tab-dashboard">
+    <div class="cards" id="dashCards"></div>
+    <div class="wrap"><table id="dashTable"></table></div>
+  </section>
+
+  <section id="tab-tbreview" class="hidden">
+    <div class="cards" id="tbRevCards"></div>
+    <div style="margin:10px 0;display:flex;gap:8px;flex-wrap:wrap">
+      <select id="tbRevFilter" onchange="loadTBReview()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px"><option value="open">Sirf Open</option><option value="all">Sab</option><option value="ok">OK kiye</option></select>
+      <button onclick="tbRevAI()" id="tbAiBtn">🤖 AI Explanation (Gemini)</button>
+      <button class="warn" onclick="tbRevAccept()">✅ Accept &amp; Finalise TB</button>
+      <button class="secondary" onclick="tbRevReopen()">↩️ Re-open (naya TB aane par)</button>
+    </div>
+    <p class="note">Flow: <b>TB upload/replace → 🔄 Reload → yahan issues check karo → har issue pe OK (ya AI se samjho) → Accept</b>. Accept ke baad hi month ka review complete maana jata hai. Naya TB aane par Re-open karo.</p>
+    <div class="wrap"><table id="tbRevTable"></table></div>
+  </section>
+
+  <section id="tab-pl" class="hidden">
+    <p class="note">PL group-wise: OB (opening) + April→March monthly + Total. Group-row par <b>click</b> karo → us group ke saare ledgers dikhenge. Ledger naya hai → <b>Ledger Mapping</b> tab se group do.</p>
+    <div class="cards" id="plCards"></div>
+    <div class="wrap"><table id="plTable"></table></div>
+  </section>
+
+  <section id="tab-bs" class="hidden">
+    <p class="note">BS group-wise (Assets/Liabilities): OB + monthly closing + Total. Group-row par <b>click</b> karo → ledger breakup.</p>
+    <div class="cards" id="bsCards"></div>
+    <div class="wrap"><table id="bsTable"></table></div>
+  </section>
+
+  <section id="tab-mapping" class="hidden">
+    <p class="note"><b>Ledger Mapping</b> — naye ledgers jinka PL/BS group nahi hai. Yahan se group do, statement me turant dikhne lagega.</p>
+    <p class="note">Naye ledgers jinka PL/BS group nahi hai — yahan se <b>PL ya BS</b> chuno aur group do. Mapping save hote hi PL/BS statement me dikhne lagega. (Mapping file: <b>F:\Financial Report\ledger-map.json</b>)</p>
+    <div class="cards" id="mapCards"></div>
+    <div class="toolbar" style="border:none;padding:0 0 10px 0;background:none">
+      <input id="mapSearch" placeholder="Ledger name/code search…" style="width:220px" onkeyup="if(event.key==='Enter')loadMapping()" />
+      <button onclick="loadMapping()">Search</button>
+    </div>
+    <div class="wrap"><table id="mapTable"></table></div>
+  </section>
+
+  <section id="tab-sales" class="hidden">
+    <div class="cards" id="salesCards"></div>
+    <div class="wrap"><table id="salesTable"></table></div>
+  </section>
+
+  <section id="tab-matrix" class="hidden">
+    <p class="note">Month-wise sales — <b>Amount</b> aur <b>Quantity</b> dono (FG focus). Company/FY upar se badlo.</p>
+    <div class="cards" id="mxSumCards"></div>
+    <p style="font-weight:700;margin:10px 0 4px">Amount (₹)</p>
+    <div class="wrap"><table id="matrixTable"></table></div>
+    <p style="font-weight:700;margin:14px 0 4px">Quantity (Nos)</p>
+    <div class="wrap"><table id="matrixQtyTable"></table></div>
+  </section>
+
+  <section id="tab-fg" class="hidden">
+    <p class="note">Finished Goods — Item-Group wise monthly trend</p>
+    <div class="wrap"><table id="fgTable"></table></div>
+  </section>
+
+  <section id="tab-rej" class="hidden">
+    <div class="cards" id="rejCards"></div>
+    <div class="wrap"><table id="rejTable"></table></div>
+  </section>
+
+  <section id="tab-stock" class="hidden">
+    <div class="toolbar" style="border:none;padding:0 0 10px 0;background:none">
+      <label>Position upto month: <select id="stockUpto"></select></label>
+      <button onclick="loadStock()">Show</button>
+      <label style="margin-left:12px">View: <select id="stockView" onchange="loadStock()"><option value="item">Item-wise</option><option value="wh">Item × Warehouse</option></select></label>
+      <span class="note" style="margin:0">SAP B1 query-report export <b>as-is chalega</b> — file naam me month rakho (jaise <b>STOCK-Apr-2026.xlsx</b>) → uploads\stock me daalo → 🔄 Reload Data. (Template wala format bhi chalta hai)</span>
+    </div>
+    <div class="cards" id="stockCards"></div>
+    <p style="font-weight:700;margin:10px 0 6px;font-size:14px">🏭 Warehouse-wise Summary (latest month)</p>
+    <div class="wrap" style="max-height:280px;overflow:auto"><table id="stockWhTable"></table></div>
+    <p style="font-weight:700;margin:14px 0 6px;font-size:14px"><span id="stockDetailTitle">Item-wise Position</span></p>
+    <div class="wrap"><table id="stockTable"></table></div>
+  </section>
+
+  <section id="tab-dscr" class="hidden">
+    <p class="note">Month-wise DSCR per company = EBITDA (TB: revenue − opex) ÷ Debt Service (loan principal + interest). Loans: sheet-se-auto + manual edit/add niche.</p>
+    <div class="toolbar" style="border:none;padding:0 0 12px 0;background:none">
+      <label>Loan Detail month: <select id="loanMonth"><option value="ALL">Poora FY (month-wise)</option></select></label>
+      <button onclick="loanExcel()">📊 Excel Export</button>
+      <button onclick="loanPrint()">🖨 Print / PDF</button>
+      <span class="note" style="margin:0">Excel me 3 sheets: Loan Master + Month Detail + DSCR Summary. PDF: print-dialog me "Save as PDF" chuno.</span>
+    </div>
+    <div id="dscrWrap" class="wrap"></div>
+    <div class="toolbar" style="border:none;padding:14px 0 6px 0;background:none">
+      <b style="font-size:13px">✏️ Manual Loan Edit/Add</b>
+    </div>
+    <div class="toolbar" style="border:none;padding:0 0 12px 0;background:none">
+      <input id="leComp" placeholder="Company (SAKAR/SVN)" style="width:130px" />
+      <input id="leFY" placeholder="FY (FY-2026-27)" style="width:120px" />
+      <input id="leMonth" placeholder="Month (Aug)" style="width:90px" />
+      <input id="leLoan" placeholder="Loan name (part bhi chalega)" style="width:200px" />
+      <input id="lePri" placeholder="Principal" style="width:100px" />
+      <input id="leInt" placeholder="Interest" style="width:100px" />
+      <button class="warn" onclick="loanEdit()">✏️ Edit rows</button>
+      <button onclick="loanAdd()">➕ Add new</button>
+      <button onclick="loanDel()">🗑 Delete manual</button>
+    </div>
+  </section>
+
+  <section id="tab-compare" class="hidden">
+    <p class="note">Period comparison — From/To chuno (jaise Apr–Aug): is saal vs pichhle saal, sales + PL groups, company-wise.</p>
+    <div class="cards" id="cmpCards"></div>
+    <div class="wrap"><table id="cmpTable"></table></div>
+  </section>
+
+  <section id="tab-budget" class="hidden">
+    <div class="toolbar" style="border:none;padding:0 0 10px 0;background:none">
+      <label>Position upto: <select id="budUpto"></select></label>
+      <button onclick="loadBudget()">Show</button>
+      <span class="note" style="margin:0">Budget file: <b>templates\BUDGET-UPLOAD-TEMPLATE.xlsx</b> → <b>uploads\budget</b> me daalo → Reload. Head ka naam PL-group jaisa rakho — auto-match hoga.</span>
+    </div>
+    <div class="cards" id="budCards"></div>
+    <div class="wrap"><table id="budTable"></table></div>
+  </section>
+
+  <section id="tab-cgroup" class="hidden">
+    <p class="note">Group-level party view — jo customer <b>dono companies (SAKAR+SVN) me hai</b> wo ek row me combine. Company-wise split + total behaviour (sales/rejections/payments). Auto-detected: <b id="gcCount"></b> group parties. Editing: <b>F:\Financial Report\customer-master.json</b> (naya link jodo, phir Reload).</p>
+    <div class="toolbar" style="border:none;padding:0 0 10px 0;background:none">
+      <input id="gcSearch" placeholder="Party search…" style="width:200px" onkeyup="if(event.key==='Enter')loadCGroup()" />
+      <button onclick="loadCGroup()">Search</button>
+      <label style="font-size:13px"><input type="checkbox" id="gcOnlyGroup" onchange="loadCGroup()" checked> Sirf group parties (dono company wali)</label>
+    </div>
+    <div class="cards" id="gcCards"></div>
+    <div class="wrap"><table id="gcTable"></table></div>
+  </section>
+
+  <section id="tab-c360" class="hidden">
+    <div class="toolbar" style="border:none;padding:0 0 14px 0;background:none">
+      <input id="cCode" list="custList" placeholder="Customer code ya naam likho…" style="padding:8px;width:260px" />
+      <datalist id="custList"></datalist>
+      <button onclick="loadCustomer()">Show Report</button>
+      <span class="note" style="margin:0">Customer list sales-data se auto-pick hoti hai — code/naam type karo, suggest ho jayega</span>
+    </div>
+    <div class="cards" id="cCards"></div>
+    <div class="wrap"><table id="cTable"></table></div>
+  </section>
+</main>
+
+<footer style="display:flex;justify-content:space-between;align-items:center;padding:14px 24px">
+  <span>MIS Portal v3 — data: <b>F:\Financial Report</b> — <i style="color:#6b7280">Powered by: Vishnu Intelligence Services</i></span>
+  <span style="display:flex;gap:14px;font-size:12px">
+    <a href="#" onclick="toggleMapping();return false" style="color:#9ca3af">⚙ Mapping</a>
+    <a href="#" onclick="toggleTemplates();return false" style="color:#9ca3af">⬇ Templates</a>
+  </span>
+</footer>
+<div id="tplMenu" class="hidden" style="position:fixed;bottom:44px;right:20px;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);padding:10px 14px;z-index:99">
+  <b style="font-size:12px">Templates (download → fill → uploads folder me daalo)</b>
+  <div id="tplLinks" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let tab = 'dashboard';
+let YEARS = [];
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  tab = b.dataset.tab;
+  document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
+  $('tab-' + tab).classList.remove('hidden');
+  const isPlbs = ['pl','bs'].includes(tab);
+  $('stmtWrap').style.display = isPlbs ? '' : 'none';
+  $('fromWrap').style.display = tab === 'compare' ? '' : 'none';
+  $('toWrap').style.display = tab === 'compare' ? '' : 'none';
+  $('fStmt').value = tab === 'bs' ? 'BS' : (tab === 'pl' ? 'PL' : $('fStmt').value);
+  $('monthWrap').style.display = ['dashboard','sales','matrix','fg','rej'].includes(tab) ? '' : 'none';
+  $('groupWrap').style.display = tab === 'sales' ? '' : 'none';
+  loadTab();
+});
+
+function fmt(n) { return Number(n||0).toLocaleString('en-IN', {maximumFractionDigits: 0}); }
+function commonQs() {
+  const p = new URLSearchParams({ entity: $('fEntity').value, fy: $('fYear').value });
+  return p;
+}
+function salesQs() {
+  const p = commonQs();
+  if ($('fMonth').value !== 'ALL') p.set('month', $('fMonth').value);
+  if (tab === 'sales') { p.set('groupBy', $('fGroup').value); p.set('search', $('fSearch').value); }
+  return p;
+}
+
+async function init() {
+  const s = await (await fetch('/api/mis/summary')).json();
+  const y = await (await fetch('/api/mis/years')).json();
+  YEARS = y.years;
+  for (const fy of YEARS) { const o = document.createElement('option'); o.value = o.textContent = fy; $('fYear').appendChild(o); }
+  if (y.currentFy) $('fYear').value = y.currentFy;
+  $('metaLine').textContent = `${s.meta.counts.sales.toLocaleString()} sales | ${s.meta.counts.tb.toLocaleString()} TB ledgers | FY: ${YEARS.join(', ')}`;
+  $('metaWb').textContent = 'store@' + s.meta.dataDir + ' | ' + new Date(s.meta.generatedAt).toLocaleString();
+  $('loading').classList.add('hidden');
+  loadTab();
+}
+
+async function loadTab() {
+  $('loading').classList.remove('hidden');
+  try {
+    if (tab === 'dashboard') await loadDashboard();
+    else if (tab === 'tbreview') await loadTBReview();
+    else if (tab === 'pl' || tab === 'bs') await loadPLBS(tab === 'bs' ? 'BS' : 'PL');
+    else if (tab === 'mapping') await loadMapping();
+    else if (tab === 'sales') await loadSales();
+    else if (tab === 'matrix') await loadMatrix();
+    else if (tab === 'fg') await loadMatrixOld('fgTable', '/api/mis/fg-analysis');
+    else if (tab === 'rej') await loadRejections();
+    else if (tab === 'stock') await loadStock();
+    else if (tab === 'dscr') await loadDSCR();
+    else if (tab === 'compare') await loadCompare();
+    else if (tab === 'budget') await loadBudget();
+    else if (tab === 'cgroup') await loadCGroup();
+    else if (tab === 'c360') loadCustList();
+  } finally { $('loading').classList.add('hidden'); }
+}
+
+function card(label, value, sub) {
+  return `<div class="card"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub||''}</div></div>`;
+}
+
+// ---------- PL / BS ----------
+let plbsData = null;
+async function loadPLBS(stmt) {
+  const view = $('plbsView').value;
+  $('viewWrap').style.display = '';
+  if (view === 'group') {
+    const p = new URLSearchParams({ fy: $('fYear').value, statement: stmt });
+    const d = await (await fetch('/api/mis/group-tb?' + p)).json();
+    plbsData = { months: d.groups.length ? MONTHS_ALL : [], groups: [], grand: { ob: 0, total: 0 } };
+    let html = '<thead><tr><th>Group (Group consolidated: Sakar+SVN)</th><th class="num">Ledgers</th><th class="num">OB</th>' + MONTHS_ALL.map(m => `<th class="num">${m.slice(0,3)}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>';
+    for (const g of d.groups) {
+      html += `<tr><td>${g.group}</td><td class="num">${g.count}</td><td class="num">${fmt(g.ob)}</td>` + MONTHS_ALL.map(m => `<td class="num">${g[m] ? fmt(g[m]) : '-'}</td>`).join('') + `<td class="num">${fmt(g.total)}</td></tr>`;
+    }
+    html += '</tbody>';
+    $(stmt === 'BS' ? 'bsTable' : 'plTable').innerHTML = html;
+    $(stmt === 'BS' ? 'bsCards' : 'plCards').innerHTML = card('View', '🏢 GROUP', 'Sakar + SVN combined') + card('Groups', d.groups.length) + card('Ledgers (merged)', d.ledgers.length);
+    return;
+  }
+  const p = commonQs(); p.set('statement', stmt);
+  const d = await (await fetch('/api/mis/plbs?' + p)).json();
+  plbsData = d;
+  renderStatement(stmt === 'BS' ? 'bsTable' : 'plTable', d, stmt);
+  const cardsEl = $(stmt === 'BS' ? 'bsCards' : 'plCards');
+  cardsEl.innerHTML = card('Grand Total', '₹' + fmt(d.grand.total), d.groups.length + ' groups') +
+    card('Opening Balance', '₹' + fmt(d.grand.ob)) +
+    card('Biggest Group', d.groups[0]?.group || '-', '₹' + fmt(d.groups[0]?.total || 0));
+}
+const MONTHS_ALL = ['April','May','June','July','August','September','October','November','December','January','February','March'];
+
+function renderStatement(tId, d, stmt) {
+  const mons = d.months;
+  let html = '<thead><tr><th>Group</th><th class="num">OB</th>' + mons.map(m => `<th class="num">${m.slice(0,3)}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>';
+  for (const g of d.groups) {
+    html += `<tr class="group-row" onclick="toggleGroup(this,'${g.group.replace(/'/g,"\\'")}')"><td>▸ ${g.group} <span class="pill ${stmt==='PL'?'pl':'bs'}">${g.ledgers.length} ledgers</span></td>` +
+      `<td class="num">${fmt(g.ob)}</td>` + mons.map(m => `<td class="num">${g[m] ? fmt(g[m]) : '-'}</td>`).join('') +
+      `<td class="num">${fmt(g.total)}</td></tr>`;
+  }
+  html += `<tr class="total-row"><td>GRAND TOTAL</td><td class="num">${fmt(d.grand.ob)}</td>` + mons.map(m => {
+    const sum = d.groups.reduce((s,g) => s + (g[m]||0), 0);
+    return `<td class="num">${fmt(sum)}</td>`;
+  }).join('') + `<td class="num">${fmt(d.grand.total)}</td></tr></tbody>`;
+  $(tId).innerHTML = html;
+}
+
+function toggleGroup(tr, groupName) {
+  const existing = tr.nextElementSibling;
+  if (existing && existing.classList.contains('ledger-detail')) { existing.remove(); return; }
+  const g = plbsData.groups.find(x => x.group === groupName);
+  if (!g) return;
+  const mons = plbsData.months;
+  let html = `<tr class="ledger-detail"><td colspan="${mons.length + 3}" style="padding:0"><div style="max-height:300px;overflow:auto;background:#fbfdff">`;
+  html += '<table style="font-size:12px"><thead><tr><th>Code</th><th>Ledger</th><th>Entity</th><th class="num">OB</th><th class="num">Total</th><th>Source</th></tr></thead><tbody>';
+  for (const l of g.ledgers) {
+    html += `<tr><td>${l.code}</td><td>${l.name}</td><td>${l.entity}</td><td class="num">${fmt(l.ob)}</td><td class="num">${fmt(l.total)}</td><td><span class="pill ${l.source==='user'?'user':'tb'}">${l.source==='user'?'mapped':'TB'}</span></td></tr>`;
+  }
+  html += '</tbody></table></div></td></tr>';
+  tr.insertAdjacentHTML('afterend', html);
+}
+
+// ---------- Ledger Mapping ----------
+async function loadMapping() {
+  const p = commonQs(); p.set('search', $('mapSearch').value);
+  const u = await (await fetch('/api/mis/unmapped?' + p)).json();
+  const g = await (await fetch('/api/mis/ledger-groups')).json();
+  $('mapCards').innerHTML = card('Unmapped Ledgers', u.count, 'PL/BS group nahi mila') +
+    card('PL Groups Known', g.pl.length, g.pl.slice(0,3).join(', ')) +
+    card('BS Groups Known', g.bs.length, g.bs.slice(0,3).join(', '));
+  const plOpts = '<option value="">— group chuno —</option>' + g.pl.map(x => `<option>${x}</option>`).join('') + '<option value="__new">+ naya group…</option>';
+  const bsOpts = '<option value="">— group chuno —</option>' + g.bs.map(x => `<option>${x}</option>`).join('') + '<option value="__new">+ naya group…</option>';
+  let html = '<thead><tr><th>Entity</th><th>Code</th><th>Ledger Name</th><th class="num">Total</th><th>Statement</th><th>Group</th><th></th></tr></thead><tbody>';
+  u.ledgers.forEach((l, i) => {
+    html += `<tr class="map-row" id="maprow-${i}"><td>${l.entity}</td><td>${l.code}</td><td>${l.name}</td><td class="num">${fmt(l.total)}</td>` +
+      `<td><select class="mapSel" id="stmt-${i}"><option value="PL">PL</option><option value="BS">BS</option></select></td>` +
+      `<td><select class="mapSel" id="grp-${i}">${plOpts}</select></td>` +
+      `<td><button style="padding:4px 10px;border:none;border-radius:4px;background:#1e3a5f;color:#fff;cursor:pointer" onclick="saveMap(${i},'${l.code.replace(/'/g,"\\'")}','${l.entity}')">Save</button></td></tr>`;
+  });
+  html += '</tbody>';
+  $('mapTable').innerHTML = html;
+  window._grpOpts = { plOpts, bsOpts };
+  for (let i = 0; i < u.ledgers.length; i++) {
+    $('stmt-' + i).onchange = e => { $('grp-' + i).innerHTML = e.target.value === 'BS' ? window._grpOpts.bsOpts : window._grpOpts.plOpts; };
+  }
+}
+
+async function saveMap(i, code, entity) {
+  const statement = $('stmt-' + i).value;
+  let group = $('grp-' + i).value;
+  if (!group) return alert('Pehle group chuno');
+  if (group === '__new') group = prompt('Naya group ka naam:');
+  if (!group) return;
+  const r = await (await fetch('/api/mis/map-ledger', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entity, ledger: code, statement, group })
+  })).json();
+  if (r.ok) { alert(`Mapped: ${code} → ${statement} / ${group} (${r.changed} ledgers updated)`); loadMapping(); }
+  else alert('Error: ' + r.error);
+}
+
+// ---------- Sales & others ----------
+async function loadDashboard() {
+  const qs = salesQs();
+  const d = await (await fetch('/api/mis/sales?' + qs)).json();
+  const s = await (await fetch('/api/mis/sales-summary?' + qs)).json();
+  const top = d.groups.slice(0, 15);
+  const regTotal = d.groups.reduce((x, g) => x + g.taxable, 0);
+  const stmtLabel = s.months.length ? (s.months[0] || '').slice(0,7) + ' to ' + (s.months[s.months.length-1] || '').slice(0,7) : '';
+  const srcNote = s.stmtTotal ? 'Statement PL (' + stmtLabel + ')' : 'Register only';
+  $('dashCards').innerHTML =
+    card('Total Sales (Statement)', '₹' + fmt(s.total), srcNote + ' · sales-only ₹' + fmt(s.salesOnlyTotal) + ' · register ' + d.count + ' lines') +
+    card('Unique Items', new Set(d.groups.map(g => g.name)).size, 'register me available items') +
+    card('Top Item Share', (top[0] ? (top[0].taxable/regTotal*100).toFixed(1) : 0) + '%', top[0]?.name || '');
+  $('dashTable').innerHTML = '<thead><tr><th>Top Items</th><th class="num">Taxable</th><th>Share</th></tr></thead><tbody>' +
+    top.map(g => `<tr><td>${g.name}</td><td class="num">${fmt(g.taxable)}</td><td><div class="bar" style="width:${(g.taxable/top[0].taxable*110).toFixed(0)}px"></div></td></tr>`).join('') + '</tbody>';
+}
+
+function renderGroups(tId, groups, topN, cId) {
+  const max = Math.max(...groups.map(g => g.taxable), 1);
+  let html = '<thead><tr><th>#</th><th>Name</th><th class="num">Qty</th><th class="num">Taxable</th><th class="num">GST</th><th class="num">Total</th><th style="width:120px">Share</th></tr></thead><tbody>';
+  groups.slice(0, topN).forEach((g, i) => {
+    const share = (g.taxable / groups.reduce((s, x) => s + x.taxable, 0) * 100).toFixed(1);
+    html += `<tr><td>${i+1}</td><td>${g.name}</td><td class="num">${fmt(g.qty)}</td><td class="num">${fmt(g.taxable)}</td><td class="num">${fmt(g.gst)}</td><td class="num">${fmt(g.total)}</td><td><div class="bar" style="width:${(g.taxable/max*100).toFixed(0)}px"></div><span style="font-size:11px">${share}%</span></td></tr>`;
+  });
+  html += '</tbody>';
+  $(tId).innerHTML = html;
+  if (cId) {
+    const tot = groups.reduce((a, g) => ({qty: a.qty + g.qty, taxable: a.taxable + g.taxable, gst: a.gst + g.gst, total: a.total + g.total}), {qty:0,taxable:0,gst:0,total:0});
+    $(cId).innerHTML = card('Total Taxable', '₹' + fmt(tot.taxable), groups.length + ' parties/items') + card('Total Qty', fmt(tot.qty)) + card('GST', '₹' + fmt(tot.gst)) + card('Grand Total', '₹' + fmt(tot.total));
+  }
+}
+
+async function loadSales() {
+  const d = await (await fetch('/api/mis/sales?' + salesQs())).json();
+  renderGroups('salesTable', d.groups, 500, 'salesCards');
+}
+
+async function loadMatrixOld(tId, url) {
+  const p = salesQs(); p.delete('month'); p.delete('groupBy'); p.delete('search');
+  const d = await (await fetch(url + '?' + p)).json();
+  let html = '<thead><tr><th>Group</th>' + d.months.map(m => `<th class="num">${m}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>';
+  d.rows.slice(0, 60).forEach(r => {
+    html += `<tr><td>${r.name}</td>` + d.months.map(m => `<td class="num">${r[m] ? fmt(r[m]) : '-'}</td>`).join('') + `<td class="num"><b>${fmt(r.total)}</b></td></tr>`;
+  });
+  html += '</tbody>';
+  $(tId).innerHTML = html;
+}
+
+// Month-wise: Amount + Qty dono (new server param byValue)
+async function loadMatrix() {
+  const p = salesQs(); p.delete('month'); p.delete('groupBy'); p.delete('search');
+  p.set('byValue', 'amount');
+  const dA = await (await fetch('/api/mis/matrix?' + p)).json();
+  p.set('byValue', 'qty');
+  const dQ = await (await fetch('/api/mis/matrix?' + p)).json();
+  const draw = (d, bold) => {
+    let h = '<thead><tr><th>Item Group</th>' + d.months.map(m => `<th class="num">${m}</th>`).join('') + '<th class="num">Total</th></tr></thead><tbody>';
+    d.rows.slice(0, 60).forEach(r => {
+      h += `<tr><td>${r.name}</td>` + d.months.map(m => `<td class="num">${r[m] ? (bold ? '<b>' + fmt(r[m]) + '</b>' : fmt(r[m])) : '-'}</td>`).join('') + `<td class="num">${fmt(r.total)}</td></tr>`;
+    });
+    const tot = d.months.map(m => d.rows.reduce((s, r) => s + (r[m] || 0), 0));
+    h += `<tr class="total-row"><td>TOTAL</td>` + d.months.map((m, i) => `<td class="num">${fmt(tot[i])}</td>`).join('') + `<td class="num">${fmt(tot.reduce((a, b) => a + b, 0))}</td></tr></tbody>`;
+    return h;
+  };
+  $('matrixTable').innerHTML = draw(dA, false);
+  $('matrixQtyTable').innerHTML = draw(dQ, true);
+  const grandA = dA.rows.reduce((s, r) => s + r.total, 0), grandQ = dQ.rows.reduce((s, r) => s + r.total, 0);
+  $('mxSumCards').innerHTML = card('Total Amount', '₹' + fmt(grandA), dA.months.length + ' months') + card('Total Qty', fmt(grandQ) + ' nos') +
+    card('Avg Realisation', '₹' + (grandQ ? fmt(grandA / grandQ) : 0) + '/nos', 'amount ÷ qty');
+}
+
+async function loadRejections() {
+  const p = salesQs(); p.set('by', 'party'); p.delete('month');
+  const d = await (await fetch('/api/mis/rejections?' + p)).json();
+  $('rejCards').innerHTML = card('Credit-Note Channel', '₹' + fmt(d.byChannel['credit-note']), 'customer se direct') +
+    card('Purchase-Invoice Channel', '₹' + fmt(d.byChannel['purchase-invoice']), 'vendor code se') +
+    card('Total Rejections', '₹' + fmt(d.byChannel['credit-note'] + d.byChannel['purchase-invoice']), d.count + ' lines');
+  $('rejTable').innerHTML = '<thead><tr><th>Party</th><th class="num">Qty</th><th class="num">Amount</th><th>Share</th></tr></thead><tbody>' +
+    d.groups.slice(0, 100).map((g) => `<tr><td>${g.name}</td><td class="num">${fmt(g.qty)}</td><td class="num">${fmt(g.taxable)}</td><td><div class="bar" style="width:${(g.taxable/d.groups[0].taxable*110).toFixed(0)}px"></div></td></tr>`).join('') + '</tbody>';
+}
+
+// ---------- STOCK ----------
+let stockMonthsFilled = false;
+async function loadStock() {
+  if (!stockMonthsFilled) {
+    const sel = $('stockUpto');
+    for (const m of ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar']) { const o = document.createElement('option'); o.value = o.textContent = m; sel.appendChild(o); }
+    sel.value = 'Mar'; stockMonthsFilled = true;
+  }
+  const p = commonQs(); p.delete('fy');
+  p.set('fy', $('fYear').value === 'ALL' ? 'ALL' : $('fYear').value);
+  p.set('upto', $('stockUpto').value);
+  const d = await (await fetch('/api/mis/stock?' + p)).json();
+  const s = d.summary;
+  const bs = s.byStatus || {};
+  $('stockCards').innerHTML =
+    card('Opening Qty', fmt(s.openingQty)) +
+    card('Produced (This Period)', fmt(s.producedQty)) +
+    card('Sold (This Period)', fmt(s.soldQty)) +
+    card('Closing Qty', fmt(s.closingQty), '₹' + fmt(s.closingValue)) +
+    card('🔴 Dead Stock', fmt((bs['Dead']||{}).qty||0), '₹' + fmt((bs['Dead']||{}).value||0) + ' | ' + ((bs['Dead']||{}).items||0) + ' items') +
+    card('🟡 Non-Moving', fmt((bs['Non-Moving']||{}).qty||0), '₹' + fmt((bs['Non-Moving']||{}).value||0) + ' | ' + ((bs['Non-Moving']||{}).items||0) + ' items') +
+    card('🟢 Moving', fmt((bs['Moving']||{}).qty||0), ((bs['Moving']||{}).items||0) + ' items');
+  let html = '<thead><tr><th>Company</th><th>Item</th><th>Group</th><th class="num">Opening</th><th class="num">Produced</th><th class="num">Sold</th><th class="num">Closing</th><th class="num">Value</th><th>Last Sale</th><th>Warehouse Flag</th><th>Status</th></tr></thead><tbody>';
+  const view = $('stockView') ? $('stockView').value : 'item';
+  if (view === 'wh') {
+    $('stockDetailTitle').textContent = 'Item × Warehouse Position (latest month)';
+    html = '<thead><tr><th>Company</th><th>Item</th><th>Group</th><th>Warehouse</th><th class="num">Closing Qty</th><th class="num">Value</th><th class="num">Dead WH Qty</th><th class="num">Non-Mov WH Qty</th></tr></thead><tbody>';
+    for (const i of (d.whItems || []).slice(0, 300)) {
+      html += `<tr><td>${i.company}</td><td>${i.itemNo} - ${i.itemDesc}</td><td>${i.itemGroup}</td><td>${i.store}${i.code ? ' <span class="note">(' + i.code + ')</span>' : ''}</td><td class="num">${fmt(i.qty)}</td><td class="num">${fmt(i.value)}</td><td class="num">${i.dead ? fmt(i.dead) : '-'}</td><td class="num">${i.nm ? fmt(i.nm) : '-'}</td></tr>`;
+    }
+  } else {
+    $('stockDetailTitle').textContent = 'Item-wise Position';
+    for (const i of d.items.slice(0, 300)) {
+      const col = i.status === 'Dead' ? '#fecaca' : (i.status === 'Non-Moving' ? '#fef3c7' : (i.status === 'Slow' ? '#fde68a' : '#d1fae5'));
+      html += `<tr><td>${i.company}</td><td>${i.itemNo} - ${i.itemDesc}</td><td>${i.itemGroup}</td><td class="num">${fmt(i.openingQty)}</td><td class="num">${fmt(i.producedQty)}</td><td class="num">${fmt(i.soldQty)}</td><td class="num">${fmt(i.closingQty)}</td><td class="num">${fmt(i.closingValue)}</td><td>${i.lastSaleMonth || '-'}</td><td>${i.whFlag ? '<span class="pill" style="background:#e0e7ff">' + i.whFlag + '</span>' : '-'}</td><td><span class="pill" style="background:${col}">${i.status}</span></td></tr>`;
+    }
+  }
+  $('stockTable').innerHTML = html + '</tbody>';
+  // warehouse summary table
+  const ws = d.whSummary || [];
+  $('stockWhTable').innerHTML = '<thead><tr><th>Company</th><th>Store Name</th><th>WH Code</th><th class="num">Items</th><th class="num">Closing Qty</th><th class="num">Value</th><th class="num">🔴 Dead WH Qty</th><th class="num">🟠 Non-Mov WH Qty</th></tr></thead><tbody>' +
+    ws.map(w => `<tr><td>${w.company}</td><td>${w.store}</td><td>${w.code || '-'}</td><td class="num">${w.items}</td><td class="num">${fmt(w.qty)}</td><td class="num">${fmt(w.value)}</td><td class="num">${w.deadQty ? fmt(w.deadQty) : '-'}</td><td class="num">${w.nmQty ? fmt(w.nmQty) : '-'}</td></tr>`).join('') +
+    (ws.length ? `<tr class="total-row"><td colspan=3>TOTAL (${ws.length} warehouses)</td><td class="num">${ws.reduce((s, w) => s + w.items, 0)}</td><td class="num">${fmt(ws.reduce((s, w) => s + w.qty, 0))}</td><td class="num">${fmt(ws.reduce((s, w) => s + w.value, 0))}</td><td class="num">${fmt(ws.reduce((s, w) => s + w.deadQty, 0))}</td><td class="num">${fmt(ws.reduce((s, w) => s + w.nmQty, 0))}</td></tr>` : '') + '</tbody>';
+}
+
+// ---------- DSCR ----------
+function loanExcel() {
+  const p = new URLSearchParams({ report: 'loans', entity: $('fEntity').value === 'GROUP' ? 'ALL' : $('fEntity').value, fy: $('fYear').value, month: $('loanMonth').value });
+  window.open('/api/mis/export?' + p, '_blank');
+}
+function loanPrint() {
+  const p = new URLSearchParams({ entity: $('fEntity').value === 'GROUP' ? 'ALL' : $('fEntity').value, fy: $('fYear').value, month: $('loanMonth').value });
+  window.open('/mis/loan-print?' + p, '_blank');
+}
+async function loadDSCR() {
+  const p = commonQs();
+  const d = await (await fetch('/api/mis/dscr?' + p)).json();
+  const sel = $('loanMonth');
+  if (sel.options.length <= 1) { for (const mn of d.months) { const o = document.createElement('option'); o.value = mn; o.textContent = mn.slice(0, 3); sel.appendChild(o); } }
+  let html = '';
+  for (const [comp, obj] of Object.entries(d.result)) {
+    const m = obj.monthly;
+    html += `<p style="font-weight:700;margin:14px 0 6px;font-size:14px">${comp}</p><table style="font-size:12px"><thead><tr><th></th>${d.months.map(x=>`<th class="num">${x.slice(0,3)}</th>`).join('')}<th class="num">FY Total</th></tr></thead><tbody>`;
+    const row = (label, key, fmtFn, bold) => {
+      let fyTot = 0; let has = false;
+      const tds = d.months.map(mn => { const v = m[mn]?.[key]; if (typeof v === 'number' && v !== 0) has = true; if (typeof v === 'number') fyTot += v; return `<td class="num">${v == null ? '-' : (fmtFn ? fmtFn(v) : fmt(v))}</td>`; }).join('');
+      return `<tr${bold?' class="total-row"':''}><td>${label}</td>${tds}<td class="num">${has ? (fmtFn ? fmtFn(fyTot) : fmt(fyTot)) : '-'}</td></tr>`;
+    };
+    html += row('Revenue (TB)', 'revenue');
+    html += row('Opex (TB)', 'expense');
+    html += row('EBITDA (Rev − Opex)', 'ebitda', null, false);
+    html += row('Principal Paid', 'principal');
+    html += row('Interest Paid', 'interest');
+    html += row('Debt Service', 'debtService');
+    html += row('DSCR (×)', 'dscr', v => v, true);
+    html += row('Loan Balance (closing)', 'closingBalance');
+    html += '</tbody></table>';
+    const loans = obj.loans || {};
+    const lk = Object.keys(loans);
+    if (lk.length) {
+      html += '<p style="font-size:12px;margin:6px 0 14px;color:#6b7280"><b>Loans (FY closing balance):</b> ' +
+        lk.map(k => `${k}: ₹${fmt(loans[k].closing)} (P ₹${fmt(loans[k].principal)} / I ₹${fmt(loans[k].interest)})`).join(' | ') + '</p>';
+    }
+  }
+  $('dscrWrap').innerHTML = html || '<p class="note">Loan data nahi hai — templates\\LOAN-UPLOAD-TEMPLATE.xlsx format me uploads\\loans me daalo.</p>';
+}
+
+// ---------- COMPARE (YoY) ----------
+async function loadCompare() {
+  const from = $('fFrom').value || 'Apr', to = $('fTo').value || 'Aug';
+  const p = new URLSearchParams({ metric: 'sales', from, to, entity: $('fEntity').value });
+  const d = await (await fetch('/api/mis/compare?' + p)).json();
+  const fys = Object.keys(d.fyWise).sort();
+  const entities = ['SAKAR','SVN'];
+  $('cmpCards').innerHTML = fys.map(fy => card(fy, '₹' + fmt(d.fyWise[fy].total), `${from}–${to} period`)).join('') +
+    (fys.length === 2 ? card('Growth (YoY)', (((d.fyWise[fys[1]].total - d.fyWise[fys[0]].total) / (d.fyWise[fys[0]].total || 1)) * 100).toFixed(1) + '%', `${fys[0]} → ${fys[1]}`) : '');
+  let html = '<thead><tr><th>FY</th><th>Entity</th><th class="num">Sales (' + from + '–' + to + ')</th></tr></thead><tbody>';
+  for (const fy of fys) {
+    for (const e of entities) {
+      if (d.fyWise[fy].entity[e]) html += `<tr><td>${fy}</td><td>${e}</td><td class="num">${fmt(d.fyWise[fy].entity[e])}</td></tr>`;
+    }
+    html += `<tr class="total-row"><td>${fy}</td><td>TOTAL</td><td class="num">${fmt(d.fyWise[fy].total)}</td></tr>`;
+  }
+  $('cmpTable').innerHTML = html + '</tbody>';
+}
+
+// ---------- BUDGET vs ACTUAL ----------
+let budMonthsFilled = false;
+async function loadBudget() {
+  if (!budMonthsFilled) {
+    for (const m of ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar']) { const o = document.createElement('option'); o.value = o.textContent = m; $('budUpto').appendChild(o); }
+    $('budUpto').value = 'Mar'; budMonthsFilled = true;
+  }
+  const p = commonQs();
+  p.set('upto', $('budUpto').value);
+  const d = await (await fetch('/api/mis/budget-vs-actual?' + p)).json();
+  const totB = d.rows.reduce((s, r) => s + r.budget, 0);
+  const totA = d.rows.reduce((s, r) => s + r.actual, 0);
+  const unmatched = d.rows.filter(r => !r.matched);
+  $('budCards').innerHTML = card('Total Budget', '₹' + fmt(totB), 'Apr–' + d.upto) +
+    card('Total Actual', '₹' + fmt(totA)) +
+    card('Variance', '₹' + fmt(totA - totB), (totB ? ((totA - totB) / totB * 100).toFixed(1) : 0) + '% ' + (totA > totB ? 'over' : 'under')) +
+    card('Budget Heads', d.rows.length, unmatched.length + ' unmatched (name-match nahi hua)');
+  let html = '<thead><tr><th>Company</th><th>Head</th><th class="num">Budget</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">Var %</th><th>Status</th><th>Sub-Units</th></tr></thead><tbody>';
+  for (const r of d.rows) {
+    const over = r.variance > 0;
+    const col = !r.matched ? '#e5e7eb' : (Math.abs(r.variancePct||0) <= 5 ? '#d1fae5' : (over ? '#fecaca' : '#fef9c3'));
+    const st = !r.matched ? '⚠️ head-match nahi' : (Math.abs(r.variancePct||0) <= 5 ? '✓ On-track' : (over ? '🔴 Over-budget' : '🟢 Under-budget'));
+    const units = Object.entries(r.byUnit).map(([u, v]) => u + ': ₹' + fmt(v)).join(', ');
+    html += `<tr><td>${r.company}</td><td>${r.head}</td><td class="num">${fmt(r.budget)}</td><td class="num">${fmt(r.actual)}</td>` +
+      `<td class="num" style="color:${over ? '#b91c1c' : '#047857'}">${fmt(r.variance)}</td><td class="num">${r.variancePct == null ? '-' : r.variancePct + '%'}</td>` +
+      `<td><span class="pill" style="background:${col}">${st}</span></td><td style="font-size:11px">${units}</td></tr>`;
+  }
+  $('budTable').innerHTML = html + '</tbody>';
+}
+
+// ---------- Manual loan edit/add/delete ----------
+async function loanEdit() {
+  const body = {
+    company: $('leComp').value.trim(), fy: $('leFY').value.trim(), month: $('leMonth').value.trim(),
+    loanName: $('leLoan').value.trim(),
+    principal: parseFloat($('lePri').value) || undefined,
+    interest: parseFloat($('leInt').value) || undefined,
+  };
+  if (!body.loanName || !body.month) return alert('Loan name + Month zaroori hai (jo rows match hongi sab edit hongi)');
+  const r = await (await fetch('/api/mis/loan-edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+  if (r.ok) { alert(r.changed + ' rows updated'); loadDSCR(); } else alert('Error: ' + r.error);
+}
+async function loanAdd() {
+  const body = {
+    company: $('leComp').value.trim(), fy: $('leFY').value.trim(), month: $('leMonth').value.trim(),
+    loanName: $('leLoan').value.trim(), principal: parseFloat($('lePri').value) || 0, interest: parseFloat($('leInt').value) || 0,
+  };
+  if (!body.company || !body.loanName || !body.month) return alert('Company + Loan name + Month zaroori hai');
+  const r = await (await fetch('/api/mis/loan-add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+  if (r.ok) { alert('Loan added'); loadDSCR(); } else alert('Error: ' + r.error);
+}
+async function loanDel() {
+  if (!confirm('Manual-added loan rows delete karein? (sheet-wali rows nahi hategi)')) return;
+  const body = { company: $('leComp').value.trim(), fy: $('leFY').value.trim(), month: $('leMonth').value.trim(), loanName: $('leLoan').value.trim() };
+  const r = await (await fetch('/api/mis/loan-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+  if (r.ok) { alert(r.removed + ' manual rows removed'); loadDSCR(); } else alert('Error: ' + r.error);
+}
+
+// ---------- GROUP CUSTOMERS ----------
+async function loadCGroup() {
+  const p = new URLSearchParams({ search: $('gcSearch').value, fy: $('fYear').value });
+  const d = await (await fetch('/api/mis/customer-group?' + p)).json();
+  $('gcCount').textContent = d.groupCount + ' / ' + d.totalParties;
+  $('gcCards').innerHTML = card('Total Parties', d.totalParties) + card('🏢 Group Parties (dono company)', d.groupCount, 'combined view available') +
+    card('Top Group Party', d.parties[0]?.isGroup ? d.parties[0].party.slice(0, 30) : '-', d.parties[0]?.isGroup ? '₹' + fmt(d.parties[0].total.sales) : '');
+  let html = '<thead><tr><th>Party</th><th>Companies</th><th class="num">SAKAR Sales</th><th class="num">SVN Sales</th><th class="num">Group Total</th><th class="num">Rej</th><th class="num">Payments</th><th>Behaviour</th></tr></thead><tbody>';
+  for (const P of d.parties) {
+    if ($('gcOnlyGroup').checked && !P.isGroup) continue;
+    const sS = P.byEntity['SAKAR']?.sales || 0, sV = P.byEntity['SVN']?.sales || 0;
+    const tot = P.total.sales || 1;
+    const bal = sS - sV;
+    const beh = Math.abs(bal) < tot * 0.2 ? '⚖️ Balanced' : (bal > 0 ? '← SAKAR-heavy' : 'SVN-heavy →');
+    html += `<tr><td><b>${P.party}</b></td><td>${P.entities.join(' + ')}</td>` +
+      `<td class="num">${sS ? fmt(sS) : '-'}</td><td class="num">${sV ? fmt(sV) : '-'}</td>` +
+      `<td class="num"><b>${fmt(P.total.sales)}</b></td><td class="num">${P.total.rej ? fmt(P.total.rej) : '-'}</td><td class="num">${P.total.pay ? fmt(P.total.pay) : '-'}</td>` +
+      `<td style="font-size:12px">${beh}</td></tr>`;
+  }
+  $('gcTable').innerHTML = html + '</tbody>';
+}
+
+async function loadCustomer() {
+  const code = $('cCode').value.trim().toUpperCase();
+  if (!code) return alert('Customer code likho');
+  const p = new URLSearchParams({ code, entity: $('fEntity').value, fy: $('fYear').value });
+  const d = await (await fetch('/api/mis/customer360?' + p)).json();
+  $('cCards').innerHTML = card('Customer', d.name, code) + card('Total Sales', '₹' + fmt(d.totalSales)) +
+    card('Rejections', '₹' + fmt(d.totalRejections)) + card('Payments Received', '₹' + fmt(d.totalPayments), d.payments.length + ' payments') +
+    card('Outstanding', '₹' + fmt(d.outstanding), 'Sales - Rej - Payments');
+  $('cTable').innerHTML = '<thead><tr><th>Month</th><th class="num">Sales</th><th class="num">Rejections</th><th class="num">Payments</th><th class="num">Net</th></tr></thead><tbody>' +
+    d.monthly.map(m => `<tr><td>${m.month}</td><td class="num">${fmt(m.sales)}</td><td class="num">${fmt(m.rej)}</td><td class="num">${fmt(m.pay)}</td><td class="num"><b>${fmt(m.sales - m.rej - m.pay)}</b></td></tr>`).join('') +
+    `<tr class="total-row"><td>TOTAL</td><td class="num">${fmt(d.totalSales)}</td><td class="num">${fmt(d.totalRejections)}</td><td class="num">${fmt(d.totalPayments)}</td><td class="num">${fmt(d.outstanding)}</td></tr></tbody>`;
+}
+
+function exportExcel() {
+  const p = new URLSearchParams({ entity: $('fEntity').value, fy: $('fYear').value });
+  if (tab === 'pl' || tab === 'bs') { p.set('report', 'plbs'); p.set('statement', tab === 'bs' ? 'BS' : 'PL'); }
+  else if (tab === 'mapping') p.set('report', 'unmapped');
+  else if (tab === 'rej') p.set('report', 'rejections');
+  else if (tab === 'cgroup') p.set('report', 'cgroup');
+  else if (tab === 'dscr') { p.set('report', 'loans'); p.set('month', 'ALL'); }
+  else { p.set('report', 'sales'); p.set('by', $('fGroup').value); }
+  window.open('/api/mis/export?' + p, '_blank');
+}
+
+async function reloadData() {
+  if (!confirm('Workbook se fresh data load karein? (Naya TB/sales daalne ke baad)')) return;
+  $('loading').classList.remove('hidden');
+  const r = await (await fetch('/api/mis/reload', { method: 'POST' })).json();
+  $('loading').classList.add('hidden');
+  if (r.ok) { alert('Data reloaded: ' + JSON.stringify(r.counts)); init(); }
+  else alert('Error: ' + r.error);
+}
+
+  const from = new URLSearchParams(); 
+  ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'].forEach(m => { from.set(m, m); });
+  for (const m of ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar']) {
+    const o1 = document.createElement('option'); o1.value = o1.textContent = m; $('fFrom').appendChild(o1);
+    const o2 = document.createElement('option'); o2.value = o2.textContent = m; $('fTo').appendChild(o2);
+  }
+  $('fFrom').value = 'Apr'; $('fTo').value = 'Aug';
+  // ---------- auto-refresh: filter badlo -> turant reload (Apply ki zaroorat nahi) ----------
+['fEntity','fYear','fMonth','fGroup','fFrom','fTo','fStmt','fView'].forEach(id => {
+  $(id).addEventListener('change', () => loadTab());
+});
+let searchTimer = null;
+$('fSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadTab, 400); });
+
+// ---------- hidden corner: mapping + templates ----------
+function toggleMapping() {
+  document.querySelector('button[data-tab=mapping]').click();
+  window.scrollTo(0, 0);
+}
+
+// ---------- TB Review Gate ----------
+let tbRevData = null;
+async function loadTBReview() {
+  const d = await (await fetch('/api/mis/tb-review')).json();
+  tbRevData = d;
+  $('tbRevCards').innerHTML =
+    card('Open Issues', d.counts.open, d.counts.errors + ' errors, ' + d.counts.warnings + ' warnings, ' + d.counts.infos + ' info') +
+    card('OK kiye', d.counts.ok, 'aapne verify kar liye') +
+    card('Status', d.accepted ? '✅ Accepted' : '⏳ Pending', d.accepted ? new Date(d.accepted).toLocaleString() : 'Accept dabao review-complete ke liye');
+  const sevBadge = (s) => s === 'error' ? '<span style="color:#dc2626;font-weight:700">ERROR</span>' : s === 'warning' ? '<span style="color:#d97706;font-weight:700">WARN</span>' : '<span style="color:#2563eb;font-weight:700">INFO</span>';
+  const chk = $('tbRevFilter') ? $('tbRevFilter').value : 'open';
+  let rows = d.issues || [];
+  if (chk === 'open') rows = rows.filter(i => i.status === 'open');
+  else if (chk === 'ok') rows = rows.filter(i => i.status === 'ok');
+  let html = '<thead><tr><th>Sev</th><th>Check</th><th>Co.</th><th>Ledger</th><th>Detail</th><th>AI</th><th>Status</th><th></th></tr></thead><tbody>';
+  for (const i of rows) {
+    html += `<tr><td>${sevBadge(i.severity)}</td><td>${i.check}</td><td>${i.entity}</td><td>${i.ledger || '-'}</td><td style="max-width:420px">${i.detail}${i.note ? '<br><i style="color:#64748b">📝 ' + i.note + '</i>' : ''}</td><td style="max-width:360px;color:#475569" id="ai-${i.id}">${i.explanation || ''}</td><td>${i.status === 'ok' ? '✅ OK' : i.status === 'accepted' ? '✔️ Accepted' : '⏳ Open'}</td><td>${i.status === 'open' ? `<button onclick="tbRevOK(${i.id})">OK</button>` : ''}</td></tr>`;
+  }
+  html += '</tbody>';
+  $('tbRevTable').innerHTML = html;
+}
+async function tbRevOK(id) {
+  const note = prompt('Optional note (kya verify kiya / reason):') || '';
+  await fetch('/api/mis/tb-review/ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, note }) });
+  loadTBReview();
+}
+async function tbRevAI() {
+  $('tbAiBtn').textContent = '🤖 AI soch raha hai…';
+  try {
+    const openIds = (tbRevData?.issues || []).filter(i => i.status === 'open').map(i => i.id);
+    const r = await (await fetch('/api/mis/tb-review/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: openIds }) })).json();
+    for (const e of r.explanations || []) { const el = $('ai-' + e.id); if (el) el.textContent = e.explanation; }
+    if (r.engine === 'offline-rules') alert('Gemini key nahi lagi — built-in CA-rules se explanation diya. (Key mis-config me daalo to Gemini chalega.)');
+  } finally { $('tbAiBtn').textContent = '🤖 AI Explanation (Gemini)'; }
+}
+async function tbRevAccept() {
+  const open = (tbRevData?.counts?.open) || 0;
+  if (!confirm(open ? open + ' issues abhi OPEN hain — sab force-accept karke TB finalise kar doon?' : 'TB finalise kar doon? Review complete mark ho jayega.')) return;
+  await fetch('/api/mis/tb-review/accept', { method: 'POST' });
+  loadTBReview();
+}
+async function tbRevReopen() {
+  await fetch('/api/mis/tb-review/reopen', { method: 'POST' });
+  loadTBReview();
+}
+async function toggleTemplates() {
+  const m = $('tplMenu');
+  if (!m.classList.contains('hidden')) { m.classList.add('hidden'); return; }
+  const d = await (await fetch('/api/mis/templates')).json();
+  $('tplLinks').innerHTML = d.templates.map(t => `<a href="/api/mis/templates/${encodeURIComponent(t)}" download style="color:#1e3a5f;font-size:13px">📄 ${t}</a>`).join('');
+  m.classList.remove('hidden');
+}
+
+// ---------- customer datalist (sales se auto-pick) ----------
+async function loadCustList() {
+  const d = await (await fetch('/api/mis/customers?entity=' + $('fEntity').value)).json();
+  $('custList').innerHTML = d.customers.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+}
+  init();
+</script>
+</body>
+</html>

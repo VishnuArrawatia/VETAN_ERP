@@ -1,0 +1,130 @@
+{
+  "$comment": "MIS PORTAL CONFIG v3 - Notepad me edit kar sakte ho. NAYI COMPANY add karni ho to companies list me ek line jodo (jaise {\"code\":\"XYZ\",\"name\":\"XYZ Pvt Ltd\"}) aur TB/workbook paths me uska block - bas.",
+  "port": 3001,
+  "dataDir": "F:/Financial Report",
+  "fiscalYearStartMonth": 4,
+  "companies": [
+    { "code": "SAKAR", "name": "Sakar Electricals & Electronics Pvt Ltd" },
+    { "code": "SVN", "name": "SVN Opto Electronics Pvt Ltd" }
+  ],
+  "salesWorkbook": {
+    "$comment": "IWSR/CN/Purchase wali workbook - month ke hisab se update karke isi path par rakho (purana replace hota rahega)",
+    "path": "F:/Financial Report/workbooks/Revised Group-Summary as on 31.08.26.xlsm",
+    "sheets": {
+      "iwsr": { "SAKAR": "IWSR-SKR", "SVN": "IWSR-SVN" },
+      "creditNote": { "SAKAR": "CN-SKR", "SVN": "CN-SVN" },
+      "purchase": "FG Purchase"
+    },
+    "columns": {
+      "iwsr": {
+        "month": "B", "invoiceNo": "M", "invoiceDate": "N",
+        "customerCode": "P", "customerName": "Q",
+        "itemNo": "S", "itemDesc": "T", "itemCategory": "U", "itemGroup": "V", "itemSubgroup": "W", "customerGroup": "X",
+        "quantity": "Z", "unitPrice": "AA", "taxableAmount": "AB", "gstAmount": "AG", "totalAmount": "AH"
+      },
+      "cn": {
+        "month": "A", "reason": "B", "cnNo": "M", "cnDate": "N",
+        "customerCode": "P", "customerName": "Q", "itemNo": "S", "itemDesc": "T",
+        "quantity": "V", "unitPrice": "W", "taxableAmount": "X"
+      },
+      "purchase": {
+        "month": "A", "vendorCode": "D", "vendorName": "E", "postingDate": "G",
+        "transNo": "H", "originNo": "J", "details": "M", "amount": "N"
+      }
+    }
+  },
+  "salesWorkbooks": {
+    "$comment": "PURANE SAAL ke sales registers (IWSR/CN same format). Ye files yahan banao: F:/Financial Report/workbooks/ me. Har file me SAKAR+SVN dono ki IWSR/CN sheets ho sakti hain (sheet-names alag ho to iwsr/creditNote me override karo). Jab tak file nahi hai, loader warning dega aur skip karega.",
+    "list": [
+      { "file": "F:/Financial Report/workbooks/Sales Register FY-2024-25.xlsx" },
+      { "file": "F:/Financial Report/workbooks/Sales Register FY-2025-26.xlsx" }
+    ]
+  },
+  "salesCsvFiles": {
+    "$comment": "SAP B1 query-export CSVs (UTF-16) - E: drive se copy karke yahan rakho. entity = kis company ka data hai. SIRF PURANE SAAL register karo (current-FY CSV workbook ke IWSR sheet ka duplicate hota hai - dono load karne par double-count). Sales-FY-2026-27-Apr-Aug.csv backup me csv folder me pada hai.",
+    "files": [
+      { "file": "F:/Financial Report/workbooks/csv/Sales-FY-2024-25.csv", "entity": "SAKAR" },
+      { "file": "F:/Financial Report/workbooks/csv/Sales-FY-2025-26.csv", "entity": "SAKAR" }
+    ]
+  },
+  "tbWorkbooks": {
+    "$comment": "HAR FINANCIAL YEAR KA TB - naya FY shuru ho to naya {} block jodo. Current-year file time-to-time replace hogi.",
+    "years": [
+      {
+        "year": "FY-2026-27",
+        "isFYCurrent": true,
+        "sakar": "F:/Financial Report/workbooks/Revised Group-Summary as on 31.08.26.xlsm",
+        "sakarTbSheet": "Master-TB-Sakar",
+        "svn": "F:/Financial Report/workbooks/Revised Group-Summary as on 31.08.26.xlsm",
+        "svnTbSheet": "Master-TB-SVN"
+      }
+    ]
+  },
+  "tbLayout": {
+    "$comment": "TB sheet ka layout - SAKAR aur SVN ka thoda alag hai",
+    "SAKAR": { "code": "D", "name": "E", "groupPL": "G", "groupMonthly": "H", "ob": "I", "monthsStart": "J", "monthsCount": 12, "total": "V", "headerRow": 1, "dataStartRow": 3 },
+    "SVN":   { "code": "C", "name": "D", "groupBS": "A", "groupType": "B", "ob": "G", "monthsStart": "H", "monthsCount": 12, "total": "T", "headerRow": 2, "dataStartRow": 3 }
+  },
+  "stockUploads": {
+    "$comment": "Har mahine stock file yahan daalo: F:/Financial Report/uploads/stock/ me. Columns (A se M): Company, FY, Month, Item No, Item Desc, Item Group, Opening Qty, Produced Qty, Sold Qty, Closing Qty, Closing Value, Last Sale Month, Last Sale Date. Template: templates/STOCK-UPLOAD-TEMPLATE.xlsx",
+    "dir": "F:/Financial Report/uploads/stock"
+  },
+  "loanUploads": {
+    "$comment": "Loan details (optional): F:/Financial Report/uploads/loans/ me repayment-schedule format (template dekho). SAKAR ke liye ye use karo. SVN auto aa jata hai Loan-SVN sheet se (neeche loanSheets).",
+    "dir": "F:/Financial Report/uploads/loans"
+  },
+  "loanSheets": {
+    "$comment": "Workbook ke andar jo loan-schedule sheets hain unhe direct parse karo - entity -> sheet-name. Column-blocks: D/H/L/P/T = Total/Principle/Interest triplets, R2 me loan-names, A=FY code (jaise 26-27), B=month. NOTE: Loan-SVN sheet me SAKAR ke loans hain (user-confirmed)",
+    "SAKAR": "Loan-SVN"
+  },
+  "svnLoanRps": {
+    "$comment": "SVN Term Loan RPS Working file - Term Loan + Car Loan sheets (D/E/F triplets, R2=loan-name, A=FY, B=month-date) + Loan Summery (master-only loans: 802920431/ECGS/DBS x2)",
+    "file": "E:/Account Master/A-Sakar/11. Archieve/Loans/SVN Term Loan RPS Working till closure - Revised.xlsx",
+    "sheets": { "termLoan": "Term Loan", "carLoan": "Car Loan" },
+    "summaryLoans": [
+      { "loanName": "Term Loan - HDFC Bank - 802920431", "sanctionAmount": 38540652, "emiAmount": 805814, "balance": 36635127 },
+      { "loanName": "Term Loan - ECGS - HDFC Bank - 803641167", "sanctionAmount": 258110000, "emiAmount": 189281, "balance": 258110000 },
+      { "loanName": "Term Loan - DBS Bank - 8817320000005890", "sanctionAmount": 16980880, "emiAmount": 338763, "balance": 16291833 },
+      { "loanName": "Term Loan - DBS Bank - 8817320000005951", "sanctionAmount": 14219120, "emiAmount": 283667, "balance": 13623789 }
+    ]
+  },
+  "creditNoteCsv": {
+    "$comment": "Credit-Note register CSV (SAP UTF-16) - HISTORY ke liye. uptoMonth = is month se pehle tak ka data CSV se (workbook CN sheets current-FY dete hain - overlap double-count guard isliye zaroori). Jab workbook CN me purane saal bhi aa jayen to isko hata dena.",
+    "files": [
+      { "file": "F:/Financial Report/workbooks/csv/CreditNote-SAKAR-Apr2024-Aug2026.csv", "entity": "SAKAR", "uptoMonth": "2026-04" }
+    ]
+  },
+  "fgPurchaseCsv": {
+    "$comment": "FG Purchase ledger CSV (510101008, SAP UTF-16) - channel-2 rejection ke liye. PC(A/P Credit Memo)=customer-rejection return, PD(GRPO)=normal inward purchase (rejection me NAHI ginta), OB/JE/PU/BC=skip. Vendor-code Offset-Account column me hai (V####) - CUSTOMER-MASTER template me vendor-code daalke link karna hai, phir customer-name auto aa jayega. uptoMonth = workbook FG-Purchase sheet overlap-guard.",
+    "files": [
+      { "file": "F:/Financial Report/workbooks/csv/FGPurchase-SAKAR-Apr2024-Aug2026.csv", "entity": "SAKAR", "uptoMonth": "2026-04" }
+    ]
+  },
+  "tbHistoryCsv": {
+    "$comment": "PURANE FY ka TB (SAP 42-col export CSV, UTF-16) - SAKAR history. Ledger rows (9-digit code) store hoti hain, group-rows hierarchy ke liye. mappingSource=tb-column, history=true - Ledger Mapping me map karne par PL/BS history bhi banegi.",
+    "files": [
+      { "file": "F:/Financial Report/workbooks/csv/TB-SAKAR-FY-2024-25.csv", "entity": "SAKAR", "fy": "FY-2024-25" },
+      { "file": "F:/Financial Report/workbooks/csv/TB-SAKAR-FY-2025-26.csv", "entity": "SAKAR", "fy": "FY-2025-26" }
+    ]
+  },
+  "stmtPLFiles": {
+    "$comment": "NEW PL STATEMENT (user ki official monthly PL) - app ke Sales/Revenue figures ISSE aane chahiye, register se nahi. File = har FY ka summary workbook, sheet = 'New PL'. Structure: col1 = row-label; SAKAR block cols 2-13 (Apr..Mar monthly, col1 me label pehle), SVN block cols 17-28. Row-label 'Total of Sales'/'Operational Revenue' = monthly operational revenue (GST-exclusive sales + jobwork etc). currentFyMonths = current FY me kitne months bharre hain (Apr=5 columns filled).",
+    "files": [
+      { "fy": "FY-2024-25", "entityLabel": "SAKAR", "file": "F:/Financial Report/workbooks/statements/New Group-Summary as on 31.03.25.xlsb" },
+      { "fy": "FY-2025-26", "entityLabel": "SAKAR", "file": "F:/Financial Report/workbooks/statements/Revised Group-Summary as on 31.3.26.xlsb" },
+      { "fy": "FY-2026-27", "entityLabel": "SAKAR", "file": "F:/Financial Report/workbooks/statements/Revised Group-Summary as on 31.08.26.xlsb" }
+    ]
+  },
+  "ai": {
+    "$comment": "TB-Review ke AI-explanations ke liye. apiKey dalo (Google AI Studio se free milti hai: aistudio.google.com -> Get API key) to Gemini chalega; key khali rahegi to built-in CA-rules se offline explanation milega. model: gemini-2.0-flash (fast) ya gemini-2.5-pro (deep).",
+    "gemini": { "apiKey": "", "model": "gemini-2.0-flash" }
+  },
+  "deadStockRules": {
+    "$comment": "Dead/Non-moving stock ki definition - months sale nahi hua to",
+    "deadMonths": 12,
+    "nonMovingMonths": 6
+  },
+  "customerVendorLinks": [],
+  "fgCategories": ["Finished Goods"],
+  "reportDefaults": { "entity": "SAKAR", "topN": 10 }
+}
