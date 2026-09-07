@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Account Reconciliation Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --primary: #2563eb;
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  
+  .header {
+    background: linear-gradient(135deg, #1e40af, #3b82f6);
+    color: white; padding: 24px 32px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .header h1 { font-size: 24px; font-weight: 700; }
+  .header p { opacity: 0.85; font-size: 14px; margin-top: 4px; }
+  
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  
+  .upload-card {
+    background: var(--card); border: 2px dashed var(--border);
+    border-radius: 12px; padding: 32px; text-align: center;
+    transition: all 0.2s; cursor: pointer; position: relative;
+  }
+  .upload-card:hover { border-color: var(--primary); background: #eff6ff; }
+  .upload-card.has-data { border-color: var(--success); border-style: solid; background: #f0fdf4; }
+  .upload-card h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+  .upload-card .icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-card input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-card .info { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .upload-card .badge { display: inline-block; background: var(--success); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 8px; }
+  
+  .controls {
+    background: var(--card); border-radius: 12px; padding: 20px 24px;
+    border: 1px solid var(--border); margin-bottom: 24px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .controls label { font-weight: 600; font-size: 14px; }
+  .controls select, .controls input {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: white;
+  }
+  .btn {
+    padding: 10px 24px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #15803d; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--card); border-radius: 10px; padding: 16px 20px;
+    border: 1px solid var(--border); text-align: center;
+  }
+  .stat-card .num { font-size: 28px; font-weight: 700; }
+  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-matched .num { color: var(--success); }
+  .stat-our-only .num { color: var(--danger); }
+  .stat-cust-only .num { color: var(--warning); }
+  .stat-mismatch .num { color: #9333ea; }
+  .stat-total .num { color: var(--primary); }
+  
+  .results-section { margin-top: 24px; }
+  .results-section h2 { font-size: 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; background: #f1f5f9; border-radius: 10px; padding: 4px; }
+  .tab {
+    padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; border: none; background: transparent; color: var(--muted);
+  }
+  .tab.active { background: white; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .tab:hover:not(.active) { color: var(--text); }
+  
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th { background: #f8fafc; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); padding: 12px 14px; text-align: left; border-bottom: 2px solid var(--border); position: sticky; top: 0; }
+  td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  tr:hover td { background: #f8fafc; }
+  
+  .status-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .status-matched { background: #dcfce7; color: #166534; }
+  .status-our-only { background: #fee2e2; color: #991b1b; }
+  .status-cust-only { background: #fef3c7; color: #92400e; }
+  .status-mismatch { background: #f3e8ff; color: #6b21a8; }
+  
+  .amt { font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; }
+  .amt-pos { color: var(--success); }
+  .amt-neg { color: var(--danger); }
+  
+  .mapping-section {
+    background: var(--card); border-radius: 12px; padding: 20px 24px;
+    border: 1px solid var(--border); margin-bottom: 24px;
+  }
+  .mapping-section h3 { font-size: 14px; margin-bottom: 12px; }
+  .mapping-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .mapping-row label { font-size: 13px; font-weight: 500; min-width: 140px; }
+  .mapping-row select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; min-width: 160px; }
+  
+  .hidden { display: none; }
+  
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+  
+  @media (max-width: 768px) {
+    .upload-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📊 Customer Account Reconciliation</h1>
+    <p>Upload both ledgers → Auto match → Export Excel report</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Upload Cards -->
+  <div class="upload-grid">
+    <div class="upload-card" id="ourCard">
+      <div class="icon">📒</div>
+      <h3>Our Ledger (Company Books)</h3>
+      <p class="info">Upload Excel (.xlsx) or CSV file</p>
+      <input type="file" id="ourFile" accept=".xlsx,.xls,.csv" onchange="handleFile(this, 'our')">
+      <div id="ourBadge" class="hidden"><span class="badge">✅ Loaded</span></div>
+    </div>
+    <div class="upload-card" id="custCard">
+      <div class="icon">📒</div>
+      <h3>Customer Ledger</h3>
+      <p class="info">Upload Excel (.xlsx) or CSV file</p>
+      <input type="file" id="custFile" accept=".xlsx,.xls,.csv" onchange="handleFile(this, 'cust')">
+      <div id="custBadge" class="hidden"><span class="badge">✅ Loaded</span></div>
+    </div>
+  </div>
+
+  <!-- Column Mapping -->
+  <div class="mapping-section hidden" id="mappingSection">
+    <h3>🔗 Map Your Columns</h3>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+      <div>
+        <p style="font-size:13px; font-weight:600; margin-bottom:8px; color:var(--primary);">Our Ledger Columns</p>
+        <div class="mapping-row"><label>Date:</label><select id="ourMapDate"></select></div>
+        <div class="mapping-row"><label>Ref / Invoice No:</label><select id="ourMapRef"></select></div>
+        <div class="mapping-row"><label>Description:</label><select id="ourMapDesc"></select></div>
+        <div class="mapping-row"><label>Debit:</label><select id="ourMapDr"></select></div>
+        <div class="mapping-row"><label>Credit:</label><select id="ourMapCr"></select></div>
+      </div>
+      <div>
+        <p style="font-size:13px; font-weight:600; margin-bottom:8px; color:var(--warning);">Customer Ledger Columns</p>
+        <div class="mapping-row"><label>Date:</label><select id="custMapDate"></select></div>
+        <div class="mapping-row"><label>Ref / Invoice No:</label><select id="custMapRef"></select></div>
+        <div class="mapping-row"><label>Description:</label><select id="custMapDesc"></select></div>
+        <div class="mapping-row"><label>Debit:</label><select id="custMapDr"></select></div>
+        <div class="mapping-row"><label>Credit:</label><select id="custMapCr"></select></div>
+      </div>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:12px;">
+      <button class="btn btn-primary" onclick="runReconciliation()">🔍 Run Reconciliation</button>
+      <button class="btn btn-danger" onclick="resetAll()">🗑️ Reset All</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid hidden" id="statsGrid">
+    <div class="stat-card stat-total"><div class="num" id="statTotal">0</div><div class="lbl">Total Entries</div></div>
+    <div class="stat-card stat-matched"><div class="num" id="statMatched">0</div><div class="lbl">✅ Matched</div></div>
+    <div class="stat-card stat-our-only"><div class="num" id="statOurOnly">0</div><div class="lbl">❌ Our Only</div></div>
+    <div class="stat-card stat-cust-only"><div class="num" id="statCustOnly">0</div><div class="lbl">⚠️ Customer Only</div></div>
+    <div class="stat-card stat-mismatch"><div class="num" id="statMismatch">0</div><div class="lbl">🔄 Mismatched</div></div>
+  </div>
+
+  <!-- Results Tabs -->
+  <div class="results-section hidden" id="resultsSection">
+    <div class="tab-bar">
+      <button class="tab active" onclick="showTab('all', this)">All Entries</button>
+      <button class="tab" onclick="showTab('matched', this)">✅ Matched</button>
+      <button class="tab" onclick="showTab('our-only', this)">❌ Our Only</button>
+      <button class="tab" onclick="showTab('cust-only', this)">⚠️ Customer Only</button>
+      <button class="tab" onclick="showTab('mismatch', this)">🔄 Mismatch</button>
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+      <div id="rowInfo" style="font-size:13px; color:var(--muted);"></div>
+      <button class="btn btn-success" onclick="exportExcel()">📥 Export Reconciliation Excel</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="reconTable">
+        <thead>
+          <tr>
+            <th>#</th><th>Date</th><th>Ref No</th><th>Description</th>
+            <th>Our Debit</th><th>Our Credit</th>
+            <th>Cust Debit</th><th>Cust Credit</th>
+            <th>Status</th><th>Difference</th><th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody id="reconBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty-state" id="emptyState">
+    <div class="icon">📁</div>
+    <p>Upload both ledgers above to start reconciliation</p>
+  </div>
+</div>
+
+<script>
+let ourData = null, custData = null;
+let ourHeaders = [], custHeaders = [];
+let reconResults = [];
+let currentFilter = 'all';
+
+function handleFile(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    if (json.length < 2) { alert('File is empty or has no data rows!'); return; }
+    
+    const headers = json[0].map((h, i) => String(h || `Column_${i+1}`));
+    const rows = json.slice(1).filter(r => r.some(c => c !== undefined && c !== ''));
+    
+    if (type === 'our') {
+      ourData = rows;
+      ourHeaders = headers;
+      document.getElementById('ourCard').classList.add('has-data');
+      document.getElementById('ourBadge').classList.remove('hidden');
+      populateMapping('our', headers);
+    } else {
+      custData = rows;
+      custHeaders = headers;
+      document.getElementById('custCard').classList.add('has-data');
+      document.getElementById('custBadge').classList.remove('hidden');
+      populateMapping('cust', headers);
+    }
+    
+    if (ourData && custData) {
+      document.getElementById('mappingSection').classList.remove('hidden');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findCol(headers, patterns) {
+  const lower = headers.map(h => h.toLowerCase().trim());
+  for (const p of patterns) {
+    const idx = lower.findIndex(h => h.includes(p.toLowerCase()));
+    if (idx !== -1) return idx;
+  }
+  return 0;
+}
+
+function populateMapping(type, headers) {
+  const prefix = type === 'our' ? 'our' : 'cust';
+  const datePatterns = ['date', 'dt', 'voucher date', 'txn date'];
+  const refPatterns = ['ref', 'invoice', 'bill', 'vch', 'voucher no', 'number', 'no'];
+  const descPatterns = ['desc', 'particular', 'narration', 'details', 'remarks'];
+  const drPatterns = ['debit', 'dr', 'debit amount'];
+  const crPatterns = ['credit', 'cr', 'credit amount'];
+  
+  function fill(selectId, patterns) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">-- Select --</option>';
+    headers.forEach((h, i) => {
+      sel.innerHTML += `<option value="${i}">${h}</option>`;
+    });
+    const auto = findCol(headers, patterns);
+    sel.value = auto;
+  }
+  
+  fill(`${prefix}MapDate`, datePatterns);
+  fill(`${prefix}MapRef`, refPatterns);
+  fill(`${prefix}MapDesc`, descPatterns);
+  fill(`${prefix}MapDr`, drPatterns);
+  fill(`${prefix}MapCr`, crPatterns);
+}
+
+function getVal(row, colIdx) {
+  if (colIdx === '' || colIdx === undefined || colIdx === null) return '';
+  const v = row[parseInt(colIdx)];
+  return v !== undefined ? v : '';
+}
+
+function parseNum(v) {
+  if (v === '' || v === undefined || v === null) return 0;
+  if (typeof v === 'number') return v;
+  return parseFloat(String(v).replace(/[,₹$\s]/g, '')) || 0;
+}
+
+function normRef(v) {
+  return String(v).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function runReconciliation() {
+  if (!ourData || !custData) { alert('Please upload both ledgers first!'); return; }
+  
+  const m = {
+    ourDate: document.getElementById('ourMapDate').value,
+    ourRef: document.getElementById('ourMapRef').value,
+    ourDesc: document.getElementById('ourMapDesc').value,
+    ourDr: document.getElementById('ourMapDr').value,
+    ourCr: document.getElementById('ourMapCr').value,
+    custDate: document.getElementById('custMapDate').value,
+    custRef: document.getElementById('custMapRef').value,
+    custDesc: document.getElementById('custMapDesc').value,
+    custDr: document.getElementById('custMapDr').value,
+    custCr: document.getElementById('custMapCr').value,
+  };
+  
+  const results = [];
+  const custUsed = new Set();
+  const ourUsed = new Set();
+  
+  // Pass 1: Match by Ref No
+  for (let i = 0; i < ourData.length; i++) {
+    const o = ourData[i];
+    const oRef = normRef(getVal(o, m.ourRef));
+    let matched = false;
+    
+    for (let j = 0; j < custData.length; j++) {
+      if (custUsed.has(j)) continue;
+      const cRef = normRef(getVal(custData[j], m.custRef));
+      if (oRef && oRef === cRef) {
+        custUsed.add(j);
+        ourUsed.add(i);
+        const c = custData[j];
+        const ourDr = parseNum(getVal(o, m.ourDr));
+        const ourCr = parseNum(getVal(o, m.ourCr));
+        const cDr = parseNum(getVal(c, m.custDr));
+        const cCr = parseNum(getVal(c, m.custCr));
+        const ourNet = ourDr - ourCr;
+        const cNet = cDr - cCr;
+        const diff = ourNet - cNet;
+        
+        let status = 'matched', remarks = 'Both books agree';
+        if (Math.abs(diff) > 0.01) {
+          status = 'mismatch';
+          remarks = `Amount difference: ₹${diff.toLocaleString('en-IN', {minimumFractionDigits:2})}`;
+        }
+        
+        results.push({
+          date: getVal(o, m.ourDate),
+          refNo: getVal(o, m.ourRef),
+          desc: getVal(o, m.ourDesc),
+          ourDr, ourCr, cDr, cCr,
+          status, diff, remarks,
+        });
+        matched = true;
+        break;
+      }
+    }
+    
+    if (!matched) {
+      ourUsed.add(i);
+      const ourDr = parseNum(getVal(o, m.ourDr));
+      const ourCr = parseNum(getVal(o, m.ourCr));
+      results.push({
+        date: getVal(o, m.ourDate),
+        refNo: getVal(o, m.ourRef),
+        desc: getVal(o, m.ourDesc),
+        ourDr, ourCr, cDr: 0, cCr: 0,
+        status: 'our-only',
+        diff: ourDr - ourCr,
+        remarks: 'Entry in our books only — verify with customer',
+      });
+    }
+  }
+  
+  // Pass 2: Unmatched customer entries
+  for (let j = 0; j < custData.length; j++) {
+    if (custUsed.has(j)) continue;
+    const c = custData[j];
+    const cDr = parseNum(getVal(c, m.custDr));
+    const cCr = parseNum(getVal(c, m.custCr));
+    results.push({
+      date: getVal(c, m.custDate),
+      refNo: getVal(c, m.custRef),
+      desc: getVal(c, m.custDesc),
+      ourDr: 0, ourCr: 0, cDr, cCr,
+      status: 'cust-only',
+      diff: -(cDr - cCr),
+      remarks: 'Entry in customer books only — verify with our team',
+    });
+  }
+  
+  // Sort by date
+  results.sort((a, b) => {
+    const da = new Date(a.date), db = new Date(b.date);
+    if (isNaN(da) || isNaN(db)) return 0;
+    return da - db;
+  });
+  
+  reconResults = results;
+  
+  // Update stats
+  const matched = results.filter(r => r.status === 'matched');
+  const ourOnly = results.filter(r => r.status === 'our-only');
+  const custOnly = results.filter(r => r.status === 'cust-only');
+  const mismatch = results.filter(r => r.status === 'mismatch');
+  
+  document.getElementById('statTotal').textContent = results.length;
+  document.getElementById('statMatched').textContent = matched.length;
+  document.getElementById('statOurOnly').textContent = ourOnly.length;
+  document.getElementById('statCustOnly').textContent = custOnly.length;
+  document.getElementById('statMismatch').textContent = mismatch.length;
+  
+  document.getElementById('statsGrid').classList.remove('hidden');
+  document.getElementById('resultsSection').classList.remove('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+  
+  currentFilter = 'all';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab').classList.add('active');
+  renderTable();
+}
+
+function showTab(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function renderTable() {
+  const filtered = currentFilter === 'all' 
+    ? reconResults 
+    : reconResults.filter(r => r.status === currentFilter);
+  
+  const body = document.getElementById('reconBody');
+  body.innerHTML = '';
+  
+  const fmt = v => v ? `₹${Number(v).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})}` : '—';
+  const fmtDiff = v => {
+    if (!v || Math.abs(v) < 0.01) return '<span class="amt">—</span>';
+    const cls = v > 0 ? 'amt-pos' : 'amt-neg';
+    return `<span class="amt ${cls}">₹${Math.abs(v).toLocaleString('en-IN', {minimumFractionDigits:2})}</span>`;
+  };
+  const statusHtml = s => {
+    const map = { matched: ['✅ Matched', 'status-matched'], 'our-only': ['❌ Our Only', 'status-our-only'], 'cust-only': ['⚠️ Customer Only', 'status-cust-only'], mismatch: ['🔄 Mismatch', 'status-mismatch'] };
+    const [label, cls] = map[s] || ['', ''];
+    return `<span class="status-badge ${cls}">${label}</span>`;
+  };
+  
+  filtered.forEach((r, i) => {
+    body.innerHTML += `<tr>
+      <td>${i+1}</td>
+      <td>${r.date}</td>
+      <td><strong>${r.refNo}</strong></td>
+      <td>${r.desc}</td>
+      <td class="amt">${r.ourDr ? fmt(r.ourDr) : ''}</td>
+      <td class="amt">${r.ourCr ? fmt(r.ourCr) : ''}</td>
+      <td class="amt">${r.cDr ? fmt(r.cDr) : ''}</td>
+      <td class="amt">${r.cCr ? fmt(r.cCr) : ''}</td>
+      <td>${statusHtml(r.status)}</td>
+      <td>${fmtDiff(r.diff)}</td>
+      <td style="font-size:12px; color:var(--muted);">${r.remarks}</td>
+    </tr>`;
+  });
+  
+  document.getElementById('rowInfo').textContent = `Showing ${filtered.length} of ${reconResults.length} entries`;
+}
+
+function exportExcel() {
+  // Build summary data
+  const matched = reconResults.filter(r => r.status === 'matched');
+  const ourOnly = reconResults.filter(r => r.status === 'our-only');
+  const custOnly = reconResults.filter(r => r.status === 'cust-only');
+  const mismatch = reconResults.filter(r => r.status === 'mismatch');
+  
+  const ourTotalDr = reconResults.reduce((s, r) => s + r.ourDr, 0);
+  const ourTotalCr = reconResults.reduce((s, r) => s + r.ourCr, 0);
+  const custTotalDr = reconResults.reduce((s, r) => s + r.cDr, 0);
+  const custTotalCr = reconResults.reduce((s, r) => s + r.cCr, 0);
+  
+  const wb = XLSX.utils.book_new();
+  
+  // Sheet 1: Full Reconciliation
+  const reconData = reconResults.map((r, i) => ({
+    '#': i + 1,
+    'Date': r.date,
+    'Ref No': r.refNo,
+    'Description': r.desc,
+    'Our Debit': r.ourDr || '',
+    'Our Credit': r.ourCr || '',
+    'Customer Debit': r.cDr || '',
+    'Customer Credit': r.cCr || '',
+    'Status': r.status === 'matched' ? '✅ Matched' : r.status === 'our-only' ? '❌ Our Only' : r.status === 'cust-only' ? '⚠️ Customer Only' : '🔄 Amount Mismatch',
+    'Difference (₹)': r.diff ? parseFloat(r.diff.toFixed(2)) : 0,
+    'Remarks': r.remarks,
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(reconData), 'Reconciliation');
+  
+  // Sheet 2: Summary
+  const summary = [
+    ['CUSTOMER ACCOUNT RECONCILIATION REPORT'],
+    [''],
+    ['Period:', new Date().toLocaleDateString('en-IN')],
+    ['Generated By:', 'Reconciliation Tool'],
+    [''],
+    ['── LEDGER COMPARISON ──'],
+    [''],
+    ['', 'Our Books', 'Customer Books', 'Difference'],
+    ['Total Debits', ourTotalDr, custTotalDr, ourTotalDr - custTotalDr],
+    ['Total Credits', ourTotalCr, custTotalCr, ourTotalCr - custTotalCr],
+    ['Net Balance (Dr)', ourTotalDr - ourTotalCr, custTotalDr - custTotalCr, (ourTotalDr - ourTotalCr) - (custTotalDr - custTotalCr)],
+    [''],
+    ['── MATCHING SUMMARY ──'],
+    ['Total Entries', reconResults.length],
+    ['Matched Entries', matched.length],
+    ['Our Books Only', ourOnly.length],
+    ['Customer Books Only', custOnly.length],
+    ['Amount Mismatches', mismatch.length],
+    [''],
+    ['── UNMATCHED ENTRIES ──'],
+    [''],
+  ];
+  
+  ourOnly.forEach(r => {
+    summary.push([r.date, r.refNo, r.desc, `Our: ₹${r.ourDr || r.ourCr}`, 'Customer: —', r.remarks]);
+  });
+  custOnly.forEach(r => {
+    summary.push([r.date, r.refNo, r.desc, 'Our: —', `Customer: ₹${r.cDr || r.cCr}`, r.remarks]);
+  });
+  mismatch.forEach(r => {
+    summary.push([r.date, r.refNo, r.desc, `Our: ₹${r.ourDr || r.ourCr}`, `Customer: ₹${r.cDr || r.cCr}`, r.remarks]);
+  });
+  
+  summary.push(['']);
+  summary.push(['── SIGN-OFF ──']);
+  summary.push(['Prepared by:', '', 'Date:', '']);
+  summary.push(['Reviewed by:', '', 'Date:', '']);
+  summary.push(['Approved by:', '', 'Date:', '']);
+  
+  const sumSheet = XLSX.utils.aoa_to_sheet(summary);
+  sumSheet['!cols'] = [{ wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 50 }];
+  XLSX.utils.book_append_sheet(wb, sumSheet, 'Summary');
+  
+  // Sheet 3: Matched only
+  const matchedData = matched.map((r, i) => ({
+    '#': i + 1, 'Date': r.date, 'Ref No': r.refNo, 'Description': r.desc,
+    'Our Debit': r.ourDr || '', 'Our Credit': r.ourCr || '',
+    'Customer Debit': r.cDr || '', 'Customer Credit': r.cCr || '',
+    'Difference (₹)': r.diff ? parseFloat(r.diff.toFixed(2)) : 0,
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matchedData), 'Matched');
+  
+  // Sheet 4: Unmatched
+  const unmatchedData = [...ourOnly, ...custOnly, ...mismatch].map((r, i) => ({
+    '#': i + 1, 'Date': r.date, 'Ref No': r.refNo, 'Description': r.desc,
+    'Our Debit': r.ourDr || '', 'Our Credit': r.ourCr || '',
+    'Customer Debit': r.cDr || '', 'Customer Credit': r.cCr || '',
+    'Status': r.status === 'our-only' ? '❌ Our Only' : r.status === 'cust-only' ? '⚠️ Customer Only' : '🔄 Mismatch',
+    'Difference (₹)': r.diff ? parseFloat(r.diff.toFixed(2)) : 0,
+    'Remarks': r.remarks,
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(unmatchedData), 'Unmatched');
+  
+  XLSX.writeFile(wb, `Customer_Reconciliation_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+function resetAll() {
+  ourData = null; custData = null;
+  ourHeaders = []; custHeaders = [];
+  reconResults = [];
+  document.getElementById('ourFile').value = '';
+  document.getElementById('custFile').value = '';
+  document.getElementById('ourCard').classList.remove('has-data');
+  document.getElementById('custCard').classList.remove('has-data');
+  document.getElementById('ourBadge').classList.add('hidden');
+  document.getElementById('custBadge').classList.add('hidden');
+  document.getElementById('mappingSection').classList.add('hidden');
+  document.getElementById('statsGrid').classList.add('hidden');
+  document.getElementById('resultsSection').classList.add('hidden');
+  document.getElementById('emptyState').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
