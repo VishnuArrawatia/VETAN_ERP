@@ -2152,11 +2152,12 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
-  // Form 16 Tax Estimation Report
+  // Form 16 Tax Estimation Report (new regime; ?fy=2026-27 optional)
   app.get('/api/form16/:employeeId', (req, res) => {
     const { employeeId } = req.params;
     try {
-      const calculation = db.calculateForm16(employeeId);
+      const fy = (req.query.fy as string) || undefined;
+      const calculation = db.calculateForm16(employeeId, fy);
       res.json(calculation);
     } catch (e: any) {
       res.status(500).json({ error: e.message });

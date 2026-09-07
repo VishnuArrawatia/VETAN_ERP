@@ -24318,14 +24318,15 @@ var require_sqlite3 = __commonJS({
   }
 });
 
-// server/app.ts
-var app_exports = {};
-__export(app_exports, {
+// api/server-entry.ts
+var server_entry_exports = {};
+__export(server_entry_exports, {
   createApp: () => createApp,
-  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(app_exports);
+module.exports = __toCommonJS(server_entry_exports);
+
+// server/app.ts
 var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -24390,6 +24391,13 @@ function mergeRecordArrays(base, incoming, prefer) {
       if (t2 > t1) resultMap.set(key, item);
       return;
     }
+    if (t1 === null && t2 !== null) {
+      resultMap.set(key, item);
+      return;
+    }
+    if (t1 !== null && t2 === null) {
+      return;
+    }
     if (prefer === "incoming") resultMap.set(key, item);
   };
   for (const it of base ?? []) add(it, "base");
@@ -24406,6 +24414,8 @@ function pickScalar(base, incoming, prefer) {
     const t1 = recordTime(base);
     const t2 = recordTime(incoming);
     if (t1 !== null && t2 !== null && t1 !== t2) return t2 > t1 ? incoming : base;
+    if (t1 === null && t2 !== null) return incoming;
+    if (t1 !== null && t2 === null) return base;
     return prefer === "incoming" ? incoming : base;
   }
   return prefer === "incoming" ? incoming : base;
@@ -24425,6 +24435,203 @@ function mergeStores(base, incoming, prefer = "incoming") {
     }
   }
   return merged;
+}
+
+// server/form16-engine.ts
+var REGIME_CONFIGS = {
+  "2026-27": {
+    name: "New Tax Regime (Sec 115BAC) \u2014 FY 2026-27",
+    standardDeduction: 75e3,
+    rebateIncomeLimit: 12e5,
+    rebateMax: 6e4,
+    cessRate: 0.04,
+    slabs: [
+      { upTo: 4e5, rate: 0 },
+      { upTo: 8e5, rate: 0.05 },
+      { upTo: 12e5, rate: 0.1 },
+      { upTo: 16e5, rate: 0.15 },
+      { upTo: 2e6, rate: 0.2 },
+      { upTo: 24e5, rate: 0.25 },
+      { upTo: null, rate: 0.3 }
+    ],
+    surcharge: [
+      { above: 5e6, rate: 0.1 },
+      { above: 1e7, rate: 0.15 },
+      { above: 2e7, rate: 0.25 }
+    ],
+    leaveEncashmentCap: 25e5,
+    leaveEncashmentMonthsMultiplier: 10
+  },
+  "2025-26": {
+    name: "New Tax Regime (Sec 115BAC) \u2014 FY 2025-26",
+    standardDeduction: 75e3,
+    rebateIncomeLimit: 12e5,
+    rebateMax: 6e4,
+    cessRate: 0.04,
+    slabs: [
+      { upTo: 4e5, rate: 0 },
+      { upTo: 8e5, rate: 0.05 },
+      { upTo: 12e5, rate: 0.1 },
+      { upTo: 16e5, rate: 0.15 },
+      { upTo: 2e6, rate: 0.2 },
+      { upTo: 24e5, rate: 0.25 },
+      { upTo: null, rate: 0.3 }
+    ],
+    surcharge: [
+      { above: 5e6, rate: 0.1 },
+      { above: 1e7, rate: 0.15 },
+      { above: 2e7, rate: 0.25 }
+    ],
+    leaveEncashmentCap: 25e5,
+    leaveEncashmentMonthsMultiplier: 10
+  }
+};
+function currentFY() {
+  const now = /* @__PURE__ */ new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const startYear = m >= 4 ? y : y - 1;
+  return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+function fyMonths(fy) {
+  const [startStr] = fy.split("-");
+  const startYear = parseInt(startStr, 10);
+  const months = [];
+  for (let m = 4; m <= 12; m++) months.push(`${startYear}-${String(m).padStart(2, "0")}`);
+  for (let m = 1; m <= 3; m++) months.push(`${startYear + 1}-${String(m).padStart(2, "0")}`);
+  return months;
+}
+function buildForm16Income(payslips, opts) {
+  const { fy, config } = opts;
+  const months = fyMonths(fy);
+  const monthSet = new Set(months);
+  const rows = [];
+  let tdsTotal = 0;
+  let baseSamples = [];
+  const notes = [];
+  for (const p of payslips) {
+    if (!p || !p.month || !monthSet.has(p.month)) continue;
+    const salary = Math.max(0, (p.earned_base_salary || 0) + (p.earned_hra || 0) + (p.earned_special_allowance || 0) + (p.earned_da || 0) + (p.earned_edu_allowance || 0) + (p.earned_medical_allowance || 0) + (p.earned_conveyance_allowance || 0) + (p.overtime_pay || 0));
+    const bonus = (p.earned_bonus_payable || 0) + (p.bonus_incentive || 0) + (p.performance_incentive || 0) + (p.attendance_incentive || 0) + (p.production_incentive || 0);
+    const arrear = p.arrear_payment || 0;
+    const leaveEncash = p.earned_leave_encashment || 0;
+    const other = (p.other_earnings || 0) + (p.special_allowance_addition || 0);
+    if (p.earned_base_salary) baseSamples.push(p.earned_base_salary);
+    tdsTotal += p.tds || 0;
+    rows.push({ month: p.month, salary, bonus, arrear, leave_encashment: leaveEncash, other });
+  }
+  let ffEncash = 0;
+  for (const f of opts.ffSettlements || []) {
+    if (!f || f.employee_id == null) continue;
+    const d = f.settlement_date || "";
+    if (!d || !/^\d{4}-\d{2}/.test(d)) continue;
+    const ym = d.slice(0, 7);
+    if (!monthSet.has(ym)) continue;
+    const enc = f.earned_leave_encashment || 0;
+    if (enc <= 0) continue;
+    if (rows.some((r) => r.month === ym && r.leave_encashment > 0)) {
+      notes.push(`F&F leave encashment for ${ym} skipped \u2014 payslip already carries it (double-count guard).`);
+      continue;
+    }
+    ffEncash += enc;
+    rows.push({ month: ym, salary: 0, bonus: 0, arrear: 0, leave_encashment: enc, other: 0 });
+  }
+  rows.sort((a, b) => a.month.localeCompare(b.month));
+  const salary_income = rows.reduce((s, r) => s + r.salary, 0);
+  const bonus_income = rows.reduce((s, r) => s + r.bonus, 0);
+  const arrear_income = rows.reduce((s, r) => s + r.arrear, 0);
+  const leave_encashment_gross = rows.reduce((s, r) => s + r.leave_encashment, 0);
+  const other_income = rows.reduce((s, r) => s + r.other, 0);
+  let leave_encashment_exemption = 0;
+  if (leave_encashment_gross > 0) {
+    const avgBase = baseSamples.length > 0 ? baseSamples.reduce((s, v) => s + v, 0) / baseSamples.length : 0;
+    const b = avgBase * config.leaveEncashmentMonthsMultiplier;
+    leave_encashment_exemption = Math.max(0, Math.min(leave_encashment_gross, b, config.leaveEncashmentCap));
+    notes.push(
+      `Leave encashment exemption u/s 10(10AA): least of (actual \u20B9${Math.round(leave_encashment_gross)}, 10\xD7 avg monthly salary \u20B9${Math.round(b)}, cap \u20B9${config.leaveEncashmentCap.toLocaleString("en-IN")}) = \u20B9${Math.round(leave_encashment_exemption)}.`
+    );
+  }
+  const leave_encashment_taxable = Math.max(0, leave_encashment_gross - leave_encashment_exemption);
+  const gross_total_income = salary_income + bonus_income + arrear_income + leave_encashment_taxable + other_income;
+  if (arrear_income > 0) {
+    notes.push("Arrears are fully taxable in the year received (new regime). Relief u/s 89(1) via Form 10E, if opted, is filed outside the ERP.");
+  }
+  return {
+    salary_income,
+    bonus_income,
+    arrear_income,
+    leave_encashment_gross,
+    leave_encashment_exemption,
+    leave_encashment_taxable,
+    other_income,
+    gross_total_income,
+    months_counted: rows.length,
+    tds_deducted: tdsTotal,
+    month_wise: rows,
+    notes
+  };
+}
+function computeNewRegimeTax(grossTotalIncome, config) {
+  const total_deductions = config.standardDeduction;
+  const taxable_income = Math.max(0, Math.round(grossTotalIncome - config.standardDeduction));
+  const slabs_applied = [];
+  let tax_on_income = 0;
+  let lower = 0;
+  for (const slab of config.slabs) {
+    const upper = slab.upTo === null ? taxable_income : Math.min(slab.upTo, taxable_income);
+    if (upper <= lower) {
+      if (slab.upTo === null || taxable_income <= lower) break;
+      lower = slab.upTo;
+      continue;
+    }
+    const slabTax = Math.round((upper - lower) * slab.rate);
+    if (slabTax > 0 || slab.rate === 0) {
+      slabs_applied.push({ from: lower, to: slab.upTo, rate: slab.rate, tax: slabTax });
+    }
+    tax_on_income += slabTax;
+    lower = slab.upTo === null ? taxable_income : slab.upTo;
+    if (slab.upTo === null || taxable_income <= slab.upTo) break;
+  }
+  let rebate_87a = 0;
+  let marginal_relief = 0;
+  if (taxable_income <= config.rebateIncomeLimit) {
+    rebate_87a = Math.min(tax_on_income, config.rebateMax);
+  } else {
+    const excess = taxable_income - config.rebateIncomeLimit;
+    if (tax_on_income > excess) {
+      marginal_relief = tax_on_income - excess;
+    }
+  }
+  const taxAfterRebate = Math.max(0, tax_on_income - marginal_relief - rebate_87a);
+  let surcharge = 0;
+  let marginal_relief_surcharge = 0;
+  for (const tier of config.surcharge) {
+    if (taxable_income > tier.above) {
+      surcharge = Math.round(taxAfterRebate * tier.rate);
+      const excessOver = taxable_income - tier.above;
+      if (surcharge > excessOver) {
+        marginal_relief_surcharge = surcharge - excessOver;
+        surcharge = excessOver;
+      }
+      break;
+    }
+  }
+  const cess = Math.round((taxAfterRebate + surcharge) * config.cessRate);
+  const net_tax_payable = Math.max(0, taxAfterRebate + surcharge + cess);
+  const effective_rate = grossTotalIncome > 0 ? net_tax_payable / grossTotalIncome : 0;
+  return {
+    taxable_income,
+    slabs_applied,
+    tax_on_income,
+    marginal_relief,
+    rebate_87a,
+    surcharge,
+    marginal_relief_surcharge,
+    cess,
+    net_tax_payable,
+    total_deductions,
+    effective_rate
+  };
 }
 
 // server/db.ts
@@ -24852,6 +25059,10 @@ var PayrollDatabase = class _PayrollDatabase {
      *  another writer overwrote us — we reload and retry. */
     this._loadedVersion = "";
     this._conflictCount = 0;
+    /** Employee IDs mutated on THIS instance since the last successful cloud persist.
+     *  Used to preserve in-flight human edits through OCC conflict merges — the
+     *  core guarantee that a stale full-blob write cannot resurrect old profile values. */
+    this._dirtyEmployeeIds = /* @__PURE__ */ new Set();
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
@@ -26975,6 +27186,10 @@ var PayrollDatabase = class _PayrollDatabase {
     employee.password = last4 + birthYearVal;
     employee.needs_password_change = true;
     employee.ctc_salary = this.computeCtcForEmployee(employee);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (!employee.created_at) employee.created_at = nowIso;
+    employee.updated_at = nowIso;
+    this._dirtyEmployeeIds.add(employee.id);
     this.data.employees.push(employee);
     this.syncEmployee(employee);
     this.persistData();
@@ -27061,6 +27276,8 @@ var PayrollDatabase = class _PayrollDatabase {
     }
     this.data.employees[idx] = { ...this.data.employees[idx], ...mergedPartial };
     const emp = this.data.employees[idx];
+    emp.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    this._dirtyEmployeeIds.add(emp.id);
     emp.pf_opt_in = emp.pf_opt_in === 1 || emp.pf_opt_in === true;
     emp.esic_opt_in = emp.esic_opt_in === 1 || emp.esic_opt_in === true;
     emp.professional_tax_opt_in = emp.professional_tax_opt_in === 1 || emp.professional_tax_opt_in === true;
@@ -28861,49 +29078,72 @@ var PayrollDatabase = class _PayrollDatabase {
     );
   }
   // Form 16 Tax Estimation engine
-  calculateForm16(employeeId) {
+  /**
+   * Form 16 — NEW TAX REGIME working (config-driven, actual stored payroll data only).
+   * Income components — Salary / Bonus / Arrear / Leave Encashment / Other — are
+   * aggregated from stored payslips (+ F&F settlements) for the requested FY
+   * (default: current FY). No component is double-counted (one payslip field →
+   * exactly one bucket). Tax slabs/rebate/surcharge/cess come from
+   * server/form16-engine.ts REGIME_CONFIGS — edit the config per FY, not the engine.
+   */
+  calculateForm16(employeeId, fy) {
     const emp = this.getEmployeeById(employeeId);
     if (!emp) throw new Error("Employee not found for Form 16 calculation");
+    const fyKey = fy && REGIME_CONFIGS[fy] ? fy : currentFY();
+    const config = REGIME_CONFIGS[fyKey] || REGIME_CONFIGS[currentFY()];
+    const months = fyMonths(fyKey);
+    const payslips = (this.data.payslips || []).filter((p) => p && p.employee_id === employeeId && months.includes(p.month));
+    const ffSettlements = (this.data.ff_settlements || []).filter((f) => f && f.employee_id === employeeId);
+    const income = buildForm16Income(payslips, { fy: fyKey, config, ffSettlements });
+    const tax = computeNewRegimeTax(income.gross_total_income, config);
     const monthlyGross = emp.base_salary + emp.hra + emp.special_allowance + (emp.conveyance_allowance || 0) + (emp.edu_allowance || 0) + (emp.medical_allowance || 0);
     const gross_annual_salary = monthlyGross * 12;
-    const standard_deduction = 5e4;
-    let section_80c = 0;
-    if (emp.pf_opt_in) {
-      const pfContributionBasis = emp.base_salary;
-      section_80c = Math.min(15e4, Math.round(pfContributionBasis * 0.12 * 12));
+    const notes = [...income.notes];
+    if (income.months_counted < 12) {
+      notes.push(`Payslips available for only ${income.months_counted} of 12 FY months \u2014 figures cover payroll processed to date.`);
     }
-    const section_80d = 12500;
-    const hra_exemption = Math.round(emp.hra * 12 * 0.9);
-    const taxable_income = Math.max(0, gross_annual_salary - standard_deduction - section_80c - section_80d - hra_exemption);
-    let tax_on_income = 0;
-    if (taxable_income > 15e5) {
-      tax_on_income = 15e4 + (taxable_income - 15e5) * 0.3;
-    } else if (taxable_income > 1e6) {
-      tax_on_income = 6e4 + (taxable_income - 1e6) * 0.2;
-    } else if (taxable_income > 7e5) {
-      tax_on_income = 3e4 + (taxable_income - 7e5) * 0.1;
-    } else if (taxable_income > 3e5) {
-      tax_on_income = (taxable_income - 3e5) * 0.05;
-    }
-    let rebate_87a = 0;
-    if (taxable_income <= 7e5) {
-      rebate_87a = tax_on_income;
-    }
-    const net_tax_payable = Math.max(0, tax_on_income - rebate_87a);
     return {
       employee_id: emp.id,
       employee_name: emp.name,
       company: emp.company,
       pan: emp.pan,
       gross_annual_salary,
-      standard_deduction,
-      section_80c,
-      section_80d,
-      hra_exemption,
-      taxable_income,
-      tax_on_income,
-      rebate_87a,
-      net_tax_payable
+      standard_deduction: tax.total_deductions,
+      section_80c: 0,
+      // not applicable under new regime (legacy UI field)
+      section_80d: 0,
+      // not applicable under new regime (legacy UI field)
+      hra_exemption: 0,
+      // not applicable under new regime (legacy UI field)
+      taxable_income: tax.taxable_income,
+      tax_on_income: tax.tax_on_income,
+      rebate_87a: tax.rebate_87a,
+      net_tax_payable: tax.net_tax_payable,
+      fy: fyKey,
+      regime: "NEW",
+      regime_name: config.name,
+      income: {
+        salary_income: income.salary_income,
+        bonus_income: income.bonus_income,
+        arrear_income: income.arrear_income,
+        leave_encashment_gross: income.leave_encashment_gross,
+        leave_encashment_exemption: income.leave_encashment_exemption,
+        leave_encashment_taxable: income.leave_encashment_taxable,
+        other_income: income.other_income,
+        gross_total_income: income.gross_total_income,
+        months_counted: income.months_counted
+      },
+      month_wise: income.month_wise,
+      slabs_applied: tax.slabs_applied,
+      total_deductions: tax.total_deductions,
+      marginal_relief: tax.marginal_relief,
+      surcharge: tax.surcharge,
+      marginal_relief_surcharge: tax.marginal_relief_surcharge,
+      cess: tax.cess,
+      tds_deducted: income.tds_deducted,
+      balance_payable: Math.max(0, tax.net_tax_payable - income.tds_deducted),
+      effective_rate: tax.effective_rate,
+      notes
     };
   }
   // Core helper methods
@@ -30297,6 +30537,26 @@ Sakar & SVN Group`;
         const timeoutPromise = new Promise(
           (_, reject) => setTimeout(() => reject(new Error(`Supabase persist timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
+        try {
+          const rmwRow = await this._fetchCloudRowOnce();
+          if (rmwRow && rmwRow.payload && typeof rmwRow.payload === "object") {
+            const dirtySnapshot = /* @__PURE__ */ new Map();
+            for (const e of this.data.employees || []) {
+              if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
+            }
+            this.data = mergeStores(this.data, rmwRow.payload, "base");
+            if (dirtySnapshot.size > 0) {
+              const emps = this.data.employees || [];
+              for (let i = 0; i < emps.length; i++) {
+                const local = dirtySnapshot.get(emps[i]?.id);
+                if (local) emps[i] = local;
+              }
+            }
+            this._loadedVersion = rmwRow.updated_at || this._loadedVersion;
+          }
+        } catch (rmwErr) {
+          console.warn("[Supabase] persist RMW merge skipped:", rmwErr?.message || rmwErr);
+        }
         let writePromise;
         if (this._loadedVersion) {
           writePromise = this.supabaseAdmin.from("vetan_erp_store").update({ payload: this.data, updated_at: newUpdatedAt }).eq("id", "live").eq("updated_at", this._loadedVersion).select("id");
@@ -30323,9 +30583,20 @@ Sakar & SVN Group`;
             const remoteRow = await this._fetchCloudRowOnce();
             if (remoteRow && remoteRow.payload && typeof remoteRow.payload === "object") {
               const beforeEmployees = this.data?.employees?.length || 0;
+              const dirtySnapshot = /* @__PURE__ */ new Map();
+              for (const e of this.data.employees || []) {
+                if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
+              }
               this.data = mergeStores(this.data, remoteRow.payload, "base");
+              if (dirtySnapshot.size > 0) {
+                const emps = this.data.employees || [];
+                for (let i = 0; i < emps.length; i++) {
+                  const local = dirtySnapshot.get(emps[i]?.id);
+                  if (local) emps[i] = local;
+                }
+              }
               this._loadedVersion = remoteRow.updated_at || "";
-              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} \u2192 ${this.data?.employees?.length || 0} employees).`);
+              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} \u2192 ${this.data?.employees?.length || 0} employees, ${dirtySnapshot.size} in-flight edits preserved).`);
             }
           } catch (mergeErr) {
             console.error("[Supabase] Conflict merge failed:", mergeErr?.message || mergeErr);
@@ -30338,6 +30609,7 @@ Sakar & SVN Group`;
         }
         this._loadedVersion = newUpdatedAt;
         this._conflictCount = 0;
+        this._dirtyEmployeeIds.clear();
         this.lastPersistError = null;
         this.lastPersistSuccess = true;
         this.lastPersistedAt = newUpdatedAt;
@@ -30372,6 +30644,9 @@ Sakar & SVN Group`;
       console.error("Failed to persist data to JSON:", e);
     }
     if (this.supabaseAdmin && !this.loadedFromSeed) {
+      if (this._pendingPersist) {
+        return;
+      }
       this._pendingPersist = this._persistToSupabaseWithRetry(3).then((result) => {
         this._pendingPersist = null;
         if (!result.ok) {
@@ -33110,7 +33385,8 @@ async function createApp(supabaseAdmin) {
   app.get("/api/form16/:employeeId", (req, res) => {
     const { employeeId } = req.params;
     try {
-      const calculation = db.calculateForm16(employeeId);
+      const fy = req.query.fy || void 0;
+      const calculation = db.calculateForm16(employeeId, fy);
       res.json(calculation);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -34753,7 +35029,6 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
-var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,

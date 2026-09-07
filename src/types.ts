@@ -46,6 +46,11 @@ export interface Employee {
   medical_allowance?: number;
   conveyance_allowance?: number;
   bonus_payable?: number;
+  // Merge-stamp timestamps — recordTime() in storeMerge uses these to resolve
+  // same-ID conflicts by ACTUAL edit time. Protects profile edits (photo, PAN,
+  // UAN, bank, etc.) from being overwritten by stale instances/local backups.
+  updated_at?: string;
+  created_at?: string;
   ctc_salary?: number;
   sctc?: number;
   form?: string;
@@ -199,14 +204,48 @@ export interface Form16Calculation {
   company: string;
   pan: string;
   gross_annual_salary: number;
-  standard_deduction: number; // ₹50000 flat
-  section_80c: number; // Cap ₹150000 (PF contrib etc)
-  section_80d: number; // Cap ₹25000
-  hra_exemption: number;
+  standard_deduction: number; // regime-config driven (₹75,000 under new regime)
+  section_80c: number; // legacy field — always 0 under new regime (kept for UI compat)
+  section_80d: number; // legacy field — always 0 under new regime (kept for UI compat)
+  hra_exemption: number; // legacy field — always 0 under new regime (kept for UI compat)
   taxable_income: number;
   tax_on_income: number;
   rebate_87a: number; // tax rebate
   net_tax_payable: number;
+
+  // ---- New-regime Form 16 extension (additive — Task: income components + tax working) ----
+  fy?: string;
+  regime?: 'NEW';
+  regime_name?: string;
+  income?: {
+    salary_income: number;
+    bonus_income: number;
+    arrear_income: number;
+    leave_encashment_gross: number;
+    leave_encashment_exemption: number;
+    leave_encashment_taxable: number;
+    other_income: number;
+    gross_total_income: number;
+    months_counted: number;
+  };
+  month_wise?: Array<{
+    month: string;
+    salary: number;
+    bonus: number;
+    arrear: number;
+    leave_encashment: number;
+    other: number;
+  }>;
+  slabs_applied?: Array<{ from: number; to: number | null; rate: number; tax: number }>;
+  total_deductions?: number;
+  marginal_relief?: number;
+  surcharge?: number;
+  marginal_relief_surcharge?: number;
+  cess?: number;
+  tds_deducted?: number;
+  balance_payable?: number;
+  effective_rate?: number;
+  notes?: string[];
 }
 
 export interface Attendance {

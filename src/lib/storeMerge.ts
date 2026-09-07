@@ -78,6 +78,18 @@ export function mergeRecordArrays(base: any[], incoming: any[], prefer: StoreMer
       if (t2 > t1) resultMap.set(key, item); // incoming record is newer
       return;
     }
+    // ONE-SIDED TIMESTAMP RULE: when only ONE side carries an embedded timestamp,
+    // the stamped side is treated as newer. Unstamped records are pre-stamping
+    // copies — a record the user explicitly edited (and we stamped) must never
+    // lose to an unstale, never-edited copy. This is the core guard that stops
+    // employee-profile edits from silently reverting.
+    if (t1 === null && t2 !== null) {
+      resultMap.set(key, item); // incoming is explicitly stamped → newer
+      return;
+    }
+    if (t1 !== null && t2 === null) {
+      return; // existing is explicitly stamped → keep it
+    }
     if (prefer === 'incoming') resultMap.set(key, item);
   };
 
@@ -97,6 +109,9 @@ function pickScalar(base: any, incoming: any, prefer: StoreMergePrefer): any {
     const t1 = recordTime(base);
     const t2 = recordTime(incoming);
     if (t1 !== null && t2 !== null && t1 !== t2) return t2 > t1 ? incoming : base;
+    // One-sided timestamp: the stamped side always wins (see mergeRecordArrays).
+    if (t1 === null && t2 !== null) return incoming;
+    if (t1 !== null && t2 === null) return base;
     return prefer === 'incoming' ? incoming : base;
   }
   return prefer === 'incoming' ? incoming : base;

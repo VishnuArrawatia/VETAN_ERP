@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { mergeStores } from '../src/lib/storeMerge';
+import { REGIME_CONFIGS, currentFY, fyMonths, buildForm16Income, computeNewRegimeTax } from './form16-engine';
 
 let sqlite3: any = null;
 import {
@@ -506,6 +507,10 @@ export class PayrollDatabase {
   private _loadedVersion: string = '';
   private _conflictCount: number = 0;
   private static readonly MAX_CONFLICT_RETRIES = 3;
+  /** Employee IDs mutated on THIS instance since the last successful cloud persist.
+   *  Used to preserve in-flight human edits through OCC conflict merges — the
+   *  core guarantee that a stale full-blob write cannot resurrect old profile values. */
+  private _dirtyEmployeeIds: Set<string> = new Set();
 
   /**
    * @param supabaseAdmin  Optional Supabase client (service_role key).
@@ -2546,6 +2551,13 @@ export class PayrollDatabase {
     // Auto-calculate CTC on insert
     employee.ctc_salary = this.computeCtcForEmployee(employee);
 
+    // Merge-stamp: new records carry creation/update timestamps so every
+    // store-merge resolves same-ID conflicts by real edit time.
+    const nowIso = new Date().toISOString();
+    if (!employee.created_at) employee.created_at = nowIso;
+    employee.updated_at = nowIso;
+    this._dirtyEmployeeIds.add(employee.id);
+
     this.data.employees.push(employee);
     this.syncEmployee(employee);
     this.persistData();
@@ -2645,8 +2657,16 @@ export class PayrollDatabase {
 
     this.data.employees[idx] = { ...this.data.employees[idx], ...mergedPartial };
 
-    // Normalize boolean fields (API may send 0/1 or true/false)
+    // MERGE-STAMP (root-cause fix for profile reverts): every edit refreshes the
+    // record's updated_at. storeMerge then prefers the genuinely-newer record in
+    // ALL conflict paths (OCC conflict merge, stale-instance reload, browser
+    // backup push) — a stale full-blob write can no longer silently resurrect
+    // old PAN/email/bank/photo values.
     const emp = this.data.employees[idx];
+    emp.updated_at = new Date().toISOString();
+    this._dirtyEmployeeIds.add(emp.id);
+
+    // Normalize boolean fields (API may send 0/1 or true/false)
     emp.pf_opt_in = emp.pf_opt_in === 1 || emp.pf_opt_in === true;
     emp.esic_opt_in = emp.esic_opt_in === 1 || emp.esic_opt_in === true;
     emp.professional_tax_opt_in = emp.professional_tax_opt_in === 1 || emp.professional_tax_opt_in === true;
@@ -4564,44 +4584,38 @@ export class PayrollDatabase {
   }
 
   // Form 16 Tax Estimation engine
-  public calculateForm16(employeeId: string): Form16Calculation {
+  /**
+   * Form 16 — NEW TAX REGIME working (config-driven, actual stored payroll data only).
+   * Income components — Salary / Bonus / Arrear / Leave Encashment / Other — are
+   * aggregated from stored payslips (+ F&F settlements) for the requested FY
+   * (default: current FY). No component is double-counted (one payslip field →
+   * exactly one bucket). Tax slabs/rebate/surcharge/cess come from
+   * server/form16-engine.ts REGIME_CONFIGS — edit the config per FY, not the engine.
+   */
+  public calculateForm16(employeeId: string, fy?: string): Form16Calculation {
     const emp = this.getEmployeeById(employeeId);
     if (!emp) throw new Error('Employee not found for Form 16 calculation');
 
+    const fyKey = (fy && REGIME_CONFIGS[fy]) ? fy : currentFY();
+    const config = REGIME_CONFIGS[fyKey] || REGIME_CONFIGS[currentFY()];
+    const months = fyMonths(fyKey);
+
+    const payslips = (this.data.payslips || [])
+      .filter(p => p && p.employee_id === employeeId && months.includes(p.month));
+    const ffSettlements = (this.data.ff_settlements || [])
+      .filter((f: any) => f && f.employee_id === employeeId);
+
+    const income = buildForm16Income(payslips as any, { fy: fyKey, config, ffSettlements: ffSettlements as any });
+    const tax = computeNewRegimeTax(income.gross_total_income, config);
+
+    // Legacy annualised reference from salary structure (display only — NOT used in tax math)
     const monthlyGross = emp.base_salary + emp.hra + emp.special_allowance + (emp.conveyance_allowance || 0) + (emp.edu_allowance || 0) + (emp.medical_allowance || 0);
     const gross_annual_salary = monthlyGross * 12;
 
-    const standard_deduction = 50000; 
-
-    let section_80c = 0;
-    if (emp.pf_opt_in) {
-      const pfContributionBasis = emp.base_salary;
-      section_80c = Math.min(150000, Math.round(pfContributionBasis * 0.12 * 12));
+    const notes = [...income.notes];
+    if (income.months_counted < 12) {
+      notes.push(`Payslips available for only ${income.months_counted} of 12 FY months — figures cover payroll processed to date.`);
     }
-
-    const section_80d = 12500; 
-
-    const hra_exemption = Math.round(emp.hra * 12 * 0.90); 
-
-    const taxable_income = Math.max(0, gross_annual_salary - standard_deduction - section_80c - section_80d - hra_exemption);
-
-    let tax_on_income = 0;
-    if (taxable_income > 1500000) {
-      tax_on_income = 150000 + (taxable_income - 1500000) * 0.30;
-    } else if (taxable_income > 1000000) {
-      tax_on_income = 60000 + (taxable_income - 1000000) * 0.20;
-    } else if (taxable_income > 700000) {
-      tax_on_income = 30000 + (taxable_income - 700000) * 0.10;
-    } else if (taxable_income > 300000) {
-      tax_on_income = (taxable_income - 300000) * 0.05;
-    }
-
-    let rebate_87a = 0;
-    if (taxable_income <= 700000) {
-      rebate_87a = tax_on_income;
-    }
-
-    const net_tax_payable = Math.max(0, tax_on_income - rebate_87a);
 
     return {
       employee_id: emp.id,
@@ -4609,14 +4623,39 @@ export class PayrollDatabase {
       company: emp.company,
       pan: emp.pan,
       gross_annual_salary,
-      standard_deduction,
-      section_80c,
-      section_80d,
-      hra_exemption,
-      taxable_income,
-      tax_on_income,
-      rebate_87a,
-      net_tax_payable
+      standard_deduction: tax.total_deductions,
+      section_80c: 0,   // not applicable under new regime (legacy UI field)
+      section_80d: 0,   // not applicable under new regime (legacy UI field)
+      hra_exemption: 0, // not applicable under new regime (legacy UI field)
+      taxable_income: tax.taxable_income,
+      tax_on_income: tax.tax_on_income,
+      rebate_87a: tax.rebate_87a,
+      net_tax_payable: tax.net_tax_payable,
+      fy: fyKey,
+      regime: 'NEW',
+      regime_name: config.name,
+      income: {
+        salary_income: income.salary_income,
+        bonus_income: income.bonus_income,
+        arrear_income: income.arrear_income,
+        leave_encashment_gross: income.leave_encashment_gross,
+        leave_encashment_exemption: income.leave_encashment_exemption,
+        leave_encashment_taxable: income.leave_encashment_taxable,
+        other_income: income.other_income,
+        gross_total_income: income.gross_total_income,
+        months_counted: income.months_counted
+      },
+      month_wise: income.month_wise,
+      slabs_applied: tax.slabs_applied,
+      total_deductions: tax.total_deductions,
+      marginal_relief: tax.marginal_relief,
+      surcharge: tax.surcharge,
+      marginal_relief_surcharge: tax.marginal_relief_surcharge,
+      cess: tax.cess,
+      tds_deducted: income.tds_deducted,
+      balance_payable: Math.max(0, tax.net_tax_payable - income.tds_deducted),
+      effective_rate: tax.effective_rate,
+      notes
     };
   }
 
@@ -6092,6 +6131,33 @@ Sakar & SVN Group`;
           setTimeout(() => reject(new Error(`Supabase persist timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)
         );
 
+        // READ-MODIFY-WRITE CAS: adopt the authoritative remote row BEFORE every
+        // write. A stale in-memory object (old local JSON/backup injected into
+        // this instance) can NEVER overwrite a newer stamped record — even when
+        // this instance's version happens to match (no conflict to trigger a
+        // merge). In-flight (dirty) edits on this instance are re-applied after
+        // the union merge so a live human edit is never lost.
+        try {
+          const rmwRow = await this._fetchCloudRowOnce();
+          if (rmwRow && rmwRow.payload && typeof rmwRow.payload === 'object') {
+            const dirtySnapshot = new Map<string, any>();
+            for (const e of (this.data.employees || []) as any[]) {
+              if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
+            }
+            this.data = mergeStores(this.data, rmwRow.payload, 'base');
+            if (dirtySnapshot.size > 0) {
+              const emps = (this.data.employees || []) as any[];
+              for (let i = 0; i < emps.length; i++) {
+                const local = dirtySnapshot.get(emps[i]?.id);
+                if (local) emps[i] = local;
+              }
+            }
+            this._loadedVersion = rmwRow.updated_at || this._loadedVersion;
+          }
+        } catch (rmwErr: any) {
+          console.warn('[Supabase] persist RMW merge skipped:', rmwErr?.message || rmwErr);
+        }
+
         let writePromise: any;
         if (this._loadedVersion) {
           // OPTIMISTIC CONCURRENCY: only write if the version we loaded is still current.
@@ -6137,9 +6203,24 @@ Sakar & SVN Group`;
             const remoteRow = await this._fetchCloudRowOnce();
             if (remoteRow && remoteRow.payload && typeof remoteRow.payload === 'object') {
               const beforeEmployees = this.data?.employees?.length || 0;
+              // Belt-and-suspenders: snapshot THIS instance's in-flight (dirty)
+              // employee edits and re-apply them after the union merge. Even if
+              // merge rules could not decide, a human edit made on this instance
+              // must never be resurrected to its old value.
+              const dirtySnapshot = new Map<string, any>();
+              for (const e of (this.data.employees || []) as any[]) {
+                if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
+              }
               this.data = mergeStores(this.data, remoteRow.payload, 'base');
+              if (dirtySnapshot.size > 0) {
+                const emps = (this.data.employees || []) as any[];
+                for (let i = 0; i < emps.length; i++) {
+                  const local = dirtySnapshot.get(emps[i]?.id);
+                  if (local) emps[i] = local;
+                }
+              }
               this._loadedVersion = remoteRow.updated_at || '';
-              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} → ${this.data?.employees?.length || 0} employees).`);
+              console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} → ${this.data?.employees?.length || 0} employees, ${dirtySnapshot.size} in-flight edits preserved).`);
             }
           } catch (mergeErr: any) {
             console.error('[Supabase] Conflict merge failed:', mergeErr?.message || mergeErr);
@@ -6154,6 +6235,7 @@ Sakar & SVN Group`;
         // Success — update version tracker and mark persist time
         this._loadedVersion = newUpdatedAt;
         this._conflictCount = 0;
+        this._dirtyEmployeeIds.clear();
         this.lastPersistError = null;
         this.lastPersistSuccess = true;
         this.lastPersistedAt = newUpdatedAt;
@@ -6198,6 +6280,13 @@ Sakar & SVN Group`;
 
     // 2. Supabase push — tracked so flushPendingWrites() can await it
     if (this.supabaseAdmin && !this.loadedFromSeed) {
+      if (this._pendingPersist) {
+        // SINGLE-FLIGHT: a cloud write is already in flight. `payload: this.data`
+        // is a live reference, so that in-flight write already serialises the
+        // latest state including this mutation — starting a second concurrent
+        // OCC write here would only manufacture version conflicts.
+        return;
+      }
       this._pendingPersist = this._persistToSupabaseWithRetry(3).then(result => {
         this._pendingPersist = null;
         if (!result.ok) {

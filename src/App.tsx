@@ -2249,10 +2249,11 @@ export default function App() {
     return false;
   };
 
-  // Form 16 Tax Estimation retrieval
-  const handleFetchForm16Sub = async (employeeId: string): Promise<Form16Calculation | null> => {
+  // Form 16 Tax Estimation retrieval (fy: '2026-27' etc., default = current FY on server)
+  const handleFetchForm16Sub = async (employeeId: string, fy?: string): Promise<Form16Calculation | null> => {
     try {
-      const res = await fetch(`/api/form16/${employeeId}`);
+      const qs = fy ? `?fy=${encodeURIComponent(fy)}` : '';
+      const res = await fetch(`/api/form16/${employeeId}${qs}`);
       if (res.ok) {
         return await res.json();
       }
