@@ -51,7 +51,7 @@ export const Badge = ({ children, tone = 'slate' }: { children: React.ReactNode;
 };
 
 export const Btn = ({
-  children, onClick, variant = 'primary', size = 'md', className = '', type = 'button', title
+  children, onClick, variant = 'primary', size = 'md', className = '', type = 'button', title, disabled = false
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -60,6 +60,7 @@ export const Btn = ({
   className?: string;
   type?: 'button' | 'submit';
   title?: string;
+  disabled?: boolean;
 }) => {
   const base = 'inline-flex items-center gap-1.5 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
   const sizes = { sm: 'px-2.5 py-1.5 text-xs', md: 'px-3.5 py-2 text-sm' };
@@ -70,7 +71,7 @@ export const Btn = ({
     danger: 'bg-rose-600 text-white hover:bg-rose-700'
   };
   return (
-    <button type={type} title={title} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
+    <button type={type} title={title} onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
       {children}
     </button>
   );

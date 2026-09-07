@@ -139,6 +139,7 @@ export default function Workers() {
                 bank: data.bank,
                 ac: data.ac,
                 ifsc: data.ifsc,
+                workingHours: data.workingHours,
                 mode: data.mode,
                 rateBasic: data.rateBasic,
                 rateHra: data.rateHra,
@@ -168,6 +169,7 @@ export default function Workers() {
                 name: data.name, unitId: data.unitId,
                 contractor: data.mode === 'Contractor' ? data.contractor : '',
                 department: data.department, mode: data.mode,
+                workingHours: data.workingHours,
                 rateBasic: data.rateBasic, rateHra: data.rateHra, rateOther: data.rateOther,
                 rateDay: data.rateBasic + data.rateHra + data.rateOther,
                 ctc: data.ctc, minWage: data.minWage, pf: data.pf, esic: data.esic
@@ -192,6 +194,7 @@ export default function Workers() {
 export type WorkerFormData = {
   code: string; name: string; unitId: string; mode: 'Company' | 'Contractor'; contractor: string;
   department: string; doj: string; uan: string; bank: string; ac: string; ifsc: string;
+  workingHours: number;
   rateBasic: number; rateHra: number; rateOther: number; ctc: number; minWage: number;
   pf: boolean; esic: boolean;
 };
@@ -216,6 +219,7 @@ export function WorkerForm({
     bank: initial?.bank || '',
     ac: initial?.ac || '',
     ifsc: initial?.ifsc || '',
+    workingHours: initial?.workingHours ?? 8,
     rateBasic: initial?.rateBasic || 0,
     rateHra: initial?.rateHra || 0,
     rateOther: initial?.rateOther || 0,
@@ -250,9 +254,22 @@ export function WorkerForm({
             </Select></label>
         )}
         <label className="block"><span className="text-xs font-semibold text-slate-500">Department</span>
-          <Input value={f.department} onChange={(e) => set({ department: e.target.value })} className="mt-1 w-full" /></label>
+          <Select value={f.department} onChange={(e) => set({ department: e.target.value })} className="mt-1 w-full">
+            <option value="">— Select —</option>
+            {(state.settings.departments || [])
+              .concat(f.department ? [f.department] : [])
+              .filter((d, i, a) => a.indexOf(d) === i)
+              .map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+          </Select></label>
         <label className="block"><span className="text-xs font-semibold text-slate-500">DOJ</span>
           <Input type="date" value={f.doj} onChange={(e) => set({ doj: e.target.value })} className="mt-1 w-full" /></label>
+        <label className="block"><span className="text-xs font-semibold text-slate-500">Working Hours</span>
+          <Select value={String(f.workingHours)} onChange={(e) => set({ workingHours: parseInt(e.target.value) || 8 })} className="mt-1 w-full">
+            <option value="8">8 Hours (commission ₹20/day)</option>
+            <option value="12">12 Hours (commission ₹25/day)</option>
+          </Select></label>
       <label className="block"><span className="text-xs font-semibold text-slate-500">UAN</span>
           <Input value={f.uan} onChange={(e) => set({ uan: e.target.value })} className="mt-1 w-full" /></label>
         <label className="block"><span className="text-xs font-semibold text-slate-500">Bank</span>

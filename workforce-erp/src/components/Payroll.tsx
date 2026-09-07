@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Printer } from 'lucide-react';
+import { Printer, FileDown } from 'lucide-react';
 import { useStore, unitName, companyName, effRates } from '../lib/store';
 import { calcPayroll, totals } from '../lib/payroll';
+import { exportMonthWorkbook } from '../lib/excel';
 import { monthLabel, monthDays, fmtINR, fmtINR2 } from '../lib/months';
 import { WorkerRec } from '../types';
 import { Card, CardHeader, Btn, Select, Badge, Empty, Th, Td, Table, Modal } from './ui';
@@ -10,10 +11,23 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
   const { state } = useStore();
   const [unit, setUnit] = useState('all');
   const [slipId, setSlipId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const rows = calcPayroll(state, monthKey, unit !== 'all' ? unit : undefined);
   const total = totals(rows);
   const slip = slipId ? rows.find((r) => r.worker.id === slipId) : null;
+
+  const exportMonthExcel = async () => {
+    setExporting(true);
+    try {
+      const filename = await exportMonthWorkbook(state, monthKey);
+      alert(`📊 Excel month report saved: ${filename}`);
+    } catch (e: any) {
+      alert('Excel export failed: ' + (e?.message || e));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -25,6 +39,9 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Btn variant="secondary" onClick={exportMonthExcel} disabled={exporting}>
+            <FileDown size={15} /> {exporting ? 'Preparing…' : 'Month Excel'}
+          </Btn>
           <Select value={unit} onChange={(e) => setUnit(e.target.value)}>
             <option value="all">All Units</option>
             {state.units.map((u) => (
@@ -39,7 +56,7 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
         {[
           ['Paid Days', total.payDays, 'text-slate-800'],
           ['Gross', total.gross, 'text-slate-800'],
-          ['PF', total.pf, 'text-rose-600'],
+          ['Loan/Adv Recovery', total.recovery, 'text-rose-600'],
           ['Net Pay', total.net, 'text-emerald-600'],
         ].map(([l, v, c]) => (
           <div key={l as string} className="rounded-xl bg-white border border-slate-200 px-4 py-3">
@@ -50,19 +67,19 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
       </div>
 
       <Card className="overflow-hidden">
-        <CardHeader title="Monthly Payroll" subtitle="Basic×days + HRA×days + Other×days + OT − PF − ESIC = Net" />
+        <CardHeader title="Monthly Payroll" subtitle="Basic×days + HRA×days + Other×days + OT − PF − ESIC − Loan/Adv recovery = Net" />
         <Table>
           <thead className="bg-slate-50">
             <tr>
               <Th>Code</Th><Th>Name</Th><Th>Unit</Th>
               <Th right>Days</Th><Th right>OT</Th>
               <Th right>Basic</Th><Th right>HRA</Th><Th right>Other</Th>
-              <Th right>Gross</Th><Th right>PF</Th><Th right>ESIC</Th><Th right>Net</Th>
+              <Th right>Gross</Th><Th right>PF</Th><Th right>ESIC</Th><Th right>Recov.</Th><Th right>Net</Th>
               <Th right>Slip</Th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={13}><Empty message="No payroll for this unit/month." /></td></tr>}
+            {rows.length === 0 && <tr><td colSpan={14}><Empty message="No payroll for this unit/month." /></td></tr>}
             {rows.map((r) => (
               <tr key={r.worker.id} className="border-t border-slate-100 hover:bg-slate-50/60">
                 <Td className="font-mono text-xs">{r.worker.code}</Td>
@@ -76,6 +93,7 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
                 <Td right className="tabular-nums font-semibold">₹{fmtINR(r.gross)}</Td>
                 <Td right className="tabular-nums text-rose-600">{r.pf ? '₹' + fmtINR(r.pf) : '—'}</Td>
                 <Td right className="tabular-nums text-amber-600">{r.esic ? '₹' + fmtINR(r.esic) : '—'}</Td>
+                <Td right className="tabular-nums text-rose-600">{r.recovery ? '₹' + fmtINR(r.recovery) : '—'}</Td>
                 <Td right className="tabular-nums font-bold text-emerald-700">₹{fmtINR(r.net)}</Td>
                 <Td right>
                   <Btn size="sm" variant="secondary" onClick={() => setSlipId(r.worker.id)}>
@@ -107,17 +125,17 @@ export default function Payroll({ monthKey }: { monthKey: string }) {
         <PayslipModal
           worker={slip.worker} monthKey={monthKey} payDays={slip.payDays} otPay={slip.otPay}
           basic={slip.basic} hra={slip.hra} other={slip.other} gross={slip.gross}
-          pf={slip.pf} esic={slip.esic} net={slip.net} onClose={() => setSlipId(null)}
+          pf={slip.pf} esic={slip.esic} recovery={slip.recovery} net={slip.net} onClose={() => setSlipId(null)}
         />
       )}
     </div>
   );
 }
 function PayslipModal({
-  worker, monthKey, payDays, otPay, basic, hra, other, gross, pf, esic, net, onClose,
+  worker, monthKey, payDays, otPay, basic, hra, other, gross, pf, esic, recovery, net, onClose,
 }: {
   worker: WorkerRec; monthKey: string; payDays: number; otPay: number;
-  basic: number; hra: number; other: number; gross: number; pf: number; esic: number; net: number;
+  basic: number; hra: number; other: number; gross: number; pf: number; esic: number; recovery: number; net: number;
   onClose: () => void;
 }) {
   const { state } = useStore();
@@ -170,7 +188,8 @@ function PayslipModal({
           <tbody>
             <tr className="border-b border-slate-100"><td className="px-3 py-2">Employee PF</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(pf)}</td></tr>
             <tr className="border-b border-slate-100"><td className="px-3 py-2">ESIC</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(esic)}</td></tr>
-            <tr><td className="px-3 py-2 font-semibold">Total Deduction</td><td className="px-3 py-2 text-right font-bold">₹{fmtINR2(pf + esic)}</td></tr>
+            {Number(recovery) > 0 && <tr className="border-b border-slate-100"><td className="px-3 py-2">Loan/Advance Recovery</td><td className="px-3 py-2 text-right tabular-nums">₹{fmtINR2(recovery)}</td></tr>}
+            <tr><td className="px-3 py-2 font-semibold">Total Deduction</td><td className="px-3 py-2 text-right font-bold">₹{fmtINR2(pf + esic + recovery)}</td></tr>
           </tbody>
         </table>
 

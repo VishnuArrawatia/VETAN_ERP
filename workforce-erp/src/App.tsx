@@ -1,24 +1,32 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   LayoutDashboard, Users, CalendarCheck, CalendarHeart, Banknote, Settings as SettingsIcon,
-  Factory, Building2, LogOut
+  Factory, Building2, LogOut, Wallet, Download, Upload, ChartPie, FileText, FileDown
 } from 'lucide-react';
 import { StoreProvider, useStore } from './lib/store';
 import { MONTHS } from './lib/months';
+import { exportMonthWorkbook } from './lib/excel';
+import { Btn } from './components/ui';
 import Dashboard from './components/Dashboard';
 import Workers from './components/Workers';
 import Attendance from './components/Attendance';
 import Leave from './components/Leave';
 import Payroll from './components/Payroll';
+import Loans from './components/Loans';
+import Wages from './components/Wages';
+import ContractorBills from './components/ContractorBills';
 import Settings from './components/Settings';
 
-type View = 'dashboard' | 'workers' | 'attendance' | 'leave' | 'payroll' | 'settings';
+type View = 'dashboard' | 'workers' | 'attendance' | 'leave' | 'payroll' | 'loans' | 'wages' | 'contractors' | 'settings';
 
 const NAV: { id: View; label: string; icon: any }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'workers', label: 'Workers', icon: Users },
   { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
   { id: 'leave', label: 'Leave Ledger', icon: CalendarHeart },
+  { id: 'loans', label: 'Loans & Advance', icon: Wallet },
+  { id: 'wages', label: 'Wages / Report', icon: ChartPie },
+  { id: 'contractors', label: 'Contractor Bills', icon: FileText },
   { id: 'payroll', label: 'Payroll', icon: Banknote },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -26,7 +34,48 @@ const NAV: { id: View; label: string; icon: any }[] = [
 function Shell() {
   const [view, setView] = useState<View>('dashboard');
   const [monthKey, setMonthKey] = useState<string>('2026-07');
+  const [exporting, setExporting] = useState(false);
   const { state, set, reset } = useStore();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const exportMonthExcel = async () => {
+    setExporting(true);
+    try {
+      const filename = await exportMonthWorkbook(state, monthKey);
+      alert(`📊 Excel month report saved: ${filename}`);
+    } catch (e: any) {
+      alert('Excel export failed: ' + (e?.message || e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'WORKFORCE-2026-backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importData = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(String(reader.result));
+        if (!d || !Array.isArray(d.workers)) {
+          alert('Invalid backup file — workers list missing.');
+          return;
+        }
+        set(() => d as any);
+        alert('Backup imported successfully!');
+      } catch (e) {
+        alert('Could not read backup file.');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
@@ -63,13 +112,38 @@ function Shell() {
             );
           })}
         </nav>
-        <div className="px-4 py-3 border-t border-slate-800">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="px-4 py-3 border-t border-slate-800 space-y-2">
+          <div className="flex items-center gap-2 mb-1">
             <Building2 size={14} className="text-slate-500" />
             <span className="text-xs text-slate-400">
               {state.units.length} Units · {state.companies.length} Companies
             </span>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={exportData}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 px-2 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+            >
+              <Download size={13} /> Backup
+            </button>
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 px-2 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+            >
+              <Upload size={13} /> Restore
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) importData(f);
+              e.target.value = '';
+            }}
+          />
           <button
             onClick={() => {
               if (confirm('Reset all data to the original seed?')) reset();
@@ -92,6 +166,10 @@ function Shell() {
             <span className="text-slate-500 capitalize">{view}</span>
           </div>
           <div className="flex items-center gap-3">
+            <Btn onClick={exportMonthExcel} disabled={exporting}>
+              <FileDown size={15} />
+              {exporting ? 'Preparing…' : 'Month Excel'}
+            </Btn>
             <select
               value={monthKey}
               onChange={(e) => setMonthKey(e.target.value)}
@@ -110,6 +188,9 @@ function Shell() {
           {view === 'workers' && <Workers />}
           {view === 'attendance' && <Attendance monthKey={monthKey} />}
           {view === 'leave' && <Leave />}
+          {view === 'loans' && <Loans monthKey={monthKey} />}
+          {view === 'wages' && <Wages monthKey={monthKey} />}
+          {view === 'contractors' && <ContractorBills monthKey={monthKey} />}
           {view === 'payroll' && <Payroll monthKey={monthKey} />}
           {view === 'settings' && <Settings />}
         </main>
