@@ -18,3 +18,8 @@ data-backups/
 
 # Codebuff internal
 .freebuff/
+
+# local backups & snapshots (contain PII/passwords — never commit)
+backups/
+*.bak-2*
+reports/*.csv
