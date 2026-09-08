@@ -70,6 +70,23 @@ Total Days = Present + Absent + Weekly Off + PH + Leave + LWP
 ║  LWP = Leave Without Pay (Salary kategi)                     ║
 ╚══════════════════════════════════════════════════════════════╝
 
+╔══════════════════════════════════════════════════════════════╗
+║  JUN / JUL / AUG-2026 — READY TEMPLATES (08-Sep banaye)      ║
+╠══════════════════════════════════════════════════════════════╣
+║  templates\attendance-jun-2026-TEMPLATE.csv  (30 din)        ║
+║  templates\attendance-jul-2026-TEMPLATE.csv  (31 din)        ║
+║  templates\attendance-aug-2026-TEMPLATE.csv  (31 din)        ║
+║                                                              ║
+║  Har file me SAARE 106 ACTIVE employees pre-filled hain      ║
+║  (Emp.Code, Name, Unit, Month_Days). Aapko sirf              ║
+║  Present/Absent/W-O/PH/Leave/LWP bharna hai — SAP se.        ║
+║                                                              ║
+║  STEPS: 1) CSV me numbers bharo  2) App > Attendance >       ║
+║  Import Attendance > file upload  3) Har company ka count    ║
+║  check karo (SVN-1=47, Sakar-I=30, SVN-II=17, Sakar-III=10)  ║
+║  4) Mujhe bolo — main payroll-run create+process karunga     ║
+╚══════════════════════════════════════════════════════════════╝
+
 TIPS:
 ─────
 1. Jo leave nahi liya usme 0 daalein

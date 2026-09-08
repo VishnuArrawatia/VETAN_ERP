@@ -323,6 +323,7 @@
 - **Docs:** `AUDIT_REPORT.md` (production audit — compliance PASS), `MASTER_CHECK_REPORT.md` (04-Sep: 0 FAIL / 18 WARN), HR User Guide ×3 (real screenshots wala + PWA-install steps), `docs/logo-options.html`, `docs/OPENING_BALANCE_TEMPLATE.md` (1-Apr-2026), `SUPABASE_SETUP.md`
 
 ### Pending / known issues (MASTER_CHECK 04-Sep + baad ka)
+- [x] **Vercel deploy ROOT-CAUSE + REPAIR (08-Sep):** c54f295 ne `vercel.json` me `*/5` cron add kiya tha — **Hobby plan par invalid**, isliye 02-Sep shaam se HAR deployment fail (c54f295, 577be7f, 5e087f8 — cold-start fix kabhi live hua hi nahi!). Repair: schedule → `0 0 * * *` (daily) commit `c87e6b3`; c87e6b3 ka Vercel webhook miss hua → khaali trigger-commit `a47e88f` se deploy fire. **LIVE ✓ (08-Sep):** prod Form16 ab `regime_name`+`income`+std-75k deta hai; /api/employees, /api/form16/SK1ST0033?fy=2026-27, /api/leaves sab HTTP 200. Note: keep-warm har-5-min Hobby par possible nahi (Pro) — cold-start pehli-hit slow rahega; external pinger chahiye to batao. `/api/health` route code me nahi hai (404 normal).
 - [ ] **Payslips sirf Apr–May tak** — Jun/Jul/Aug missing (payroll-run + attendance data chahiye)
 - [ ] **Loan Master EMPTY** — workspace `loans.json` me 27 loans (25 ACTIVE) unsynced baithe hain
 - [ ] **Live store me HOD = 0** (SQLite me 4 hain: Alok Sharma, Ritesh Saxena, Sanjay Rawat, Vimal Kumar) + 3 users missing (USR011 varrawatia, USR012 vks, USR009 audit)

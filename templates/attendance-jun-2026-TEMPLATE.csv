@@ -1,0 +1,107 @@
+Emp.Code,Name,Unit,Present,Absent,W/O,Paid_Holy_Days,Leave,LWP,Month_Days,Paid_Days,Leave_Utilised,C-Off_Utilised,C-Off_Availed
+EMP006,Amitabh Shah,Flare-1,,,,,,,30,,0,0,0
+EMP007,Kiran Rao,Zenivo-1,,,,,,,30,,0,0,0
+SK3ST0001,Keyur Vinodchandra Lad,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0005,Nehalkumar Pareshbhai Tailor,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0006,Tusharkumar Bhagubhai Rohit,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0007,Ramandeep Singh,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0008,Vinaykant Kantilal Patel,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0010,Indrabhushan Mishra,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0011,Rajendra Choriya,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0014,Madhuvan Dhavalbhai Navin Bhai,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0017,Vivek Patel,Sakar-III,,,,,,,30,,0,0,0
+SK3ST0018,Alok Kumar Yadav,Sakar-III,,,,,,,30,,0,0,0
+SK1ST0001,Mangesh Dagdu Gurav,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0006,Riken Hasmukhbhai Mahyavanshi,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0007,Sanjay Kumar Bhagwandas Khernar,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0008,Jiteshbhai Bhagubhai Halpati,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0009,Patel Maheshbhai Umedbhai,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0011,Santosh Kumar Pandey,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0014,Daxesh Bhanabhai Patel,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0015,Kapilkumar Dahyabhai Koli,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0016,Chhintarmal Jat,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0018,Khaniya Yogeshkumar Shankarbhai,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0021,Kuldeep Vinodrai Patel,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0022,Dhangda Anilbhai Ramanbhai,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0024,Vishnu Arrawatia,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0028,Vishal Jagdish Singh,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0030,Sandeep Swami,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0033,Panchal Viraj Haresh,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0034,Patel Roshani Mayurbhai,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0036,Rohit Raj,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0048,Reshma Prashant Golipkar,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0067,Manisha Sapate,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0077,Dinesh Kumar,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0078,Deepak Kumar,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0079,Anand Gokarna,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0081,Vinod Kumar,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0084,Ravi Prakash Kulhari,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0086,Arun Mourya,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0088,Taniya Sharma,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0089,Pawan Kumar Yadav,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0091,Sridhar Sahoo,Sakar-I,,,,,,,30,,0,0,0
+SK1ST0092,Rohit Diwivedi,Sakar-I,,,,,,,30,,0,0,0
+SV1ST0001,Manoj Kailash Gupta,SVN-1,,,,,,,30,,0,0,0
+SV1ST0002,Manoj Kumar Yadav,SVN-1,,,,,,,30,,0,0,0
+SV1ST0003,Sanjay Yadav,SVN-1,,,,,,,30,,0,0,0
+SV1ST0006,Chhaya Mayur Dhonde,SVN-1,,,,,,,30,,0,0,0
+SV1ST0007,Alpeshkumar Maganbhai Lad,SVN-1,,,,,,,30,,0,0,0
+SV1ST0011,Patel Kaushalkumar Kantilal,SVN-1,,,,,,,30,,0,0,0
+SV1ST0014,Nitish Son Of Jot Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0020,Prithvi Raj Dafda,SVN-1,,,,,,,30,,0,0,0
+SV1ST0025,Dattatray Rajaram Datkhile,SVN-1,,,,,,,30,,0,0,0
+SV1ST0026,Nilu Krupashankar Singh,SVN-1,,,,,,,30,,0,0,0
+SV1ST0029,Vijendra Singh Chundawat,SVN-1,,,,,,,30,,0,0,0
+SV1ST0036,Lalo Paswan,SVN-1,,,,,,,30,,0,0,0
+SV1ST0041,Jawahar Kumar Yadav,SVN-1,,,,,,,30,,0,0,0
+SV1ST0043,Surendra Singh,SVN-1,,,,,,,30,,0,0,0
+SV1ST0045,Shankar Raut,SVN-1,,,,,,,30,,0,0,0
+SV1ST0046,Ravindra Patel,SVN-1,,,,,,,30,,0,0,0
+SV1ST0047,Rajesh Konar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0050,Md. Anwar Khan,SVN-1,,,,,,,30,,0,0,0
+SV1ST0092,Shubham Pandey,SVN-1,,,,,,,30,,0,0,0
+SV1WR0093,Vishwanath Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0056,Chetan Rajesh Sharma,SVN-1,,,,,,,30,,0,0,0
+SV1ST0062,Sanjay Amrat,SVN-1,,,,,,,30,,0,0,0
+SV1ST0065,Bipin Kumar Yadav,SVN-1,,,,,,,30,,0,0,0
+SV1ST0066,Abhishek Ranjan,SVN-1,,,,,,,30,,0,0,0
+SV1ST0094,Ganesh Haushiram Kudale,SVN-1,,,,,,,30,,0,0,0
+SV1ST0070,Sandip Dilipbhai Patel,SVN-1,,,,,,,30,,0,0,0
+SV1ST0095,Mehta Mayank Rameshbhai,SVN-1,,,,,,,30,,0,0,0
+SV1ST0071,Rajesh Singh,SVN-1,,,,,,,30,,0,0,0
+SV1ST0096,Roshan Lal,SVN-1,,,,,,,30,,0,0,0
+SV1ST0097,Satish Purushottam Bhat,SVN-1,,,,,,,30,,0,0,0
+SV1ST0098,Maroti Baburao Keshatwar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0072,Deepak Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0099,Santosh Pathak,SVN-1,,,,,,,30,,0,0,0
+SV1ST0077,Pandey Sachin Dhananjay,SVN-1,,,,,,,30,,0,0,0
+SV1ST0078,Ganvit Sanjaybhai Chandubhai,SVN-1,,,,,,,30,,0,0,0
+SV1ST0100,Virendra Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0101,Nitish Kumar Ray,SVN-1,,,,,,,30,,0,0,0
+SV1ST0081,Devendra Chotulal Patil,SVN-1,,,,,,,30,,0,0,0
+SV1ST0083,Surender Bhadwa,SVN-1,,,,,,,30,,0,0,0
+SV1ST0087,Ajay Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0088,Chirag Manjhi,SVN-1,,,,,,,30,,0,0,0
+SV1ST0089,Kumar Pushpendra Surendra,SVN-1,,,,,,,30,,0,0,0
+SV2ST0001,Kalpesh Patel,SVN-II,,,,,,,30,,0,0,0
+SV2ST0002,Amitkumar Harkishandas Lad,SVN-II,,,,,,,30,,0,0,0
+SV2ST0003,Ranveer Singh,SVN-II,,,,,,,30,,0,0,0
+SV2ST0004,Anurag Kumar Singh,SVN-II,,,,,,,30,,0,0,0
+SV2ST0007,Diggaj Kumar Yadav,SVN-II,,,,,,,30,,0,0,0
+SV2ST0006,Nilamani Behera,SVN-II,,,,,,,30,,0,0,0
+SV2ST0009,Vijay Kumar Pal,SVN-II,,,,,,,30,,0,0,0
+SV2ST0010,Amit Kumar,SVN-II,,,,,,,30,,0,0,0
+SV2ST0008,Prakash Kumar,SVN-II,,,,,,,30,,0,0,0
+SV2ST0012,Vijay Madhai,SVN-II,,,,,,,30,,0,0,0
+SV2ST0011,Vikas Kumar Yadav,SVN-II,,,,,,,30,,0,0,0
+SV2ST0014,Ashok Rameshbhai Lad,SVN-II,,,,,,,30,,0,0,0
+SV2ST0013,Prithvi Raj Dafda,SVN-II,,,,,,,30,,0,0,0
+SV2ST0017,Patel Relesh Rameshbhai,SVN-II,,,,,,,30,,0,0,0
+SV2ST0018,Pranav Prasad Vidhyadharan,SVN-II,,,,,,,30,,0,0,0
+SV2ST0016,Dhanajay Satendar Kanojiya,SVN-II,,,,,,,30,,0,0,0
+SV1ST0086,Kajal Kewat,SVN-1,,,,,,,30,,0,0,0
+SV1ST0090,Sandeep Kanji Patel,SVN-1,,,,,,,30,,0,0,0
+SV1ST0054,Shivani Gupta,SVN-1,,,,,,,30,,0,0,0
+SV2ST0021,Mr. Sagar Jagat Saud,SVN-II,,,,,,,30,,0,0,0
+SV1ST0091,Virendra Kumar,SVN-1,,,,,,,30,,0,0,0
+SV1ST0102,Kaushlendra Singh,SVN-1,,,,,,,30,,0,0,0
