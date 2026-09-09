@@ -6,6 +6,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { verifyPassword, isHashed, hashPassword } from './auth';
+import crypto from 'crypto';
 import { mergeStores } from '../src/lib/storeMerge';
 import { REGIME_CONFIGS, currentFY, fyMonths, buildForm16Income, computeNewRegimeTax } from './form16-engine';
 
@@ -3899,15 +3901,30 @@ export class PayrollDatabase {
     if (app.leave_type === 'PL' && (app.days || 0) < 2) {
       throw new Error('Privilege Leave (PL) must be applied for a minimum of 2 days.');
     }
-    // 2. Leave balance check
+    // SECURITY-FIX G5: duplicate/overlapping application validation
+    const _s = String(app.start_date || '').slice(0, 10);
+    const _e = String(app.end_date || '').slice(0, 10);
+    if (_s && _e) {
+      const overlap = (this.data.leave_applications || []).find((o: any) =>
+        o.employee_id === app.employee_id &&
+        ['PENDING_HOD', 'PENDING_HR', 'APPROVED', 'HOD_APPROVED'].includes(o.status) &&
+        String(o.start_date || '').slice(0, 10) <= _e && String(o.end_date || '').slice(0, 10) >= _s);
+      if (overlap) {
+        throw new Error(`Overlapping leave application already exists (${overlap.id}: ${overlap.start_date} to ${overlap.end_date}, status ${overlap.status}).`);
+      }
+    }
+
+    // 2. Leave balance check (CO consumes Comp-Off balance — PLAN G3)
     const emp = this.getEmployeeById(app.employee_id);
     if (emp) {
-      const balanceKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
+      const balanceKey = (app.leave_type === 'CO' ? 'leave_balance_compoff' : `leave_balance_${String(app.leave_type).toLowerCase()}`) as any;
       const currentBalance = Number(emp[balanceKey]) || 0;
       if (currentBalance < (app.days || 0)) {
         throw new Error(`Insufficient ${app.leave_type} balance. Available: ${currentBalance} day(s), Requested: ${app.days} day(s).`);
       }
     }
+    // SECURITY-FIX G2: idempotency flag — balance is deducted exactly once at FINAL approval.
+    app.balance_deducted = false;
 
     // HOD ROUTING LOGIC:
     // If the applicant IS an HOD, skip PENDING_HOD and go directly to PENDING_HR.
@@ -3941,6 +3958,10 @@ export class PayrollDatabase {
   public updateLeaveStatus(id: string, status: 'APPROVED' | 'REJECTED'): boolean {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
+    // SECURITY-FIX G2: idempotency — terminal/already-posted leaves cannot be re-processed.
+    if (['APPROVED', 'REJECTED', 'REJECTED_HOD', 'REJECTED_HR', 'CANCELLED'].includes(app.status) || (app as any).balance_deducted) {
+      return false;
+    }
     app.status = status;
 
     if (status === 'APPROVED') {
@@ -4052,6 +4073,14 @@ export class PayrollDatabase {
     const app = this.data.leave_applications?.find(a => a.id === id);
     if (!app) return false;
 
+    // SECURITY-FIX G2 (idempotency): terminal leaves cannot be re-decided.
+    // Re-approve/reject of an APPROVED/REJECTED leave is a no-op-rejected transition.
+    if (['APPROVED', 'REJECTED', 'REJECTED_HOD', 'REJECTED_HR', 'CANCELLED'].includes(app.status)) {
+      console.warn(`[LEAVE] BLOCKED: ${actorRole} tried to ${action} leave ${id} already in terminal state ${app.status}`);
+      return false;
+    }
+    const beforeStatus = app.status;
+
     // STRICT HIERARCHY ENFORCEMENT:
     // Only the assigned HOD or SUPER_HR (without override flag from HR) can approve PENDING_HOD.
     // COMPANY_HR CANNOT approve/reject PENDING_HOD leaves under any circumstances.
@@ -4060,6 +4089,13 @@ export class PayrollDatabase {
     const isHod = actorRole === 'HOD';
 
     if (app.status === 'PENDING_HOD') {
+      // SECURITY-FIX G1: a HOD may act only on leaves of employees reporting to THEM.
+      // SUPER_HR retains full authority. Missing reporting_hod_code is NOT an error —
+      // such leaves route directly to PENDING_HR at application time (HR direct-approval path).
+      if (isHod && !this.actorIsAssignedHod(app, actorId)) {
+        console.warn(`[LEAVE] BLOCKED: HOD ${actorId} tried to act on leave ${id} of ${app.employee_id} (reporting HOD: ${app.reporting_hod || app.reporting_hod_code || 'none'})`);
+        return false;
+      }
       if (isHod || isSuper) {
         // Standard HOD approval — moves to PENDING_HR
         if (action === 'APPROVE') {
@@ -4088,18 +4124,33 @@ export class PayrollDatabase {
         return false;
       }
     } else if (app.status === 'PENDING_HR') {
-      if (isHR) {
+      // Final approval: COMPANY_HR, SUPER_HR (MD) or MANAGEMENT — all HR-level roles.
+      if (isHR || isSuper || actorRole === 'MANAGEMENT') {
         if (action === 'APPROVE') {
           app.status = 'APPROVED';
           app.hr_approved_date = new Date().toISOString();
           app.hr_id = actorId || 'HR';
-          const emp = this.getEmployeeById(app.employee_id);
-          if (emp) {
-            const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
-            emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
-            this.syncEmployee(emp);
+          // SECURITY-FIX G2: idempotent posting — deduct + attendance-post exactly once.
+          if (!(app as any).balance_deducted) {
+            // Hard-lock (PLAN §3B / T-CXL): no posting into a CLOSED payroll period.
+            const _sm = String(app.start_date || '').slice(0, 7);
+            const _em = String(app.end_date || '').slice(0, 7);
+            if (_sm && _em && _sm === _em && this.isPayrollLocked(_sm, app.company)) {
+              throw new Error(`PAYROLL_PERIOD_CLOSED: payroll for ${_sm} (${app.company}) is closed — use controlled manual correction.`);
+            }
+            const emp = this.getEmployeeById(app.employee_id);
+            if (emp) {
+              if (app.leave_type === 'CO') {
+                emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - app.days);
+              } else {
+                const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
+                emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
+              }
+              this.syncEmployee(emp);
+            }
+            this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
+            (app as any).balance_deducted = true;
           }
-          this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
         } else {
           app.status = 'REJECTED_HR';
           app.hr_approved_date = new Date().toISOString();
@@ -4113,13 +4164,26 @@ export class PayrollDatabase {
         app.hod_id = app.hod_id || actorId || 'SuperAdmin';
         app.hr_approved_date = new Date().toISOString();
         app.hr_id = actorId || 'SuperAdmin';
-        const emp = this.getEmployeeById(app.employee_id);
-        if (emp) {
-          const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
-          emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
-          this.syncEmployee(emp);
+        // SECURITY-FIX G2: idempotent posting — deduct + attendance-post exactly once.
+        if (!(app as any).balance_deducted) {
+          const _sm = String(app.start_date || '').slice(0, 7);
+          const _em = String(app.end_date || '').slice(0, 7);
+          if (_sm && _em && _sm === _em && this.isPayrollLocked(_sm, app.company)) {
+            throw new Error(`PAYROLL_PERIOD_CLOSED: payroll for ${_sm} (${app.company}) is closed — use controlled manual correction.`);
+          }
+          const emp = this.getEmployeeById(app.employee_id);
+          if (emp) {
+            if (app.leave_type === 'CO') {
+              emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - app.days);
+            } else {
+              const leaveKey = `leave_balance_${app.leave_type.toLowerCase()}` as 'leave_balance_pl' | 'leave_balance_cl' | 'leave_balance_sl';
+              emp[leaveKey] = Math.max(0, (emp[leaveKey] || 0) - app.days);
+            }
+            this.syncEmployee(emp);
+          }
+          this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
+          (app as any).balance_deducted = true;
         }
-        this.autoUpdateAttendanceForLeave(app.employee_id, app.days, app.start_date, app.end_date, app.leave_type);
       } else {
         app.status = 'REJECTED';
         app.hod_approved_date = app.hod_approved_date || new Date().toISOString();
@@ -4127,6 +4191,13 @@ export class PayrollDatabase {
       }
     }
 
+    // SECURITY-FIX G1 (companion): unhandled role/state combos (e.g. HOD acting on
+    // PENDING_HR, unknown roles) must NEVER silently return success — no status
+    // change means the actor was not authorized for this transition.
+    if (app.status === beforeStatus) {
+      console.warn(`[LEAVE] BLOCKED: ${actorRole} (${actorId}) ${action} on leave ${id} state=${beforeStatus} — no authorized transition`);
+      return false;
+    }
     this.dbSqlite.run(`UPDATE leave_applications SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ?, hr_override = ?, hr_override_by = ?, hr_override_date = ? WHERE id = ?`,
       [app.status, app.hod_approved_date || null, app.hr_approved_date || null, app.hod_id || null, app.hr_id || null, app.hr_override ? 1 : 0, app.hr_override_by || null, app.hr_override_date || null, id]
     );
@@ -5457,6 +5528,225 @@ Sakar & SVN Group`;
     }
     return this.data.salary_revisions;
   }
+
+  // ===================== ESS SECURITY + LEAVE WORKFLOW ADDITIONS =====================
+
+  /** scrypt-aware password verification (legacy plaintext supported — zero lockout). */
+  public verifyEmployeePassword(employeeId: string, entered: string): { ok: boolean; employee?: Employee; isHashed: boolean } {
+    const emp = this.getEmployeeById(employeeId);
+    if (!emp) return { ok: false, isHashed: false };
+    const stored = emp.password || emp.id; // Employee-Code default preserved exactly
+    return { ok: verifyPassword(entered, stored), employee: emp, isHashed: isHashed(stored) };
+  }
+
+  /** Lazy migration: write hash back to the SAME password field after a successful plaintext login. */
+  public migrateEmployeePasswordToHash(employeeId: string, plainUsed: string): void {
+    const emp = this.getEmployeeById(employeeId);
+    if (!emp || isHashed(emp.password)) return;
+    emp.password = hashPassword(plainUsed);
+    this.persistData();
+  }
+
+  /** SECURITY-FIX G1 helper: is this actor the assigned HOD for this leave's employee? */
+  private actorIsAssignedHod(app: any, actorId?: string): boolean {
+    if (!actorId) return false;
+    const assigned = String(app.reporting_hod || app.reporting_hod_code || '');
+    if (!assigned) return false; // no assigned HOD — HOD-role actors cannot act; HR path applies
+    if (assigned === actorId) return true;
+    const hodMaster = (this.data.hods || []).find((h: any) => h.id === assigned);
+    const actorEmp = this.getEmployeeById(actorId);
+    if (hodMaster && actorEmp && hodMaster.name === actorEmp.name) return true;
+    const applicant = this.getEmployeeById(app.employee_id);
+    const applicantAssignedEmpCode = String(applicant?.reporting_hod_code || applicant?.reporting_hod || '');
+    if (applicantAssignedEmpCode && applicantAssignedEmpCode === String(actorEmp?.id || '')) return true;
+    return false;
+  }
+
+  /**
+   * Cancellation with PLAN §3B hard-lock rules (T-CXL-1..8):
+   *  - staff may cancel own PENDING leaves directly; APPROVED → request-only (HR reviews)
+   *  - posted (balance_deducted) leaves: reverse balance + attendance EXACTLY ONCE
+   *  - if any affected month's payroll run is CLOSED → hard-block PAYROLL_PERIOD_CLOSED
+   */
+  public cancelLeaveRequest(id: string, actor: { role: string; sub: string; isHR: boolean }, reason: string): { ok: boolean; code: string; message?: string } {
+    const app = (this.data.leave_applications || []).find((a: any) => a.id === id);
+    if (!app) return { ok: false, code: 'NOT_FOUND' };
+    if (['CANCELLED', 'REJECTED_HOD', 'REJECTED_HR', 'REJECTED'].includes(app.status)) return { ok: false, code: 'ALREADY_TERMINAL' };
+    if (!reason || !String(reason).trim()) return { ok: false, code: 'REASON_REQUIRED' };
+
+    const isOwner = app.employee_id === actor.sub;
+    if (actor.role === 'ESS' || (!actor.isHR && isOwner)) {
+      if (!isOwner) return { ok: false, code: 'FORBIDDEN' };
+      if (app.status === 'APPROVED') {
+        // T-CXL-3 rule: staff CANNOT cancel processed/approved leaves directly.
+        (app as any).cancellation_status = 'REQUESTED';
+        (app as any).cancellation_reason = String(reason);
+        (app as any).cancellation_requested_by = actor.sub;
+        (app as any).cancellation_requested_date = new Date().toISOString();
+        this.persistData();
+        return { ok: true, code: 'CANCELLATION_REQUESTED' };
+      }
+      // pending: staff direct-cancel falls through to HR-style cancel below
+    } else if (!actor.isHR && actor.role !== 'SUPER_HR') {
+      return { ok: false, code: 'FORBIDDEN' };
+    }
+
+    // Posted leaves: check payroll locks across ALL affected months BEFORE reversing.
+    const posted = !!(app as any).balance_deducted;
+    const months: string[] = [];
+    if (app.start_date) {
+      const s = new Date(app.start_date); const e = new Date(app.end_date || app.start_date);
+      const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+      while (cur <= e) {
+        months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+    if (posted) {
+      const lockedMonth = months.find(m => this.isPayrollLocked(m, app.company));
+      if (lockedMonth) {
+        return { ok: false, code: 'PAYROLL_PERIOD_CLOSED', message: `Payroll for ${lockedMonth} (${app.company}) is CLOSED. This leave is already reflected in processed payroll — use the controlled manual-correction process (Super Admin unlock → cancel → re-close).` };
+      }
+    }
+
+    // Reverse posting exactly once (T-CXL-5/6 — guarded by balance_deducted flag + history)
+    if (posted) {
+      const emp = this.getEmployeeById(app.employee_id);
+      if (emp) {
+        if (app.leave_type === 'CO') {
+          emp.leave_balance_compoff = (emp.leave_balance_compoff || 0) + app.days;
+        } else {
+          const leaveKey = `leave_balance_${String(app.leave_type).toLowerCase()}` as any;
+          emp[leaveKey] = (emp[leaveKey] || 0) + app.days;
+        }
+        this.syncEmployee(emp);
+      }
+      this.reverseAttendanceForLeave(app.employee_id, app.days, app.start_date, app.leave_type);
+      (app as any).balance_deducted = false;
+    }
+    (app as any).cancellation_history = (app as any).cancellation_history || [];
+    (app as any).cancellation_history.push({ by: actor.sub, role: actor.role, date: new Date().toISOString(), reason: String(reason), postedReversed: posted });
+    app.status = 'CANCELLED';
+    (app as any).cancelled_by = actor.sub;
+    (app as any).cancelled_date = new Date().toISOString();
+    (app as any).cancellation_reason = (app as any).cancellation_reason || String(reason);
+    this.persistData();
+    return { ok: true, code: 'CANCELLED' };
+  }
+
+  /** Mirror of autoUpdateAttendanceForLeave: remove posted leave days from the start-month record. */
+  private reverseAttendanceForLeave(employeeId: string, leaveDays: number, startDate?: string, leaveType?: string): void {
+    if (!employeeId || !startDate) return;
+    const d = new Date(startDate);
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const att = this.data.attendance.find((a: any) => a.employee_id === employeeId && a.month === month);
+    if (!att) return;
+    att.leave = Math.max(0, (att.leave || 0) - leaveDays);
+    if (leaveType) {
+      const lt = String(leaveType).toLowerCase();
+      const bucket = lt === 'pl' ? 'leave_pl' : lt === 'cl' ? 'leave_cl' : lt === 'sl' ? 'leave_sl' : (['coff', 'c-off', 'compoff', 'co'].includes(lt) ? 'leave_coff' : null);
+      if (bucket) (att as any)[bucket] = Math.max(0, ((att as any)[bucket] || 0) - leaveDays);
+    }
+    att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0);
+    att.lop_days = (att.absent || 0) + (att.lwp || 0);
+    att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + (att.leave || 0) + (att.lwp || 0);
+    this.dbSqlite.run(`INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked, leave_pl, leave_cl, leave_sl, leave_coff, pay_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [att.id, att.employee_id, att.month, att.total_days, att.working_days, att.lop_days, att.overtime_hours || 0, att.present || 0, att.absent || 0, att.weekly_off || 0, att.paid_holiday || 0, att.leave || 0, att.lwp || 0, att.overtime_hours || 0, att.is_locked ? 1 : 0, (att as any).leave_pl || 0, (att as any).leave_cl || 0, (att as any).leave_sl || 0, (att as any).leave_coff || 0, (att as any).pay_days || null]);
+  }
+
+  // ===================== LEAVE OPENING BALANCE (T1) =====================
+
+  /** Snapshot + metadata for 01-Apr-2026 opening balance; NOT a leave transaction (OB-11). */
+  public applyOpeningBalance(rows: Array<{ id: string; pl?: number; cl?: number; sl?: number; co?: number }>, meta: { batchId: string; fileHash: string; filename: string; by: string; asOn: string; remarks?: string }): { updated: number; skipped: Array<{ id: string; why: string }> } {
+    const skipped: Array<{ id: string; why: string }> = [];
+    let updated = 0;
+    if (!this.data.leave_import_batches) this.data.leave_import_batches = [];
+    for (const r of rows) {
+      const emp = this.getEmployeeById(r.id);
+      if (!emp) { skipped.push({ id: r.id, why: 'EMPLOYEE_NOT_FOUND' }); continue; }
+      if (emp.status && emp.status !== 'ACTIVE') { skipped.push({ id: r.id, why: 'NOT_ACTIVE' }); continue; }
+      const prev = { pl: emp.leave_balance_pl || 0, cl: emp.leave_balance_cl || 0, sl: emp.leave_balance_sl || 0, co: emp.leave_balance_compoff || 0 };
+      if (r.pl !== undefined) emp.leave_balance_pl = Number(r.pl);
+      if (r.cl !== undefined) emp.leave_balance_cl = Number(r.cl);
+      if (r.sl !== undefined) emp.leave_balance_sl = Number(r.sl);
+      if (r.co !== undefined) emp.leave_balance_compoff = Number(r.co);
+      (emp as any).leave_opening = { pl: r.pl ?? prev.pl, cl: r.cl ?? prev.cl, sl: r.sl ?? prev.sl, co: r.co ?? prev.co, as_on: meta.asOn, source: 'OPENING_BALANCE', batch_id: meta.batchId };
+      (emp as any).leave_opening_entered_by = meta.by;
+      (emp as any).leave_opening_entered_at = new Date().toISOString();
+      this.logAudit('Leave Opening Balance Imported', `Employee ${emp.id} (${emp.name}) as-on ${meta.asOn} source OPENING_BALANCE batch ${meta.batchId} | prev PL/CL/SL/CO ${prev.pl}/${prev.cl}/${prev.sl}/${prev.co} → new ${emp.leave_balance_pl}/${emp.leave_balance_cl}/${emp.leave_balance_sl}/${emp.leave_balance_compoff || 0} | by ${meta.by}${meta.remarks ? ' | remarks: ' + meta.remarks : ''}`, meta.by);
+      this.syncEmployee(emp);
+      updated++;
+    }
+    this.data.leave_import_batches.push({ id: meta.batchId, kind: 'OPENING_BALANCE', filename: meta.filename, file_hash: meta.fileHash, as_on: meta.asOn, rows: rows.length, updated, skipped: skipped.length, by: meta.by, at: new Date().toISOString() });
+    this.persistData();
+    return { updated, skipped };
+  }
+
+  /** Idempotency (OB-7): same normalized file content must never double-apply. */
+  public findImportBatchByHash(fileHash: string): any {
+    return (this.data.leave_import_batches || []).find((b: any) => b.file_hash === fileHash);
+  }
+
+  /** Historical leave import (T2): records only — balances come from recompute, NO attendance posting, NO payroll touch. */
+  public importHistoricalLeaves(rows: Array<{ employee_id: string; leave_type: string; start_date: string; end_date: string; days: number; reason?: string }>, meta: { batchId: string; fileHash: string; filename: string; by: string }): { imported: number; skipped: Array<{ employee_id: string; why: string }> } {
+    const skipped: Array<{ employee_id: string; why: string }> = [];
+    let imported = 0;
+    if (!this.data.leave_import_batches) this.data.leave_import_batches = [];
+    let nextNum = Math.max(...(this.data.leave_applications || []).map((a: any) => parseInt(String(a.id).replace('LV', '')) || 0), 0);
+    for (const r of rows) {
+      const emp = this.getEmployeeById(r.employee_id);
+      if (!emp) { skipped.push({ employee_id: r.employee_id, why: 'EMPLOYEE_NOT_FOUND' }); continue; }
+      const type = String(r.leave_type || '').toUpperCase();
+      if (!['PL', 'CL', 'SL', 'CO'].includes(type)) { skipped.push({ employee_id: r.employee_id, why: `BAD_TYPE:${type}` }); continue; }
+      nextNum++;
+      const rec: any = {
+        id: `LV${String(nextNum).padStart(3, '0')}`,
+        employee_id: emp.id, employee_name: emp.name, company: emp.company,
+        leave_type: type, start_date: r.start_date, end_date: r.end_date, days: Number(r.days) || 0,
+        reason: r.reason || 'Historical leave import (Apr–Aug 2026)',
+        status: 'APPROVED', applied_date: new Date().toISOString(),
+        historical: true, source: 'HISTORICAL_LEAVE', balance_deducted: false, // informational record — recompute handles balances
+        hr_id: meta.by, hr_approved_date: new Date().toISOString(), batch_id: meta.batchId
+      };
+      (this.data.leave_applications = this.data.leave_applications || []).push(rec);
+      this.logAudit('Historical Leave Imported', `${emp.id} ${type} ${rec.days}d (${rec.start_date}→${rec.end_date}) batch ${meta.batchId}`, meta.by);
+      imported++;
+    }
+    this.data.leave_import_batches.push({ id: meta.batchId, kind: 'HISTORICAL_LEAVE', filename: meta.filename, file_hash: meta.fileHash, rows: rows.length, imported, skipped: skipped.length, by: meta.by, at: new Date().toISOString() });
+    this.persistData();
+    return { imported, skipped };
+  }
+
+  /**
+   * Leave Register summary (PLAN §3B): Opening (01-Apr) + Credit(0, configured rules later) − Taken(live+historical) = Closing.
+   * Replaces ad-hoc balance math after onboarding; live approvals keep incremental deduction in sync.
+   */
+  public getLeaveRegisterSummary(company?: string): Array<any> {
+    const FY_MONTHS = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'];
+    const out: Array<any> = [];
+    for (const emp of this.data.employees || []) {
+      if (company && company !== 'ALL' && emp.company !== company) continue;
+      const ob = (emp as any).leave_opening || { pl: emp.leave_balance_pl || 0, cl: emp.leave_balance_cl || 0, sl: emp.leave_balance_sl || 0, co: emp.leave_balance_compoff || 0, as_on: '2026-04-01', source: 'OPENING_BALANCE' };
+      const taken = { PL: 0, CL: 0, SL: 0, CO: 0 } as any;
+      for (const a of this.data.leave_applications || []) {
+        if (a.employee_id !== emp.id || a.status !== 'APPROVED' || (a as any).cancellation_status === 'REQUESTED') continue;
+        const ym = String(a.start_date || '').slice(0, 7);
+        if (!FY_MONTHS.includes(ym)) continue;
+        const t = String(a.leave_type).toUpperCase() === 'CO' ? 'CO' : String(a.leave_type).toUpperCase();
+        if (taken[t] !== undefined) taken[t] += Number(a.days) || 0;
+      }
+      const row: any = { employee_id: emp.id, name: emp.name, company: emp.company, as_on: ob.as_on, source: ob.source };
+      for (const t of ['PL', 'CL', 'SL', 'CO'] as const) {
+        const open = Number((ob as any)[t === 'CO' ? 'co' : t.toLowerCase()] || 0);
+        const balKey = t === 'CO' ? 'leave_balance_compoff' : `leave_balance_${t.toLowerCase()}`;
+        row[t] = { opening: open, credit: 0, taken: taken[t], adjustment: 0, closing: Math.max(0, open - taken[t]), live_balance: Number((emp as any)[balKey] || 0) };
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  // ===================== END ADDITIONS =====================
 
   public addSalaryRevision(rev: Omit<SalaryRevision, 'id' | 'created_at'> & {
     hra?: number;

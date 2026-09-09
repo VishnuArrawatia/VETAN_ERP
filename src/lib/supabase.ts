@@ -4,7 +4,10 @@ import { createClient } from '@supabase/supabase-js';
  * Project URL is public (not a secret). Hardcoded so a stuck/wrong
  * Vercel env var like https://aBcDe.supabase.co cannot break production.
  */
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://wffkgzzrninmcbtqbdcf.supabase.co';
+// SECURITY-FIX (fail-closed): the hard-coded production-URL fallback is REMOVED.
+// A Preview/staging build without explicit env vars must NEVER silently point at
+// the production Supabase project. Missing config => disable cloud sync + warn.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
@@ -21,6 +24,6 @@ if (!SUPABASE_URL || SUPABASE_URL.includes('undefined')) {
 }
 
 export const supabase = createClient(
-  SUPABASE_URL,
-  supabaseAnonKey || 'placeholder-anon-key'
+  SUPABASE_URL || 'https://supabase-disabled.invalid',
+  supabaseAnonKey || 'disabled-no-anon-key'
 );

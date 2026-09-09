@@ -32,6 +32,7 @@ export interface Employee {
   leave_balance_pl: number; // Privilege Leaves
   leave_balance_cl: number; // Casual Leaves
   leave_balance_sl: number; // Sick Leaves
+  leave_balance_compoff?: number; // Comp-Off balance (used by existing leave-opening + comp-off flows)
 
   // Educational and Professional details requested by the user
   qualification?: string;
@@ -51,6 +52,12 @@ export interface Employee {
   // UAN, bank, etc.) from being overwritten by stale instances/local backups.
   updated_at?: string;
   created_at?: string;
+  // ESS security: session revocation epoch — bump on logout/password-change/reset
+  session_epoch?: number;
+  // Leave Opening Balance snapshot (PLAN §3B — as on 01-Apr-2026, NOT a leave transaction)
+  leave_opening?: { pl: number; cl: number; sl: number; co: number; as_on: string; source: string; batch_id?: string };
+  leave_opening_entered_by?: string;
+  leave_opening_entered_at?: string;
   ctc_salary?: number;
   sctc?: number;
   form?: string;
@@ -104,12 +111,12 @@ export interface LeaveApplication {
   employee_id: string;
   employee_name: string;
   company: string;
-  leave_type: 'PL' | 'CL' | 'SL';
+  leave_type: 'PL' | 'CL' | 'SL' | 'CO';
   start_date: string;
   end_date: string;
   days: number;
   reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PENDING_HOD' | 'PENDING_HR' | 'REJECTED_HOD' | 'REJECTED_HR';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PENDING_HOD' | 'PENDING_HR' | 'REJECTED_HOD' | 'REJECTED_HR' | 'CANCELLED' | 'CANCELLATION_REQUESTED';
   applied_date?: string;
   reporting_hod?: string;
   reporting_hod_name?: string;
@@ -117,6 +124,23 @@ export interface LeaveApplication {
   hod_id?: string;
   hr_approved_date?: string;
   hr_id?: string;
+
+  // ---- ESS security + leave-workflow additions (approved plan §3/§4) ----
+  balance_deducted?: boolean;          // idempotency: balance deducted exactly once
+  attachment_name?: string;
+  attachment_data?: string;            // base64, ≤2MB validated at API
+  hr_override_reason?: string;         // HR direct approval — mandatory reason
+  historical?: boolean;                // T2 historical import record (Apr–Aug 2026)
+  source?: string;                     // OPENING_BALANCE | HISTORICAL_LEAVE | ESS | HR
+  batch_id?: string;                   // import batch reference
+  cancellation_status?: 'REQUESTED';
+  cancellation_reason?: string;
+  cancellation_requested_by?: string;
+  cancellation_requested_date?: string;
+  cancelled_by?: string;
+  cancelled_date?: string;
+  cancellation_history?: Array<{ by: string; role: string; date: string; reason: string; postedReversed: boolean }>;
+  remarks?: string;
 }
 
 export interface HRUser {

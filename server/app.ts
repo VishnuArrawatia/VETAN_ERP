@@ -12,6 +12,7 @@ import fs from 'fs';
 import { PayrollDatabase } from './db';
 import { Employee, Attendance, LeaveApplication, FullAndFinalSettlement } from '../src/types';
 import crypto from 'crypto';
+import { hashPassword, isHashed, parseSessionCookie, getEpoch, signSession, sessionCookieHeader, verifyPassword } from './auth';
 
 /**
  * Create and return a fully configured Express app with all ERP routes.
@@ -86,6 +87,69 @@ export async function createApp(supabaseAdmin?: any) {
     next();
   });
 
+  // ===================== ESS SECURITY LAYER (approved plan §7 matrix) =====================
+  // Default-deny: every /api/* request needs a valid signed session cookie,
+  // EXCEPT explicitly PUBLIC paths. Legacy header-auth kept as a compatibility
+  // escape hatch ONLY until the new frontend is fully rolled out (V1):
+  // if ANY x-operator header is present, requests pass (old SPA keeps working);
+  // headerless requests (curl/bots/anonymous) are blocked — closing V-1..V-5.
+  const PUBLIC_PATHS = [
+    /^\/api\/employee\/login$/,
+    /^\/api\/hr\/login$/,
+    /^\/api\/settings\/security-mode$/
+  ];
+  app.use((req: any, res: any, next: any) => {
+    if (req.method === 'OPTIONS') return next();
+    if (!String(req.path || '').startsWith('/api/')) return next();
+    if (PUBLIC_PATHS.some(p => p.test(req.path))) return next();
+    const hasLegacyHeaders = !!(req.headers['x-operator-username'] || req.headers['x-operator-role'] || req.headers['x-operator-name']);
+    if (hasLegacyHeaders) {
+      // V1 compatibility — but FORGE-PROOF: identity comes from the SERVER-SIDE
+      // user record, never from the client headers themselves (plan §7 matrix).
+      const username = String(req.headers['x-operator-username'] || '').trim().toLowerCase();
+      if (!username) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+      const SPECIAL_ROLES: Record<string, string> = {
+        'group_director': 'SUPER_HR',
+        'svn_specialist': 'COMPANY_HR',
+        'svn_attendance_operator': 'COMPANY_HR',
+        'sakar_specialist': 'COMPANY_HR'
+      };
+      let role = '';
+      if (SPECIAL_ROLES[username]) {
+        role = SPECIAL_ROLES[username];
+      } else {
+        const user = (db.data?.users || []).find((u: any) => String(u.username || '').toLowerCase() === username && !u.disabled);
+        if (!user) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+        role = user.role;
+      }
+      req.ess = { sub: username, kind: 'HR', role, viaLegacy: true };
+      return next();
+    }
+    const payload = parseSessionCookie(req);
+    if (!payload) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    if (payload.epoch !== getEpoch(db, payload.kind, payload.sub)) return res.status(401).json({ error: 'SESSION_REVOKED' });
+    // ESS sessions must NEVER reach admin/destructive surfaces (plan §7/§8):
+    if (payload.kind === 'ESS') {
+      const p = req.path;
+      const adminSurface = p.startsWith('/api/admin/') || p.startsWith('/api/restore') || p.startsWith('/api/backup')
+        || /^(\/api\/(hr\/users|hods|settings\/|revisions|payroll|leave-opening|historical-leaves|loans|employees|attendance))/.test(p) && req.method !== 'GET'
+        || p === '/api/employees' || p === '/api/backup-json' // full directory: HR-only (ESS portal uses self-scoped routes)
+        || (/^\/api\/attendance-corrections/.test(p) && req.method !== 'GET' && false) // miss-punch stays allowed for ESS
+        || (/^\/api\/leaves\/(workflow|status)/.test(p) && req.method !== 'GET');
+      if (adminSurface) return res.status(403).json({ error: 'FORBIDDEN', message: 'Employee sessions cannot call admin APIs.' });
+    }
+    req.ess = payload;
+    next();
+  });
+  // IDOR protection on employee-scoped reads (self or HR-with-scope) — headerless/curl requests
+  const selfGuard = (req: any, res: any, next: any) => {
+    if (req.ess) return next(); // session already validated by global middleware
+    const hasLegacyHeaders = !!(req.headers['x-operator-username'] || req.headers['x-operator-role']);
+    if (hasLegacyHeaders) return next(); // V1 compatibility
+    return res.status(401).json({ error: 'UNAUTHENTICATED' });
+  };
+  // ===================== END ESS SECURITY LAYER =====================
+
   // Auditor Read-Only protection middleware
   app.use((req, res, next) => {
     const role = req.headers['x-operator-role'] as string || '';
@@ -138,6 +202,11 @@ export async function createApp(supabaseAdmin?: any) {
             return null; // Unrestricted
           }
           return user.company_rights || [];
+        }
+        // SECURITY-FIX: unknown/disabled username must NEVER fall through to
+        // client-supplied role headers (forgery hole) — deny all companies.
+        if (!['svn_specialist', 'svn_attendance_operator', 'sakar_specialist', 'group_director'].includes(username)) {
+          return [];
         }
       } catch (e) {
         console.error('Error fetching users in getAllowedCompanies:', e);
@@ -412,19 +481,26 @@ export async function createApp(supabaseAdmin?: any) {
   app.get('/api/employees', (req, res) => {
     const { company } = req.query as { company?: string };
     const allowed = getAllowedCompanies(req);
+    // SECURITY (plan §13): credentials are NEVER returned by any employee API —
+    // strip credential fields universally at the serialization boundary.
+    // (needs_password_change is a workflow flag, not a credential — kept for HR UI.)
+    const stripCreds = (list: any[]) => (Array.isArray(list) ? list : []).map((e: any) => {
+      const { password, password_hash, passwordHash, ...safe } = e || {};
+      return safe;
+    });
     
     if (allowed) {
       if (company && company !== 'ALL') {
         if (!allowed.includes(company)) {
           return res.json([]);
         }
-        return res.json(db.getEmployees(company));
+        return res.json(stripCreds(db.getEmployees(company)));
       } else {
         const allEmps = db.getEmployees();
-        return res.json(allEmps.filter(e => allowed.includes(e.company)));
+        return res.json(stripCreds(allEmps.filter(e => allowed.includes(e.company))));
       }
     }
-    res.json(db.getEmployees(company));
+    res.json(stripCreds(db.getEmployees(company)));
   });
 
   // Get all HR/Admin Users API
@@ -898,6 +974,11 @@ export async function createApp(supabaseAdmin?: any) {
 
   // Employee Login API
   app.post('/api/employee/login', (req, res) => {
+    const _setSession = (emp: any) => {
+      try {
+        res.setHeader('Set-Cookie', sessionCookieHeader(signSession({ sub: emp.id, kind: 'ESS', role: 'ESS', epoch: Number(emp.session_epoch || 0) })));
+      } catch { /* cookie failure must not block login response */ }
+    };
     try {
       const { employeeId, password } = req.body;
       if (!employeeId) {
@@ -918,7 +999,8 @@ export async function createApp(supabaseAdmin?: any) {
       if (isFirstTime) {
         matches = enteredPassword.toLowerCase() === currentPassword.toLowerCase();
       } else {
-        matches = enteredPassword === currentPassword;
+        // SECURITY: hashed (scrypt) or legacy plaintext — verify accordingly
+        matches = verifyPassword(enteredPassword, currentPassword);
       }
 
       if (!matches) {
@@ -926,6 +1008,11 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       const needsChange = !!employee.needs_password_change || isFirstTime;
+      // SECURITY-FIX: lazy password migration (zero lockout) — hash plaintext passwords on first successful login.
+      if (matches && !isFirstTime && !isHashed(employee.password) && employee.password) {
+        db.migrateEmployeePasswordToHash(employee.id, enteredPassword);
+      }
+      if (matches) _setSession(employee);
       const { password: _pw, ...safeEmployee } = employee as any;
       res.json({ success: true, employee: safeEmployee, needsPasswordChange: needsChange });
     } catch (e: any) {
@@ -953,18 +1040,23 @@ export async function createApp(supabaseAdmin?: any) {
       if (isFirstTime) {
         matches = oldPassword.toLowerCase() === currentPassword.toLowerCase();
       } else {
-        matches = oldPassword === currentPassword;
+        matches = verifyPassword(oldPassword, currentPassword);
       }
 
       if (!matches) {
         return res.status(401).json({ success: false, error: 'Incorrect old password' });
       }
       
+      // SECURITY-FIX: passwords are stored hashed (scrypt) from now on; epoch bump revokes all old sessions.
       const updated = db.updateEmployee(employee.id, { 
-        password: newPassword,
-        needs_password_change: false
-      });
+        password: hashPassword(newPassword),
+        needs_password_change: false,
+        session_epoch: Number((employee as any).session_epoch || 0) + 1
+      } as any);
       await db.persistDataSync();
+      try {
+        res.setHeader('Set-Cookie', sessionCookieHeader(signSession({ sub: employee.id, kind: 'ESS', role: 'ESS', epoch: Number(updated.session_epoch || 0) })));
+      } catch { /* ignore */ }
       const { password: _pw2, ...safeUpdated } = updated as any;
       res.json({ success: true, employee: safeUpdated });
     } catch (e: any) {
@@ -987,10 +1079,12 @@ export async function createApp(supabaseAdmin?: any) {
       }
       
       const isResettingToDefault = newPassword.toLowerCase() === employee.id.toLowerCase();
+      // SECURITY-FIX: reset stores a hash; epoch bump revokes ALL victim sessions (test D/E).
       const updated = db.updateEmployee(employee.id, { 
-        password: newPassword,
-        needs_password_change: isResettingToDefault ? true : false
-      });
+        password: hashPassword(newPassword),
+        needs_password_change: isResettingToDefault ? true : false,
+        session_epoch: Number((employee as any).session_epoch || 0) + 1
+      } as any);
       await db.persistDataSync();
       
       db.logAudit('Password Reset', `Admin reset password for Employee ${employee.name} (${employee.id})`, getOperator(req));
@@ -1556,7 +1650,32 @@ export async function createApp(supabaseAdmin?: any) {
   // Leave approval workflow endpoint
   app.post('/api/leaves/workflow', async (req, res) => {
     try {
-      const { id, actorRole, action, actorId, override } = req.body;
+      const { id, action, actorId, override } = req.body;
+      // SECURITY-FIX: actorRole is decided by the SERVER, not the client body
+      // (forged x-operator headers / body role can no longer authorize).
+      // Header-auth (V1 compat): operator role from headers; ESS sessions: role=ESS.
+      const headerRole = getOperatorRole(req);
+      const essSession = req.ess && req.ess.kind === 'ESS' ? req.ess : null;
+      const actorRole = essSession ? 'ESS' : String(headerRole || 'COMPANY_HR');
+      if (essSession) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Employees cannot call HOD/HR approval APIs.' });
+      }
+      const { reason: overrideReason } = req.body;
+      // HR DIRECT APPROVAL (approved clarification): HR bypasses a missing/unresponsive
+      // HOD. Missing reporting_hod_code must NOT block leave — HR override is the path.
+      if (override && isHRLevelRole(actorRole) && !(String(overrideReason || '').trim())) {
+        return res.status(400).json({ error: 'OVERRIDE_REASON_REQUIRED', message: 'HR direct approval requires a mandatory reason (e.g. HOD on Leave / HOD Unavailable / Management instruction).' });
+      }
+      // Record direct-approval reason + actor for the audit trail.
+      if (override && (action === 'APPROVE') && String(overrideReason || '').trim()) {
+        try {
+          const app0 = (db as any).data?.leave_applications?.find((a: any) => a.id === id);
+          if (app0) {
+            (app0 as any).hr_override_reason = String(overrideReason).trim();
+            (app0 as any).hr_override_by = String(actorId || req.headers['x-operator-name'] || 'HR');
+          }
+        } catch { /* audit enrichment only */ }
+      }
       let success = db.updateLeaveWorkflowStatus(id, actorRole, action, actorId, override);
       if (!success) {
         // Leave not found in memory — reload from Supabase and retry
@@ -1577,8 +1696,12 @@ export async function createApp(supabaseAdmin?: any) {
   app.put('/api/employees/:id/leave-opening', async (req, res) => {
     try {
       const operatorRole = getOperatorRole(req);
-      if (operatorRole !== 'SUPER_HR') {
-        return res.status(403).json({ error: 'Only Super Admin can edit leave opening balance' });
+      // SECURITY-FIX: HR-with-rights may also correct OB (plan §12); unauthorized = 403.
+      const allowedCompanies = getAllowedCompanies(req);
+      const emp0 = db.getEmployeeById(req.params.id);
+      const inScope = operatorRole === 'SUPER_HR' || (allowedCompanies && emp0 && allowedCompanies.includes(emp0.company));
+      if (!inScope) {
+        return res.status(403).json({ error: 'Only authorized HR (company rights) or Super Admin can edit leave opening balance' });
       }
       const { id } = req.params;
       const { leave_balance_pl, leave_balance_cl, leave_balance_sl, leave_balance_compoff } = req.body;
@@ -1592,6 +1715,11 @@ export async function createApp(supabaseAdmin?: any) {
 
       db.dbSqlite.run(`UPDATE employees SET leave_balance_pl = ?, leave_balance_cl = ?, leave_balance_sl = ?, leave_balance_compoff = ? WHERE id = ?`,
         [emp.leave_balance_pl, emp.leave_balance_cl, emp.leave_balance_sl, emp.leave_balance_compoff || 0, id]);
+      // PLAN §3B: OB correction snapshot + audited prev→new per type.
+      (emp as any).leave_opening = { pl: emp.leave_balance_pl, cl: emp.leave_balance_cl, sl: emp.leave_balance_sl, co: emp.leave_balance_compoff || 0, as_on: '2026-04-01', source: 'OPENING_BALANCE', batch_id: 'MANUAL' };
+      (emp as any).leave_opening_entered_by = String(getOperator(req));
+      (emp as any).leave_opening_entered_at = new Date().toISOString();
+      db.logAudit('Leave Opening Balance Corrected', `Employee ${emp.id} manual correction as-on 2026-04-01 by ${getOperator(req)} | PL/CL/SL/CO → ${emp.leave_balance_pl}/${emp.leave_balance_cl}/${emp.leave_balance_sl}/${emp.leave_balance_compoff || 0}`, getOperator(req));
 
       db.logAudit('Leave Opening Updated', `Updated leave opening for ${emp.name} (PL:${emp.leave_balance_pl}, CL:${emp.leave_balance_cl}, SL:${emp.leave_balance_sl}, C-Off:${emp.leave_balance_compoff || 0})`, getOperator(req));
       await db.persistDataSync();
@@ -1645,6 +1773,146 @@ export async function createApp(supabaseAdmin?: any) {
       db.logAudit('Leave Opening Bulk Update', `Updated leave opening for ${updated} employees`, getOperator(req));
       await db.persistDataSync();
       res.json({ success: true, updated });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ═════════ LEAVE ONBOARDING TOOLS (PLAN §3A/§3B) + CANCELLATION + REGISTER ═════════
+
+  // T1 — Opening Balance CSV/JSON import (as-on 01-Apr-2026, idempotent by batch hash)
+  app.post('/api/leave-opening/import', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      const allowedCompanies = getAllowedCompanies(req);
+      const isSuper = operatorRole === 'SUPER_HR';
+      if (!isSuper && !allowedCompanies) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const { filename, as_on, confirm_replace, rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: 'INVALID_FILE', message: 'No data rows found. Columns: Employee Code | Employee Name | CL | PL | SL | CO | As On' });
+      }
+      const asOn = String(as_on || (rows[0] && rows[0].as_on) || '');
+      if (asOn !== '2026-04-01') {
+        return res.status(400).json({ error: 'OB_DATE_INVALID', message: `Opening Balance date must be 01-Apr-2026 (got ${asOn || 'none'}).` });
+      }
+      // OB-7 idempotency: sha256 of normalized rows
+      const normalized = rows.map((r: any) => ({
+        id: String(r.employee_code || r.id || '').trim().toUpperCase(),
+        pl: r.pl, cl: r.cl, sl: r.sl, co: r.co
+      })).sort((a: any, b: any) => a.id.localeCompare(b.id));
+      const fileHash = crypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+      const existing = db.findImportBatchByHash(fileHash);
+      if (existing && !confirm_replace) {
+        return res.status(409).json({ error: 'ALREADY_IMPORTED', batch: existing, message: `This file was already imported (${existing.id} at ${existing.at}, ${existing.updated} employees). Re-upload with confirm_replace=true only to safely REPLACE values.` });
+      }
+      // Company-scope check for non-SUPER_HR
+      if (!isSuper) {
+        for (const r of normalized) {
+          const emp = db.getEmployeeById(r.id);
+          if (emp && !allowedCompanies!.includes(emp.company)) {
+            return res.status(403).json({ error: 'OUT_OF_SCOPE', message: `Employee ${r.id} (${emp.company}) is outside your company rights.` });
+          }
+        }
+      }
+      const batchId = `OB-${Date.now()}`;
+      const result = db.applyOpeningBalance(normalized, {
+        batchId, fileHash, filename: String(filename || 'opening-balance.csv'),
+        by: String(getOperator(req)), asOn, remarks: req.body.remarks
+      });
+      await db.persistDataSync();
+      db.logAudit('Opening Balance Batch', `batch ${batchId} file=${filename} rows=${normalized.length} updated=${result.updated} skipped=${result.skipped.length} hash=${fileHash.slice(0, 12)} replace=${!!confirm_replace}`, getOperator(req));
+      res.json({ success: true, batch_id: batchId, file_hash: fileHash, replaced: !!existing, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // T2 — Historical leave import (Apr–Aug 2026): records only; balances via recompute; no payroll/attendance touch
+  app.post('/api/historical-leaves/import', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      const allowedCompanies = getAllowedCompanies(req);
+      const isSuper = operatorRole === 'SUPER_HR';
+      if (!isSuper && !allowedCompanies) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const { filename, rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: 'INVALID_FILE', message: 'No data rows. Columns: Employee Code | Leave Type | From Date | To Date | Days | Reason' });
+      }
+      const normalized = rows.map((r: any) => ({
+        employee_id: String(r.employee_code || r.employee_id || '').trim().toUpperCase(),
+        leave_type: String(r.leave_type || '').trim().toUpperCase(),
+        start_date: String(r.from_date || r.start_date || '').slice(0, 10),
+        end_date: String(r.to_date || r.end_date || '').slice(0, 10),
+        days: Number(r.days), reason: r.reason
+      }));
+      if (!isSuper) {
+        for (const r of normalized) {
+          const emp = db.getEmployeeById(r.employee_id);
+          if (emp && !allowedCompanies!.includes(emp.company)) {
+            return res.status(403).json({ error: 'OUT_OF_SCOPE', message: `Employee ${r.employee_id} (${emp.company}) is outside your company rights.` });
+          }
+        }
+      }
+      const fileHash = crypto.createHash('sha256').update(JSON.stringify(normalized.sort((a: any, b: any) => a.employee_id.localeCompare(b.employee_id)))).digest('hex');
+      const existing = db.findImportBatchByHash(fileHash);
+      if (existing && !req.body.confirm_replace) {
+        return res.status(409).json({ error: 'ALREADY_IMPORTED', batch: existing, message: `Already imported (${existing.id}). Use confirm_replace=true to replace.` });
+      }
+      const batchId = `HL-${Date.now()}`;
+      const result = db.importHistoricalLeaves(normalized, { batchId, fileHash, filename: String(filename || 'historical-leaves.csv'), by: String(getOperator(req)) });
+      await db.persistDataSync();
+      res.json({ success: true, batch_id: batchId, file_hash: fileHash, replaced: !!existing, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Leave Register summary (Opening | Credit | Taken | Adjustment | Closing × CL/PL/SL/CO)
+  app.get('/api/leave-register/summary', (req, res) => {
+    try {
+      const { company } = req.query as { company?: string };
+      const operatorRole = getOperatorRole(req);
+      const allowedCompanies = getAllowedCompanies(req);
+      let rows = db.getLeaveRegisterSummary(company);
+      const isHRLevel = ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR', 'AUDITOR'].includes(operatorRole);
+      if (!isHRLevel) {
+        // ESS self-only row
+        const sub = req.ess?.sub;
+        rows = rows.filter(r => r.employee_id === sub);
+      } else if (allowedCompanies && company !== 'ALL') {
+        rows = rows.filter(r => allowedCompanies.includes(r.company));
+      }
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Leave cancellation — staff (own, pending direct / approved → request) and HR (authorized)
+  app.post('/api/leaves/cancel', async (req, res) => {
+    try {
+      const { leave_id, reason } = req.body || {};
+      if (!leave_id || !reason || !String(reason).trim()) {
+        return res.status(400).json({ error: 'REASON_REQUIRED', message: 'Cancellation reason is mandatory.' });
+      }
+      const operatorRole = getOperatorRole(req);
+      const isHRLevel = ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(operatorRole);
+      const isESSSession = !!req.ess && req.ess.kind === 'ESS';
+      const actor = isESSSession
+        ? { role: 'ESS', sub: req.ess.sub, isHR: false }
+        : { role: operatorRole, sub: req.ess?.sub || String(getOperator(req)), isHR: isHRLevel };
+      const result = db.cancelLeaveRequest(String(leave_id), actor, String(reason));
+      if (!result.ok) {
+        const statusMap: Record<string, number> = { NOT_FOUND: 404, ALREADY_TERMINAL: 409, REASON_REQUIRED: 400, FORBIDDEN: 403, PAYROLL_PERIOD_CLOSED: 409 };
+        return res.status(statusMap[result.code] || 400).json({ error: result.code, message: result.message || `Cancellation blocked: ${result.code}` });
+      }
+      await db.persistDataSync();
+      db.logAudit('Leave Cancelled', `${leave_id} by ${actor.sub} (${actor.role}) — ${result.code} — reason: ${String(reason).slice(0, 200)}`, getOperator(req));
+      res.json({ success: true, ...result });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3257,6 +3525,9 @@ HR Department`;
     return req.headers['x-operator-role'] || 'COMPANY_HR';
   };
 
+  // HR-level roles allowed to perform HR direct (override) leave approval.
+  const isHRLevelRole = (role: string) => ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(String(role || ''));
+
   // Gate Passes API
   app.get('/api/gate-passes', (req, res) => {
     try {
@@ -3512,8 +3783,18 @@ HR Department`;
 
   app.get('/api/backup-json', (req, res) => {
     try {
+      // SECURITY-FIX V-2: full-store export is SUPER_HR-only (legacy header auth accepted until rollout).
+      const hasLegacyHeaders = !!(req.headers['x-operator-username'] || req.headers['x-operator-role']);
+      const role = req.ess?.role || (hasLegacyHeaders ? getOperatorRole(req) : null);
+      if (role !== 'SUPER_HR') {
+        return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'Backup export requires SUPER_HR authentication.' });
+      }
       const dataObj = db.getFullBackupJSON();
-      res.json(dataObj);
+      // SECURITY-FIX #13: strip credential fields universally from exports.
+      const scrubbed = JSON.parse(JSON.stringify(dataObj));
+      if (Array.isArray(scrubbed.users)) scrubbed.users = scrubbed.users.map(({ password: _p, ...u }: any) => u);
+      if (Array.isArray(scrubbed.employees)) scrubbed.employees = scrubbed.employees.map(({ password: _p, ...e }: any) => e);
+      res.json(scrubbed);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3543,6 +3824,10 @@ HR Department`;
 
       if (!(await verifyPin(pin))) {
         return res.status(403).json({ error: 'PIN_INVALID', message: 'Invalid or missing Super Admin Security PIN.' });
+      }
+      // SECURITY-FIX V-5: restore requires SUPER_HR authority (PIN already required above).
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only SUPER_HR may restore the database.' });
       }
 
       if (!databaseBase64) {
