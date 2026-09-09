@@ -77,7 +77,13 @@ const NEW_PROFILE = {
 
 async function main() {
   const cloud = new FakeClient();
-  cloud.row = { payload: { employees: JSON.parse(JSON.stringify(BASE_EMPS)) }, updated_at: 'T0' };
+  // Seed users so the new default-deny auth layer can resolve 'vishnu' to the
+  // seeded SUPER_HR record (server-side identity — forged roles still fail).
+  const SEED_USERS = [
+    { id: 'USR001', username: 'vishnu', name: 'Vishnu Arrawatia', role: 'SUPER_HR', title: 'Super Admin',
+      company_rights: ['SVN-1', 'SVN-II', 'Sakar-I', 'Sakar-III', 'Flare-1', 'Zenivo-1'], password: 'Varrawatia', disabled: false }
+  ];
+  cloud.row = { payload: { employees: JSON.parse(JSON.stringify(BASE_EMPS)), users: SEED_USERS }, updated_at: 'T0' };
 
   // ---- Instance A (cold start #1) + Instance B (cold start #2 — stale view of T0)
   const appA = await createApp(cloud as any);
@@ -92,9 +98,13 @@ async function main() {
   await new Promise<void>(r => serverB.listen(0, r));
   const portB = (serverB.address() as any).port;
 
+  // NOTE: since the ESS security layer (525e393), every /api/* call needs auth.
+  // The old SPA's legacy-header path is the compatibility window the harness
+  // uses too — server validates 'vishnu' against the seeded SUPER_HR user.
+  const HRH = { 'x-operator-username': 'vishnu', 'x-operator-role': 'SUPER_HR', 'x-operator-name': 'Verify HR' };
   const put = (base: string, path: string, body: any) =>
-    fetch(`http://127.0.0.1:${base}${path}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const get = (base: string, path: string) => fetch(`http://127.0.0.1:${base}${path}`);
+    fetch(`http://127.0.0.1:${base}${path}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...HRH }, body: JSON.stringify(body) });
+  const get = (base: string, path: string) => fetch(`http://127.0.0.1:${base}${path}`, { headers: HRH });
   const cloudE = (id: string) => cloud.row!.payload.employees.find((e: any) => e.id === id);
 
   console.log('\n=== A. AUTHORITATIVE CLOUD + FULL PROFILE UPDATE (TASK POINT 1-2) ===');

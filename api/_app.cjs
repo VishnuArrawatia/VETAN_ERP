@@ -4,6 +4,10 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -20,11 +24,15 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// server.ts
-var import_express2 = __toESM(require("express"), 1);
-var import_path3 = __toESM(require("path"), 1);
-var import_vite = require("vite");
+// api/server-entry.ts
+var server_entry_exports = {};
+__export(server_entry_exports, {
+  createApp: () => createApp,
+  getAppDb: () => getAppDb
+});
+module.exports = __toCommonJS(server_entry_exports);
 
 // server/app.ts
 var import_express = __toESM(require("express"), 1);
@@ -7647,6 +7655,9 @@ Sakar & SVN Group`;
 // server/app.ts
 var import_crypto3 = __toESM(require("crypto"), 1);
 var _dbRef = null;
+function getAppDb() {
+  return _dbRef;
+}
 async function createApp(supabaseAdmin) {
   const app = (0, import_express.default)();
   const db = new PayrollDatabase(supabaseAdmin);
@@ -11329,29 +11340,11 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
-
-// server.ts
-var PORT = 3e3;
-async function startServer() {
-  const app = await createApp();
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await (0, import_vite.createServer)({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = import_path3.default.join(process.cwd(), "dist");
-    app.use(import_express2.default.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(import_path3.default.join(distPath, "index.html"));
-    });
-  }
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server launched successfully on port ${PORT}`);
-  });
-}
-startServer();
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  createApp,
+  getAppDb
+});
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11362,11 +11355,4 @@ startServer();
  *
  * Express application factory — shared by local dev (server.ts) and
  * Vercel Serverless Functions (api/[[...]].ts).
- */
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- *
- * Local development server — imports the shared Express app from server/app.ts
- * and adds Vite dev middleware + static file serving.
  */
