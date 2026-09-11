@@ -252,9 +252,12 @@ export function CompanyMasterView({
     setError(null);
   };
 
-  const saveSetupWizard = async () => {
+  const saveSetupWizard = async (pinOverride?: string) => {
     setLoading(true);
     setError(null);
+    // PHASE-1 SECURITY FIX: company create/update now requires the Super Admin
+    // PIN server-side. Ask once, resend on PIN_INVALID, surface real errors
+    // (previously any failure silently went to the offline store).
 
     const compiledSettings = {
       departments: departmentsCsv,
@@ -286,7 +289,7 @@ export function CompanyMasterView({
       bank_ifsc: bankIfsc
     };
 
-    const payload = {
+    const payload: any = {
       id: compId.trim().toUpperCase(),
       name: name.trim(),
       unit_name: unitName.trim(),
@@ -309,6 +312,15 @@ export function CompanyMasterView({
 
       let response: Response | null = null;
       try {
+        let pin: string;
+        if (pinOverride !== undefined && pinOverride !== null) {
+          pin = pinOverride;
+        } else {
+          const entered = window.prompt('Super Admin Security PIN required to save company master data:', '');
+          if (entered === null) { setLoading(false); return; } // user cancelled
+          pin = entered;
+        }
+        payload.pin = pin;
         if (isEditing && selectedCompany) {
           response = await fetch(`/api/companies/${selectedCompany.id}`, {
             method: 'PUT',
@@ -344,8 +356,28 @@ export function CompanyMasterView({
 
       const apiOk = !!(response && response.ok && resData && (resData.success !== false));
       if (!apiOk) {
-        // Vercel has no Express /api — keep the edited legal name in offline store
-        await upsertOfflineCompany(payload);
+        // PHASE-1 FIX: distinguish real server rejections from offline mode.
+        // A PIN/auth rejection must NEVER be written to the offline store.
+        const status = response ? response.status : 0;
+        const isAuthReject = !response || status === 401 || status === 403;
+        if (resData?.error === 'PIN_INVALID') {
+          const retry = pinOverride === undefined
+            ? window.prompt('Invalid Security PIN. Re-enter Super Admin PIN:', '')
+            : null;
+          if (retry !== null && retry !== '') { await saveSetupWizard(retry); return; }
+          setError('Invalid Super Admin Security PIN. Company data was NOT saved.');
+          setLoading(false);
+          return;
+        }
+        if (isAuthReject && response) {
+          setError(resData?.message || resData?.error || 'Server rejected the save (authorization).');
+          setLoading(false);
+          return;
+        }
+        if (!isAuthReject) {
+          // true network/offline case — keep prior offline fallback behavior
+          await upsertOfflineCompany(payload);
+        }
       } else if (response && !response.ok) {
         throw new Error(resData?.error || 'Failed to save company settings');
       }

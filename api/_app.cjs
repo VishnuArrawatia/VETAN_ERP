@@ -26,15 +26,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// api/server-entry.ts
-var server_entry_exports = {};
-__export(server_entry_exports, {
+// server/app.ts
+var app_exports = {};
+__export(app_exports, {
   createApp: () => createApp,
+  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(server_entry_exports);
-
-// server/app.ts
+module.exports = __toCommonJS(app_exports);
 var import_express = __toESM(require("express"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -6378,7 +6377,26 @@ Sakar & SVN Group`;
     return this.data.users || [];
   }
   // --- Secure System Settings & PIN management ---
+  // PHASE-1 SECURITY FIX: settings are now read MEMORY-FIRST (this.data
+  // .system_settings, which is persisted to Supabase with the store), falling
+  // back to SQLite. Previously ONLY SQLite was consulted — on Vercel the
+  // SQLite handle is a Mock (no-op), so every getSystemSetting silently
+  // returned its DEFAULT (security_mode='testing', default PIN hash), making
+  // PIN verification and security toggles cosmetic rather than real.
+  _memorySetting(key) {
+    try {
+      const arr = this.data?.system_settings;
+      if (Array.isArray(arr)) {
+        const hit = arr.find((s) => s && s.key === key);
+        if (hit && hit.value != null) return String(hit.value);
+      }
+    } catch {
+    }
+    return null;
+  }
   getSystemSetting(key, defaultValue) {
+    const mem = this._memorySetting(key);
+    if (mem !== null) return Promise.resolve(mem);
     return new Promise((resolve) => {
       this.dbSqlite.all(`SELECT value FROM system_settings WHERE key = ?`, [key], (err, rows) => {
         if (err || !rows || rows.length === 0) {
@@ -6390,6 +6408,16 @@ Sakar & SVN Group`;
     });
   }
   setSystemSetting(key, value) {
+    try {
+      const dataAny = this.data;
+      if (dataAny && typeof dataAny === "object") {
+        if (!Array.isArray(dataAny.system_settings)) dataAny.system_settings = [];
+        const hit = dataAny.system_settings.find((s) => s && s.key === key);
+        if (hit) hit.value = value;
+        else dataAny.system_settings.push({ key, value });
+      }
+    } catch {
+    }
     return new Promise((resolve) => {
       this.dbSqlite.run(`INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)`, [key, value], () => {
         resolve();
@@ -7711,8 +7739,11 @@ async function createApp(supabaseAdmin) {
   });
   const PUBLIC_PATHS = [
     /^\/api\/employee\/login$/,
-    /^\/api\/hr\/login$/,
-    /^\/api\/settings\/security-mode$/
+    /^\/api\/hr\/login$/
+    // PHASE-1 SECURITY FIX: /api/settings/security-mode REMOVED from public
+    // paths — it was listed WITHOUT a method check, letting an anonymous POST
+    // flip production_security_enabled. It is now session-authenticated
+    // (global middleware) and SUPER_HR-only (route-level guard below).
   ];
   app.use((req, res, next) => {
     if (req.method === "OPTIONS") return next();
@@ -7767,15 +7798,29 @@ async function createApp(supabaseAdmin) {
     }
     next();
   });
+  const getOperatorRole = (req) => {
+    if (req.ess?.role) return String(req.ess.role);
+    const username = String(req.headers["x-operator-username"] || "").trim().toLowerCase();
+    if (username) {
+      const user = (db.data?.users || []).find((u) => String(u.username || "").toLowerCase() === username && !u.disabled);
+      if (user?.role) return user.role;
+    }
+    return "COMPANY_HR";
+  };
   async function verifyPin(pin) {
-    const isSecEnabled = await db.getSystemSetting("production_security_enabled", "0");
-    const securityMode = await db.getSystemSetting("security_mode", "testing");
-    if (isSecEnabled === "0" && securityMode !== "production") {
+    const bypassAllowed = process.env.VETAN_ALLOW_PIN_BYPASS === "1" && process.env.VERCEL !== "1";
+    if (bypassAllowed) {
+      console.warn("[verifyPin] PIN verification BYPASSED via VETAN_ALLOW_PIN_BYPASS (local-dev only).");
       return true;
     }
-    const hash = import_crypto3.default.createHash("sha256").update(String(pin || "")).digest("hex");
+    const provided = String(pin == null ? "" : pin).trim();
+    if (!provided) return false;
+    const hash = import_crypto3.default.createHash("sha256").update(provided).digest("hex");
     const storedHash = await db.getSystemSetting("super_admin_pin", import_crypto3.default.createHash("sha256").update("1234").digest("hex"));
-    return hash === storedHash;
+    const a = Buffer.from(hash, "hex");
+    const b = Buffer.from(String(storedHash || ""), "hex");
+    if (a.length !== b.length || a.length === 0) return false;
+    return import_crypto3.default.timingSafeEqual(a, b);
   }
   function getCompanyBrand(companyIdOrName) {
     const name = String(companyIdOrName || "").toUpperCase();
@@ -7939,6 +7984,10 @@ async function createApp(supabaseAdmin) {
   });
   app.put("/api/companies/:id", async (req, res) => {
     try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may update company master data." });
+      }
       const { id } = req.params;
       const { pin, ...updateData } = req.body;
       if (!await verifyPin(pin)) {
@@ -8183,10 +8232,6 @@ async function createApp(supabaseAdmin) {
         users = db.getUsers();
         user = users.find((u) => u.username.toLowerCase() === lowerUser);
       }
-      const userFound = user ? "Yes" : "No";
-      const passwordMatch = user && user.password === password ? "Yes" : "No";
-      const roleLoaded = user && user.role ? "Yes" : "No";
-      console.log(`[Diagnostic Log] Selected User: ${username}, User Found: ${userFound}, Password Match: ${passwordMatch}, Role Loaded: ${roleLoaded}`);
       if (!user) {
         return res.status(404).json({ success: false, error: "User Not Found" });
       }
@@ -8197,8 +8242,15 @@ async function createApp(supabaseAdmin) {
         return res.status(400).json({ success: false, error: "Role Missing" });
       }
       if (isSecEnabled) {
-        if (user.password !== password) {
+        if (!verifyPassword(String(password || ""), user.password)) {
           return res.status(401).json({ success: false, error: "Password Incorrect" });
+        }
+        if (user.password && !isHashed(user.password)) {
+          try {
+            db.syncUser({ ...user, password: hashPassword(String(password)) });
+            await db.persistDataSync();
+          } catch {
+          }
         }
       }
       db.logAudit("User Login", `User ${user.name} (${user.username}) successfully logged in`, user.name);
@@ -8230,6 +8282,7 @@ async function createApp(supabaseAdmin) {
       const newHash = import_crypto3.default.createHash("sha256").update(String(newPin)).digest("hex");
       await db.setSystemSetting("super_admin_pin", newHash);
       await db.setSystemSetting("pin_changed_from_default", "1");
+      await db.persistDataSync();
       db.logAudit("Security PIN Changed", "Super Admin Security PIN updated successfully", getOperator(req));
       res.json({ success: true, message: "Security PIN updated successfully." });
     } catch (e) {
@@ -8281,11 +8334,16 @@ async function createApp(supabaseAdmin) {
   });
   app.post("/api/settings/security-mode", async (req, res) => {
     try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") {
+        return res.status(403).json({ success: false, error: "Access Denied: Only Super Admin can modify production security settings." });
+      }
       const { enabled } = req.body;
       const value = enabled ? "1" : "0";
       await db.setSystemSetting("production_security_enabled", value);
+      await db.persistDataSync();
       const statusText = enabled ? "ENABLED" : "DISABLED";
-      db.logAudit("Security Change", `Production security was ${statusText}`, "System Settings");
+      db.logAudit("Security Change", `Production security was ${statusText}`, getOperator(req));
       res.json({ success: true, productionSecurityEnabled: enabled });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message });
@@ -8521,6 +8579,10 @@ async function createApp(supabaseAdmin) {
   });
   app.post("/api/admin/reset-employee-password", async (req, res) => {
     try {
+      const resetRole = getOperatorRole(req);
+      if (!["SUPER_HR", "COMPANY_HR", "MANAGEMENT"].includes(resetRole)) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required to reset employee passwords." });
+      }
       const { employeeId, newPassword } = req.body;
       if (!employeeId) {
         return res.status(400).json({ error: "Employee ID is required" });
@@ -8935,6 +8997,9 @@ async function createApp(supabaseAdmin) {
   });
   app.delete("/api/admin/attendance/:id", async (req, res) => {
     try {
+      if (!["SUPER_HR", "COMPANY_HR", "MANAGEMENT"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
       const { id } = req.params;
       const dbSqlite = db.dbSqlite;
       dbSqlite.run("DELETE FROM attendance WHERE id = ?", [id]);
@@ -8950,6 +9015,9 @@ async function createApp(supabaseAdmin) {
   });
   app.put("/api/admin/attendance/:id", async (req, res) => {
     try {
+      if (!["SUPER_HR", "COMPANY_HR", "MANAGEMENT"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
       const { id } = req.params;
       const updates = req.body;
       const dbSqlite = db.dbSqlite;
@@ -9738,6 +9806,9 @@ HR Department`;
     });
   });
   app.post("/api/sql/query", (req, res) => {
+    if (getOperatorRole(req) !== "SUPER_HR") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may execute SQL queries." });
+    }
     const { sql } = req.body;
     if (!sql || typeof sql !== "string") {
       return res.status(400).json({ error: "Invalid or missing SQL statement" });
@@ -10608,9 +10679,6 @@ HR Department`;
   const getOperator = (req) => {
     return req.headers["x-operator-name"] || req.body.operator || "Admin";
   };
-  const getOperatorRole = (req) => {
-    return req.headers["x-operator-role"] || "COMPANY_HR";
-  };
   const isHRLevelRole = (role) => ["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(String(role || ""));
   app.get("/api/gate-passes", (req, res) => {
     try {
@@ -10782,6 +10850,9 @@ HR Department`;
   });
   app.post("/api/admin/purge-employees", async (req, res) => {
     try {
+      if (getOperatorRole(req) !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may purge employee data." });
+      }
       const pin = req.headers["x-security-pin"] || req.query.pin || req.body.pin;
       if (!await verifyPin(pin)) {
         return res.status(403).json({ error: "PIN_INVALID", message: "Invalid or missing Super Admin Security PIN." });
@@ -10795,6 +10866,9 @@ HR Department`;
   });
   app.post("/api/admin/normalize-hod", async (req, res) => {
     try {
+      if (getOperatorRole(req) !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may run admin maintenance operations." });
+      }
       const result = db.normalizeAllReportingHods();
       res.json({ success: true, ...result, message: `Normalized ${result.normalized} employees, ${result.alreadyCorrect} already correct, ${result.failed.length} failed` });
     } catch (e) {
@@ -10803,6 +10877,9 @@ HR Department`;
   });
   app.post("/api/admin/fix-escalated-leaves", async (req, res) => {
     try {
+      if (getOperatorRole(req) !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may run admin maintenance operations." });
+      }
       const apps = db.data.leave_applications || [];
       let fixed = 0;
       for (const app2 of apps) {
@@ -10849,6 +10926,13 @@ HR Department`;
   });
   app.post("/api/restore-json", async (req, res) => {
     try {
+      if (getOperatorRole(req) !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only SUPER_HR may restore the database." });
+      }
+      const pin = req.headers["x-security-pin"] || req.query.pin || req.body?.pin;
+      if (!await verifyPin(pin)) {
+        return res.status(403).json({ error: "PIN_INVALID", message: "Invalid or missing Super Admin Security PIN." });
+      }
       const backupData = req.body;
       const operatorName = getOperator(req);
       if (!backupData || typeof backupData !== "object") {
@@ -11317,6 +11401,9 @@ HR Department`;
   });
   app.post("/api/admin/standardize-names", async (req, res) => {
     try {
+      if (getOperatorRole(req) !== "SUPER_HR") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may run admin maintenance operations." });
+      }
       const standardizeName = (name) => {
         if (!name) return name;
         return name.trim().replace(/\s+/g, " ").split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
@@ -11340,6 +11427,7 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
+var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,

@@ -6159,7 +6159,26 @@ Sakar & SVN Group`;
   }
 
   // --- Secure System Settings & PIN management ---
+  // PHASE-1 SECURITY FIX: settings are now read MEMORY-FIRST (this.data
+  // .system_settings, which is persisted to Supabase with the store), falling
+  // back to SQLite. Previously ONLY SQLite was consulted — on Vercel the
+  // SQLite handle is a Mock (no-op), so every getSystemSetting silently
+  // returned its DEFAULT (security_mode='testing', default PIN hash), making
+  // PIN verification and security toggles cosmetic rather than real.
+  private _memorySetting(key: string): string | null {
+    try {
+      const arr: any = (this.data as any)?.system_settings;
+      if (Array.isArray(arr)) {
+        const hit = arr.find((s: any) => s && s.key === key);
+        if (hit && hit.value != null) return String(hit.value);
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
   public getSystemSetting(key: string, defaultValue: string): Promise<string> {
+    const mem = this._memorySetting(key);
+    if (mem !== null) return Promise.resolve(mem);
     return new Promise<string>((resolve) => {
       this.dbSqlite.all(`SELECT value FROM system_settings WHERE key = ?`, [key], (err: any, rows: any[]) => {
         if (err || !rows || rows.length === 0) {
@@ -6172,6 +6191,17 @@ Sakar & SVN Group`;
   }
 
   public setSystemSetting(key: string, value: string): Promise<void> {
+    // PHASE-1 SECURITY FIX: mirror into this.data.system_settings so the value
+    // (a) is readable back memory-first even when SQLite is a Mock, and (b)
+    // travels with the next store persist to Supabase (survives cold starts).
+    try {
+      const dataAny = this.data as any;
+      if (dataAny && typeof dataAny === 'object') {
+        if (!Array.isArray(dataAny.system_settings)) dataAny.system_settings = [];
+        const hit = dataAny.system_settings.find((s: any) => s && s.key === key);
+        if (hit) hit.value = value; else dataAny.system_settings.push({ key, value });
+      }
+    } catch { /* memory mirror is best-effort */ }
     return new Promise<void>((resolve) => {
       this.dbSqlite.run(`INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)`, [key, value], () => {
         resolve();

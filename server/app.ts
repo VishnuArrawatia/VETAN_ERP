@@ -95,8 +95,11 @@ export async function createApp(supabaseAdmin?: any) {
   // headerless requests (curl/bots/anonymous) are blocked — closing V-1..V-5.
   const PUBLIC_PATHS = [
     /^\/api\/employee\/login$/,
-    /^\/api\/hr\/login$/,
-    /^\/api\/settings\/security-mode$/
+    /^\/api\/hr\/login$/
+    // PHASE-1 SECURITY FIX: /api/settings/security-mode REMOVED from public
+    // paths — it was listed WITHOUT a method check, letting an anonymous POST
+    // flip production_security_enabled. It is now session-authenticated
+    // (global middleware) and SUPER_HR-only (route-level guard below).
   ];
   app.use((req: any, res: any, next: any) => {
     if (req.method === 'OPTIONS') return next();
@@ -164,18 +167,45 @@ export async function createApp(supabaseAdmin?: any) {
     next();
   });
 
-    // Helper to verify PIN securely against database system settings
-  async function verifyPin(pin: any): Promise<boolean> {
-    const isSecEnabled = await db.getSystemSetting('production_security_enabled', '0');
-    const securityMode = await db.getSystemSetting('security_mode', 'testing');
-    // PIN is required only when EITHER production security OR security_mode='production'.
-    // Default (testing mode, sec disabled) => bypass, preserving existing behavior.
-    if (isSecEnabled === '0' && securityMode !== 'production') {
-      return true; // Bypass PIN verification in Testing Mode (default — unchanged)
+  // Operator role resolution — SERVER-SIDE ONLY (PHASE-1 SECURITY FIX).
+  // The client-supplied x-operator-role header is forgeable and must never be
+  // the authority for authorization. Resolution order:
+  //   1. Valid ESS session cookie (role from server user record)
+  //   2. Legacy header path: username → server-side user record → user's role
+  //   3. No identity => COMPANY_HR (least privilege; never SUPER_HR)
+  const getOperatorRole = (req: any) => {
+    if (req.ess?.role) return String(req.ess.role);
+    const username = String(req.headers['x-operator-username'] || '').trim().toLowerCase();
+    if (username) {
+      const user = (db.data?.users || []).find((u: any) => String(u.username || '').toLowerCase() === username && !u.disabled);
+      if (user?.role) return user.role;
     }
-    const hash = crypto.createHash('sha256').update(String(pin || '')).digest('hex');
+    return 'COMPANY_HR';
+  };
+
+    // Helper to verify PIN securely against database system settings.
+    // PHASE-1 SECURITY FIX (P0): FAIL-CLOSED. The previous implementation
+    // returned true (bypass) whenever security_mode != 'production', which left
+    // every PIN-guarded destructive route (purge/restore/delete/companies)
+    // open to ANY authenticated caller. Bypass now exists ONLY when the
+    // operator explicitly opts into local dev via VETAN_ALLOW_PIN_BYPASS=1.
+    // Requests can NEVER set/unset this via headers, body, cookies or query.
+  async function verifyPin(pin: any): Promise<boolean> {
+    // Testing-mode bypass is now gated on a SERVER-ONLY env var (never on a
+    // request-controlled flag) and never applies on Vercel (production env).
+    const bypassAllowed = process.env.VETAN_ALLOW_PIN_BYPASS === '1' && process.env.VERCEL !== '1';
+    if (bypassAllowed) {
+      console.warn('[verifyPin] PIN verification BYPASSED via VETAN_ALLOW_PIN_BYPASS (local-dev only).');
+      return true;
+    }
+    const provided = String(pin == null ? '' : pin).trim();
+    if (!provided) return false; // missing PIN => reject (fail-closed)
+    const hash = crypto.createHash('sha256').update(provided).digest('hex');
     const storedHash = await db.getSystemSetting('super_admin_pin', crypto.createHash('sha256').update('1234').digest('hex'));
-    return hash === storedHash;
+    const a = Buffer.from(hash, 'hex');
+    const b = Buffer.from(String(storedHash || ''), 'hex');
+    if (a.length !== b.length || a.length === 0) return false;
+    return crypto.timingSafeEqual(a, b); // constant-time compare (no string-timing leak)
   }
 
   // Security and Visibility Helpers
@@ -375,6 +405,10 @@ export async function createApp(supabaseAdmin?: any) {
 
   app.put('/api/companies/:id', async (req, res) => {
     try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may update company master data.' });
+      }
       const { id } = req.params;
       const { pin, ...updateData } = req.body;
       
@@ -650,13 +684,6 @@ export async function createApp(supabaseAdmin?: any) {
         user = users.find(u => u.username.toLowerCase() === lowerUser);
       }
 
-      const userFound = user ? 'Yes' : 'No';
-      const passwordMatch = user && user.password === password ? 'Yes' : 'No';
-      const roleLoaded = user && user.role ? 'Yes' : 'No';
-
-      // Temporary diagnostic log as requested
-      console.log(`[Diagnostic Log] Selected User: ${username}, User Found: ${userFound}, Password Match: ${passwordMatch}, Role Loaded: ${roleLoaded}`);
-
       if (!user) {
         return res.status(404).json({ success: false, error: 'User Not Found' });
       }
@@ -668,8 +695,20 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       if (isSecEnabled) {
-        if (user.password !== password) {
+        // PHASE-1 SECURITY FIX: server-side password verification (scrypt-aware,
+        // constant-time). Previously a raw string compare against the STORED
+        // value — scrypt-hashed passwords could never match, and the old
+        // diagnostic log leaked whether the stored password matched.
+        if (!verifyPassword(String(password || ''), (user as any).password)) {
           return res.status(401).json({ success: false, error: 'Password Incorrect' });
+        }
+        // Lazy migration: upgrade legacy plaintext to scrypt (zero lockout —
+        // the plaintext value just proved correct).
+        if ((user as any).password && !isHashed((user as any).password)) {
+          try {
+            db.syncUser({ ...(user as any), password: hashPassword(String(password)) } as any);
+            await db.persistDataSync();
+          } catch { /* best-effort; legacy compare still works next time */ }
         }
       }
       
@@ -711,6 +750,9 @@ export async function createApp(supabaseAdmin?: any) {
       const newHash = crypto.createHash('sha256').update(String(newPin)).digest('hex');
       await db.setSystemSetting('super_admin_pin', newHash);
       await db.setSystemSetting('pin_changed_from_default', '1');
+      // PHASE-1 SECURITY FIX: persist the new PIN to the cloud store —
+      // otherwise a serverless recycle silently reverts it to the default.
+      await db.persistDataSync();
 
       db.logAudit('Security PIN Changed', 'Super Admin Security PIN updated successfully', getOperator(req));
       res.json({ success: true, message: 'Security PIN updated successfully.' });
@@ -772,13 +814,20 @@ export async function createApp(supabaseAdmin?: any) {
   // Set security mode setting
   app.post('/api/settings/security-mode', async (req, res) => {
     try {
+      // PHASE-1 SECURITY FIX: this toggle controls whether passwords/PINs are
+      // enforced — it must be SUPER_HR-only (server-side role, not client headers).
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') {
+        return res.status(403).json({ success: false, error: 'Access Denied: Only Super Admin can modify production security settings.' });
+      }
       const { enabled } = req.body;
       const value = enabled ? '1' : '0';
       await db.setSystemSetting('production_security_enabled', value);
+      await db.persistDataSync(); // PHASE-1 FIX: persist the toggle immediately
       
       // Also log audit
       const statusText = enabled ? 'ENABLED' : 'DISABLED';
-      db.logAudit('Security Change', `Production security was ${statusText}`, 'System Settings');
+      db.logAudit('Security Change', `Production security was ${statusText}`, getOperator(req));
       
       res.json({ success: true, productionSecurityEnabled: enabled });
     } catch (e: any) {
@@ -1067,6 +1116,13 @@ export async function createApp(supabaseAdmin?: any) {
   // Admin Reset Employee Password API
   app.post('/api/admin/reset-employee-password', async (req, res) => {
     try {
+      // PHASE-1 SECURITY FIX: resetting an employee's password is an admin
+      // action — must be HR-level (SUPER_HR/COMPANY_HR/MANAGEMENT), never ESS.
+      // (ESS sessions are already blocked from /api/admin/* by the global layer.)
+      const resetRole = getOperatorRole(req);
+      if (!['SUPER_HR', 'COMPANY_HR', 'MANAGEMENT'].includes(resetRole)) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required to reset employee passwords.' });
+      }
       const { employeeId, newPassword } = req.body;
       if (!employeeId) {
         return res.status(400).json({ error: 'Employee ID is required' });
@@ -1540,6 +1596,9 @@ export async function createApp(supabaseAdmin?: any) {
   // ADMIN: Delete attendance record by ID
   app.delete('/api/admin/attendance/:id', async (req, res) => {
     try {
+      if (!['SUPER_HR', 'COMPANY_HR', 'MANAGEMENT'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
       const { id } = req.params;
       const dbSqlite = (db as any).dbSqlite;
       dbSqlite.run('DELETE FROM attendance WHERE id = ?', [id]);
@@ -1558,6 +1617,9 @@ export async function createApp(supabaseAdmin?: any) {
   // ADMIN: Update attendance record fields
   app.put('/api/admin/attendance/:id', async (req, res) => {
     try {
+      if (!['SUPER_HR', 'COMPANY_HR', 'MANAGEMENT'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
       const { id } = req.params;
       const updates = req.body;
       const dbSqlite = (db as any).dbSqlite;
@@ -2489,6 +2551,12 @@ HR Department`;
 
   // SQL console analyzer query entry
   app.post('/api/sql/query', (req, res) => {
+    // PHASE-1 SECURITY FIX: arbitrary SQL is a destructive admin surface.
+    // Previously it had NO role check — any authenticated identity could run
+    // DELETE/UPDATE against live tables. Now SUPER_HR-only, server-resolved.
+    if (getOperatorRole(req) !== 'SUPER_HR') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may execute SQL queries.' });
+    }
     const { sql } = req.body;
     if (!sql || typeof sql !== 'string') {
       return res.status(400).json({ error: 'Invalid or missing SQL statement' });
@@ -3520,10 +3588,7 @@ HR Department`;
   const getOperator = (req: any) => {
     return req.headers['x-operator-name'] || req.body.operator || 'Admin';
   };
-  
-  const getOperatorRole = (req: any) => {
-    return req.headers['x-operator-role'] || 'COMPANY_HR';
-  };
+
 
   // HR-level roles allowed to perform HR direct (override) leave approval.
   const isHRLevelRole = (role: string) => ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(String(role || ''));
@@ -3725,6 +3790,11 @@ HR Department`;
 
   app.post('/api/admin/purge-employees', async (req, res) => {
     try {
+      // PHASE-1 SECURITY FIX: purge wipes ALL employees+payroll — SUPER_HR-only
+      // (server-resolved role) in addition to the mandatory PIN.
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may purge employee data.' });
+      }
       const pin = req.headers['x-security-pin'] || req.query.pin || req.body.pin;
       if (!(await verifyPin(pin))) {
         return res.status(403).json({ error: 'PIN_INVALID', message: 'Invalid or missing Super Admin Security PIN.' });
@@ -3741,6 +3811,9 @@ HR Department`;
   // Admin: Normalize ALL employees' reporting_hod from names to IDs
   app.post('/api/admin/normalize-hod', async (req, res) => {
     try {
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may run admin maintenance operations.' });
+      }
       const result = db.normalizeAllReportingHods();
       res.json({ success: true, ...result, message: `Normalized ${result.normalized} employees, ${result.alreadyCorrect} already correct, ${result.failed.length} failed` });
     } catch (e: any) {
@@ -3751,6 +3824,9 @@ HR Department`;
   // One-time fix: Reset incorrectly auto-escalated leaves back to PENDING_HOD
   app.post('/api/admin/fix-escalated-leaves', async (req, res) => {
     try {
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may run admin maintenance operations.' });
+      }
       const apps = db.data.leave_applications || [];
       let fixed = 0;
       for (const app of apps) {
@@ -3802,6 +3878,16 @@ HR Department`;
 
   app.post('/api/restore-json', async (req, res) => {
     try {
+      // PHASE-1 SECURITY FIX: full-database overwrite is the most destructive
+      // operation in the system. It now requires BOTH SUPER_HR authority
+      // (server-resolved role — forge-proof) AND the Super Admin PIN.
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only SUPER_HR may restore the database.' });
+      }
+      const pin = req.headers['x-security-pin'] || req.query.pin || req.body?.pin;
+      if (!(await verifyPin(pin))) {
+        return res.status(403).json({ error: 'PIN_INVALID', message: 'Invalid or missing Super Admin Security PIN.' });
+      }
       const backupData = req.body;
       const operatorName = getOperator(req);
       
@@ -4260,6 +4346,9 @@ HR Department`;
   // Bulk name standardization endpoint
   app.post('/api/admin/standardize-names', async (req, res) => {
     try {
+      if (getOperatorRole(req) !== 'SUPER_HR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may run admin maintenance operations.' });
+      }
       const standardizeName = (name: string): string => {
         if (!name) return name;
         return name.trim().replace(/\s+/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
