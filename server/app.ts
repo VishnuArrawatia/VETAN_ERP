@@ -1605,6 +1605,10 @@ export async function createApp(supabaseAdmin?: any) {
       // Also remove from in-memory
       const data = (db as any).data;
       if (data.attendance) {
+        // PHASE-2B: record tombstone BEFORE removal so a stale instance's
+        // union-merge cannot resurrect this attendance row.
+        const doomed = data.attendance.find((a: any) => a.id === id);
+        if (doomed && typeof (db as any)._tombstone === 'function') (db as any)._tombstone('attendance', doomed);
         (db as any).data.attendance = data.attendance.filter((a: any) => a.id !== id);
       }
       await db.persistDataSync();

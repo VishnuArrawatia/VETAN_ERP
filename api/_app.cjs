@@ -24423,6 +24423,35 @@ function getEpoch(db, kind, sub) {
 var import_crypto2 = __toESM(require("crypto"), 1);
 
 // src/lib/storeMerge.ts
+function getTombstones(store) {
+  const t = store && typeof store === "object" ? store.tombstones : null;
+  return t && typeof t === "object" ? t : {};
+}
+function isTombstoned(tombstones, collection, item, storeTs) {
+  if (!item || typeof item !== "object") return false;
+  const coll = tombstones[collection];
+  if (!coll) return false;
+  const key = recordKey(item);
+  if (!key) return false;
+  const entry = coll[key];
+  if (!entry || !entry.deleted_at) return false;
+  const delT = Date.parse(entry.deleted_at);
+  if (Number.isNaN(delT)) return false;
+  const recT = recordTime(item);
+  if (recT !== null) return recT <= delT;
+  if (storeTs !== null && storeTs !== void 0 && !Number.isNaN(storeTs)) {
+    return delT >= storeTs;
+  }
+  return false;
+}
+function addTombstone(store, collection, item) {
+  if (!store || typeof store !== "object" || !item) return;
+  const key = recordKey(item);
+  if (!key) return;
+  if (!store.tombstones || typeof store.tombstones !== "object") store.tombstones = {};
+  if (!store.tombstones[collection] || typeof store.tombstones[collection] !== "object") store.tombstones[collection] = {};
+  store.tombstones[collection][key] = { deleted_at: (/* @__PURE__ */ new Date()).toISOString() };
+}
 function recordTime(item) {
   if (!item || typeof item !== "object") return null;
   let best = null;
@@ -24456,7 +24485,9 @@ function recordKey(item) {
   }
   return `json:${stableStringify(item)}`;
 }
-function mergeRecordArrays(base, incoming, prefer) {
+function mergeRecordArrays(base, incoming, prefer, opts) {
+  const tombstones = opts?.tombstones || {};
+  const collection = opts?.collection || "";
   const resultMap = /* @__PURE__ */ new Map();
   const order = [];
   const add = (item, source) => {
@@ -24465,6 +24496,10 @@ function mergeRecordArrays(base, incoming, prefer) {
     if (!key) return;
     const existing = resultMap.get(key);
     if (existing === void 0) {
+      if (collection) {
+        const storeTs = source === "base" ? opts?.baseTs : opts?.incomingTs;
+        if (isTombstoned(tombstones, collection, item, storeTs)) return;
+      }
       resultMap.set(key, item);
       order.push(key);
       return;
@@ -24488,7 +24523,16 @@ function mergeRecordArrays(base, incoming, prefer) {
   };
   for (const it of base ?? []) add(it, "base");
   for (const it of incoming ?? []) add(it, "incoming");
-  return order.map((k) => resultMap.get(k));
+  if (collection) {
+    const laterTs = [opts?.baseTs, opts?.incomingTs].filter((x) => x !== null && x !== void 0 && !Number.isNaN(x));
+    const boundTs = laterTs.length ? Math.max(...laterTs) : null;
+    for (const k of order) {
+      if (isTombstoned(tombstones, collection, resultMap.get(k), boundTs)) {
+        resultMap.delete(k);
+      }
+    }
+  }
+  return order.map((k) => resultMap.get(k)).filter((x) => x !== void 0);
 }
 function pickScalar(base, incoming, prefer) {
   if (base === void 0) return incoming;
@@ -24506,16 +24550,39 @@ function pickScalar(base, incoming, prefer) {
   }
   return prefer === "incoming" ? incoming : base;
 }
-function mergeStores(base, incoming, prefer = "incoming") {
+function mergeStores(base, incoming, prefer = "incoming", tsHints) {
   if (!base || typeof base !== "object") return incoming ? { ...incoming } : {};
   if (!incoming || typeof incoming !== "object") return { ...base };
+  const tb = {};
+  const tBase = getTombstones(base);
+  const tInc = getTombstones(incoming);
+  const colls = /* @__PURE__ */ new Set([...Object.keys(tBase), ...Object.keys(tInc)]);
+  for (const coll of colls) {
+    tb[coll] = {};
+    const bColl = tBase[coll] || {};
+    const iColl = tInc[coll] || {};
+    for (const k of /* @__PURE__ */ new Set([...Object.keys(bColl), ...Object.keys(iColl)])) {
+      const b = bColl[k], i = iColl[k];
+      if (b && i) {
+        const bt = Date.parse(b.deleted_at || ""), it = Date.parse(i.deleted_at || "");
+        tb[coll][k] = !Number.isNaN(it) && (Number.isNaN(bt) || it >= bt) ? i : b;
+      } else tb[coll][k] = b || i;
+    }
+  }
+  const baseStoreTs = tsHints?.baseTs !== void 0 ? tsHints.baseTs : Date.parse(base?.updated_at || "") || null;
+  const incStoreTs = tsHints?.incomingTs !== void 0 ? tsHints.incomingTs : Date.parse(incoming?.updated_at || "") || null;
+  const opts = { tombstones: tb, baseTs: baseStoreTs, incomingTs: incStoreTs };
   const keys = /* @__PURE__ */ new Set([...Object.keys(base), ...Object.keys(incoming)]);
   const merged = {};
   for (const key of keys) {
     const b = base[key];
     const i = incoming[key];
+    if (key === "tombstones") {
+      merged[key] = tb;
+      continue;
+    }
     if (Array.isArray(b) || Array.isArray(i)) {
-      merged[key] = mergeRecordArrays(Array.isArray(b) ? b : [], Array.isArray(i) ? i : [], prefer);
+      merged[key] = mergeRecordArrays(Array.isArray(b) ? b : [], Array.isArray(i) ? i : [], prefer, { ...opts, collection: key });
     } else {
       merged[key] = pickScalar(b, i, prefer);
     }
@@ -25149,6 +25216,12 @@ var PayrollDatabase = class _PayrollDatabase {
      *  Used to preserve in-flight human edits through OCC conflict merges — the
      *  core guarantee that a stale full-blob write cannot resurrect old profile values. */
     this._dirtyEmployeeIds = /* @__PURE__ */ new Set();
+    /** PHASE-2B: timestamps bounding how fresh this instance's UNTIMED record copies
+     *  can possibly be — loaded store version and last successful persist version.
+     *  Passed to mergeStores as baseTs so a tombstone newer than this bound
+     *  suppresses the stale (untimed) copy during OCC/RMW merges. */
+    this._storeLoadedTs = null;
+    this._storePersistedTs = null;
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
@@ -25172,6 +25245,12 @@ var PayrollDatabase = class _PayrollDatabase {
   static {
     this.MAX_CONFLICT_RETRIES = 3;
   }
+  _storeTsHint() {
+    const a = this._storeLoadedTs, b = this._storePersistedTs;
+    if (a === null) return b;
+    if (b === null) return a;
+    return Math.max(a, b);
+  }
   async init() {
     if (this.supabaseAdmin) {
       try {
@@ -25186,6 +25265,7 @@ var PayrollDatabase = class _PayrollDatabase {
           if (Array.isArray(payload.employees) && payload.employees.length > 0) {
             this.data = { ...this.data, ...payload };
             this._loadedVersion = row.updated_at || "";
+            this._storeLoadedTs = Date.parse(row.updated_at || "") || null;
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.loadedFromSeed = false;
@@ -27016,6 +27096,7 @@ var PayrollDatabase = class _PayrollDatabase {
       }
     );
     if (!this.data.users) this.data.users = [];
+    this._clearTombstone("users", user.id);
     const idx = this.data.users.findIndex((u) => u.id === user.id);
     if (idx !== -1) {
       this.data.users[idx] = user;
@@ -27025,6 +27106,8 @@ var PayrollDatabase = class _PayrollDatabase {
     this.persistData();
   }
   deleteUser(id) {
+    const doomed = (this.data.users || []).find((u) => u.id === id);
+    if (doomed) this._tombstone("users", doomed);
     this.dbSqlite.run(`DELETE FROM users WHERE id = ?`, [id], (err) => {
       if (err) console.error("SQLite Delete Error on Users:", err);
     });
@@ -27051,6 +27134,7 @@ var PayrollDatabase = class _PayrollDatabase {
       }
     );
     if (!this.data.hods) this.data.hods = [];
+    this._clearTombstone("hods", hod.id);
     const idx = this.data.hods.findIndex((h) => h.id === hod.id);
     if (idx !== -1) {
       this.data.hods[idx] = hod;
@@ -27060,6 +27144,8 @@ var PayrollDatabase = class _PayrollDatabase {
     this.persistData();
   }
   deleteHod(id) {
+    const doomed = (this.data.hods || []).find((h) => h.id === id);
+    if (doomed) this._tombstone("hods", doomed);
     this.dbSqlite.run(`DELETE FROM hods WHERE id = ?`, [id], (err) => {
       if (err) console.error("SQLite Delete Error on HODs:", err);
     });
@@ -27097,6 +27183,7 @@ var PayrollDatabase = class _PayrollDatabase {
       grace_time: Number(shift.grace_time || 0),
       weekly_off: shift.weekly_off || "Sunday"
     };
+    this._clearTombstone("shifts", cleanShift.code);
     if (idx !== -1) {
       this.data.shifts[idx] = cleanShift;
     } else {
@@ -27105,6 +27192,8 @@ var PayrollDatabase = class _PayrollDatabase {
     this.persistData();
   }
   deleteShift(code) {
+    const doomed = (this.data.shifts || []).find((s) => s.code.toUpperCase() === code.toUpperCase());
+    if (doomed) this._tombstone("shifts", doomed);
     this.dbSqlite.run(`DELETE FROM shifts WHERE code = ?`, [code.toUpperCase()]);
     if (this.data.shifts) {
       this.data.shifts = this.data.shifts.filter((s) => s.code.toUpperCase() !== code.toUpperCase());
@@ -27386,6 +27475,7 @@ var PayrollDatabase = class _PayrollDatabase {
       this.persistData();
       return "INACTIVATED";
     } else {
+      this._tombstone("employees", emp);
       this.data.employees.splice(idx, 1);
       this.data.attendance = this.data.attendance.filter((a) => a.employee_id !== id);
       this.data.payslips = this.data.payslips.filter((p) => p.employee_id !== id);
@@ -30407,8 +30497,61 @@ Sakar & SVN Group`;
     }
     return newRev;
   }
+  /**
+   * PHASE-2B: record a durable deletion tombstone before removing a record.
+   * Stored inside the store payload → persisted by the existing machinery →
+   * OCC merge suppresses any stale copy of this record from then on.
+   */
+  _tombstone(collection, item) {
+    try {
+      addTombstone(this.data, collection, item);
+    } catch (e) {
+      console.warn("[Tombstone] failed to record deletion:", e?.message || e);
+    }
+  }
+  /** PHASE-2B: deliberate re-creation of a deleted id — drop its tombstone. */
+  _clearTombstone(collection, keyValue) {
+    try {
+      const tb = getTombstones(this.data);
+      const coll = tb[collection];
+      if (!coll) return;
+      const key = recordKey(typeof keyValue === "object" && keyValue !== null ? keyValue : { [collection === "shifts" ? "code" : "id"]: keyValue });
+      if (coll[key]) {
+        delete coll[key];
+        console.log(`[Tombstone] cleared for ${collection}/${key} \u2014 deliberate re-creation.`);
+      }
+    } catch (e) {
+      console.warn("[Tombstone] clear failed:", e?.message || e);
+    }
+  }
+  /**
+   * PHASE-2B: after an OCC merge, drop this instance's in-flight employee edits
+   * for records that a REMOTE instance has deleted. The deletion wins; the edit
+   * was made against a copy the deleter had already removed. Returns the ids
+   * dropped (for logging).
+   */
+  _dropDirtyTombstonedEmployees(dirtySnapshot) {
+    const tbEmp = getTombstones(this.data).employees || {};
+    if (!Object.keys(tbEmp).length) return;
+    const emps = this.data.employees || [];
+    for (let i = emps.length - 1; i >= 0; i--) {
+      const e = emps[i];
+      if (!e || !dirtySnapshot.has(e.id)) continue;
+      const entry = tbEmp[e.id];
+      if (!entry || !entry.deleted_at) continue;
+      const delT = Date.parse(entry.deleted_at);
+      if (Number.isNaN(delT)) continue;
+      const recT = Date.parse(e.updated_at || "") || Number.POSITIVE_INFINITY;
+      if (recT <= delT) continue;
+      emps.splice(i, 1);
+      dirtySnapshot.delete(e.id);
+      console.warn(`[Tombstone] dropped in-flight edit of deleted employee ${e.id} (delete wins over stale edit).`);
+    }
+  }
   deleteSalaryRevision(id) {
     if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    const doomed = this.data.salary_revisions.find((r) => r.id === id);
+    if (doomed) this._tombstone("salary_revisions", doomed);
     this.data.salary_revisions = this.data.salary_revisions.filter((r) => r.id !== id);
     this.persistData();
     this.dbSqlite.run(`DELETE FROM salary_revisions WHERE id = ?`, [id], (err) => {
@@ -30613,6 +30756,8 @@ Sakar & SVN Group`;
     this.persistData();
   }
   deleteAsset(id) {
+    const doomed = (this.data.assets || []).find((a) => a.id === id);
+    if (doomed) this._tombstone("assets", doomed);
     if (this.data.assets) {
       this.data.assets = this.data.assets.filter((a) => a.id !== id);
     }
@@ -30642,6 +30787,8 @@ Sakar & SVN Group`;
     this.persistData();
   }
   deleteTravelReimbursement(id) {
+    const doomed = (this.data.travel_reimbursements || []).find((t) => t.id === id);
+    if (doomed) this._tombstone("travel_reimbursements", doomed);
     if (this.data.travel_reimbursements) {
       this.data.travel_reimbursements = this.data.travel_reimbursements.filter((t) => t.id !== id);
     }
@@ -30667,6 +30814,8 @@ Sakar & SVN Group`;
     this.persistData();
   }
   deleteBroadcast(id) {
+    const doomed = (this.data.broadcasts || []).find((b) => b.id === id);
+    if (doomed) this._tombstone("broadcasts", doomed);
     if (this.data.broadcasts) {
       this.data.broadcasts = this.data.broadcasts.filter((b) => b.id !== id);
     }
@@ -30942,13 +31091,14 @@ Sakar & SVN Group`;
             for (const e of this.data.employees || []) {
               if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
             }
-            this.data = mergeStores(this.data, rmwRow.payload, "base");
+            this.data = mergeStores(this.data, rmwRow.payload, "base", { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || "") || null });
             if (dirtySnapshot.size > 0) {
               const emps = this.data.employees || [];
               for (let i = 0; i < emps.length; i++) {
                 const local = dirtySnapshot.get(emps[i]?.id);
                 if (local) emps[i] = local;
               }
+              this._dropDirtyTombstonedEmployees(dirtySnapshot);
             }
             this._loadedVersion = rmwRow.updated_at || this._loadedVersion;
           }
@@ -30986,13 +31136,14 @@ Sakar & SVN Group`;
               for (const e of this.data.employees || []) {
                 if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
               }
-              this.data = mergeStores(this.data, remoteRow.payload, "base");
+              this.data = mergeStores(this.data, remoteRow.payload, "base", { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || "") || null });
               if (dirtySnapshot.size > 0) {
                 const emps = this.data.employees || [];
                 for (let i = 0; i < emps.length; i++) {
                   const local = dirtySnapshot.get(emps[i]?.id);
                   if (local) emps[i] = local;
                 }
+                this._dropDirtyTombstonedEmployees(dirtySnapshot);
               }
               this._loadedVersion = remoteRow.updated_at || "";
               console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} \u2192 ${this.data?.employees?.length || 0} employees, ${dirtySnapshot.size} in-flight edits preserved).`);
@@ -31007,6 +31158,7 @@ Sakar & SVN Group`;
           return { ok: false, error: `OCC conflict after ${this._conflictCount} retries`, conflict: true, lastPersistError: this.lastPersistError = `OCC conflict after ${this._conflictCount} retries` };
         }
         this._loadedVersion = newUpdatedAt;
+        this._storePersistedTs = Date.parse(newUpdatedAt) || null;
         this._conflictCount = 0;
         this._dirtyEmployeeIds.clear();
         this.lastPersistError = null;
@@ -31132,8 +31284,9 @@ Sakar & SVN Group`;
           console.log(`[Supabase] reloadFromSupabase SKIPPED (warm) \u2014 remote (${remoteUpdatedAt}) <= last loaded (${this.lastLoadedAt})`);
           return;
         }
-        this.data = mergeStores(this.data, row.payload, "incoming");
+        this.data = mergeStores(this.data, row.payload, "incoming", { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || "") || null });
         this._loadedVersion = remoteUpdatedAt || "";
+        this._storeLoadedTs = Date.parse(remoteUpdatedAt || "") || null;
         this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
         this.inMemoryOnly = true;
         console.log(`[Supabase] reloadFromSupabase OK \u2014 ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
@@ -31186,6 +31339,27 @@ Sakar & SVN Group`;
     this.writeLocalSnapshot(`pre-restore-${stamp}`);
     console.log(`[restoreFullBackupJSON] Pre-restore safety snapshot saved (${this.data?.employees?.length || 0} employees in current state).`);
     this.data = { ...this.data, ...backupData };
+    try {
+      const restoredTb = getTombstones(this.data);
+      const survivingTb = {};
+      for (const [coll, entries] of Object.entries(restoredTb)) {
+        const arr = this.data[coll];
+        if (!Array.isArray(arr)) {
+          survivingTb[coll] = entries;
+          continue;
+        }
+        const keys = new Set(arr.map((x) => recordKey(x)));
+        const kept = {};
+        for (const [k, e] of Object.entries(entries)) {
+          if (keys.has(k)) continue;
+          kept[k] = e;
+        }
+        survivingTb[coll] = kept;
+      }
+      this.data.tombstones = survivingTb;
+    } catch (e) {
+      console.warn("[restoreFullBackupJSON] tombstone reconciliation skipped:", e?.message || e);
+    }
     const runSql = (sql, params = []) => {
       return new Promise((resolve, reject) => {
         this.dbSqlite.run(sql, params, (err) => {
@@ -31784,6 +31958,19 @@ Sakar & SVN Group`;
     await runSql(`DELETE FROM overtime_requests`);
     await runSql(`DELETE FROM ff_settlements`);
     await runSql(`INSERT OR REPLACE INTO system_settings (key, value) VALUES ('database_seeded', '1')`);
+    for (const emp of this.data.employees || []) this._tombstone("employees", emp);
+    for (const att of this.data.attendance || []) this._tombstone("attendance", att);
+    for (const lv of this.data.leave_applications || []) this._tombstone("leave_applications", lv);
+    for (const pr of this.data.payroll_runs || []) this._tombstone("payroll_runs", pr);
+    for (const sl of this.data.payslips || []) this._tombstone("payslips", sl);
+    for (const ln of this.data.loans || []) this._tombstone("loans", ln);
+    for (const rv of this.data.salary_revisions || []) this._tombstone("salary_revisions", rv);
+    for (const as of this.data.assets || []) this._tombstone("assets", as);
+    for (const tr of this.data.travel_reimbursements || []) this._tombstone("travel_reimbursements", tr);
+    for (const ac of this.data.attendance_corrections || []) this._tombstone("attendance_corrections", ac);
+    for (const co of this.data.compoff_requests || []) this._tombstone("compoff_requests", co);
+    for (const ot of this.data.overtime_requests || []) this._tombstone("overtime_requests", ot);
+    for (const ff of this.data.ff_settlements || []) this._tombstone("ff_settlements", ff);
     await this.loadAllFromSQLite();
     this.persistData();
   }
@@ -33313,6 +33500,8 @@ async function createApp(supabaseAdmin) {
       dbSqlite.run("DELETE FROM attendance WHERE id = ?", [id]);
       const data = db.data;
       if (data.attendance) {
+        const doomed = data.attendance.find((a) => a.id === id);
+        if (doomed && typeof db._tombstone === "function") db._tombstone("attendance", doomed);
         db.data.attendance = data.attendance.filter((a) => a.id !== id);
       }
       await db.persistDataSync();

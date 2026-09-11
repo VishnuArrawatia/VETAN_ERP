@@ -8,7 +8,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { verifyPassword, isHashed, hashPassword } from './auth';
 import crypto from 'crypto';
-import { mergeStores } from '../src/lib/storeMerge';
+import { mergeStores, addTombstone, getTombstones, isTombstoned, recordKey } from '../src/lib/storeMerge';
 import { REGIME_CONFIGS, currentFY, fyMonths, buildForm16Income, computeNewRegimeTax } from './form16-engine';
 
 let sqlite3: any = null;
@@ -82,6 +82,8 @@ interface Schema {
   month_status?: MonthStatus[];
   attendance_upload_batches?: AttendanceUploadBatch[];
   company_worker_payroll?: any[];
+  /** PHASE-2B: durable deletion metadata — prevents stale-writer delete resurrection. */
+  tombstones?: Record<string, Record<string, { deleted_at: string }>>;
 }
 
 const SEED_EMPLOYEES: Employee[] = [
@@ -514,6 +516,20 @@ export class PayrollDatabase {
    *  core guarantee that a stale full-blob write cannot resurrect old profile values. */
   private _dirtyEmployeeIds: Set<string> = new Set();
 
+  /** PHASE-2B: timestamps bounding how fresh this instance's UNTIMED record copies
+   *  can possibly be — loaded store version and last successful persist version.
+   *  Passed to mergeStores as baseTs so a tombstone newer than this bound
+   *  suppresses the stale (untimed) copy during OCC/RMW merges. */
+  private _storeLoadedTs: number | null = null;
+  private _storePersistedTs: number | null = null;
+
+  private _storeTsHint(): number | null {
+    const a = this._storeLoadedTs, b = this._storePersistedTs;
+    if (a === null) return b;
+    if (b === null) return a;
+    return Math.max(a, b);
+  }
+
   /**
    * @param supabaseAdmin  Optional Supabase client (service_role key).
    *                       When provided, init() loads from Supabase and
@@ -539,14 +555,13 @@ export class PayrollDatabase {
           .eq('id', 'live')
           .maybeSingle();
 
-        const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
-
-        if (!error && row?.payload && typeof row.payload === 'object') {
-          const payload = row.payload;
-          if (Array.isArray(payload.employees) && payload.employees.length > 0) {
-            this.data = { ...this.data, ...payload };
-            // OPTIMISTIC CONCURRENCY: track which version we loaded
-            this._loadedVersion = row.updated_at || '';
+        const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);          if (!error && row?.payload && typeof row.payload === 'object') {
+            const payload = row.payload;
+            if (Array.isArray(payload.employees) && payload.employees.length > 0) {
+              this.data = { ...this.data, ...payload };
+              // OPTIMISTIC CONCURRENCY: track which version we loaded
+              this._loadedVersion = row.updated_at || '';
+              this._storeLoadedTs = Date.parse(row.updated_at || '') || null;
             // Use MockDatabase so sync calls are no-ops
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
@@ -2321,6 +2336,8 @@ export class PayrollDatabase {
     );
     
     if (!this.data.users) this.data.users = [];
+    // PHASE-2B: see syncHod — recreate-intent clears the tombstone.
+    this._clearTombstone('users', user.id);
     const idx = this.data.users.findIndex(u => u.id === user.id);
     if (idx !== -1) {
       this.data.users[idx] = user;
@@ -2331,6 +2348,8 @@ export class PayrollDatabase {
   }
 
   public deleteUser(id: string) {
+    const doomed = (this.data.users || []).find(u => u.id === id);
+    if (doomed) this._tombstone('users', doomed);
     this.dbSqlite.run(`DELETE FROM users WHERE id = ?`, [id], (err: any) => {
       if (err) console.error('SQLite Delete Error on Users:', err);
     });
@@ -2357,6 +2376,11 @@ export class PayrollDatabase {
     );
     
     if (!this.data.hods) this.data.hods = [];
+    // PHASE-2B: a tombstoned id being upserted by an instance that HOLDS the
+    // tombstone is a deliberate re-creation → clear it. An instance that does
+    // NOT hold the tombstone is stale; its copy stays unstamped so the merge
+    // (untimed + pre-deletion store version) suppresses it — no resurrection.
+    this._clearTombstone('hods', hod.id);
     const idx = this.data.hods.findIndex(h => h.id === hod.id);
     if (idx !== -1) {
       this.data.hods[idx] = hod;
@@ -2367,6 +2391,8 @@ export class PayrollDatabase {
   }
 
   public deleteHod(id: string) {
+    const doomed = (this.data.hods || []).find(h => h.id === id);
+    if (doomed) this._tombstone('hods', doomed);
     this.dbSqlite.run(`DELETE FROM hods WHERE id = ?`, [id], (err: any) => {
       if (err) console.error('SQLite Delete Error on HODs:', err);
     });
@@ -2404,6 +2430,8 @@ export class PayrollDatabase {
       grace_time: Number(shift.grace_time || 0),
       weekly_off: shift.weekly_off || 'Sunday'
     };
+    // PHASE-2B: see syncHod — recreate-intent clears the tombstone (keyed by code).
+    this._clearTombstone('shifts', cleanShift.code);
     if (idx !== -1) {
       this.data.shifts[idx] = cleanShift;
     } else {
@@ -2413,6 +2441,8 @@ export class PayrollDatabase {
   }
 
   public deleteShift(code: string): boolean {
+    const doomed = (this.data.shifts || []).find(s => s.code.toUpperCase() === code.toUpperCase());
+    if (doomed) this._tombstone('shifts', doomed);
     this.dbSqlite.run(`DELETE FROM shifts WHERE code = ?`, [code.toUpperCase()]);
     if (this.data.shifts) {
       this.data.shifts = this.data.shifts.filter(s => s.code.toUpperCase() !== code.toUpperCase());
@@ -2700,6 +2730,7 @@ export class PayrollDatabase {
       this.persistData();
       return 'INACTIVATED';
     } else {
+      this._tombstone('employees', emp);
       this.data.employees.splice(idx, 1);
       this.data.attendance = this.data.attendance.filter(a => a.employee_id !== id);
       this.data.payslips = this.data.payslips.filter(p => p.employee_id !== id);
@@ -5867,8 +5898,64 @@ Sakar & SVN Group`;
     return newRev;
   }
 
+  /**
+   * PHASE-2B: record a durable deletion tombstone before removing a record.
+   * Stored inside the store payload → persisted by the existing machinery →
+   * OCC merge suppresses any stale copy of this record from then on.
+   */
+  private _tombstone(collection: string, item: any): void {
+    try {
+      addTombstone(this.data, collection, item);
+    } catch (e: any) {
+      console.warn('[Tombstone] failed to record deletion:', e?.message || e);
+    }
+  }
+
+  /** PHASE-2B: deliberate re-creation of a deleted id — drop its tombstone. */
+  private _clearTombstone(collection: string, keyValue: any): void {
+    try {
+      const tb = getTombstones(this.data);
+      const coll = tb[collection];
+      if (!coll) return;
+      const key = recordKey(typeof keyValue === 'object' && keyValue !== null ? keyValue : { [collection === 'shifts' ? 'code' : 'id']: keyValue });
+      if (coll[key]) {
+        delete coll[key];
+        console.log(`[Tombstone] cleared for ${collection}/${key} — deliberate re-creation.`);
+      }
+    } catch (e: any) {
+      console.warn('[Tombstone] clear failed:', e?.message || e);
+    }
+  }
+
+  /**
+   * PHASE-2B: after an OCC merge, drop this instance's in-flight employee edits
+   * for records that a REMOTE instance has deleted. The deletion wins; the edit
+   * was made against a copy the deleter had already removed. Returns the ids
+   * dropped (for logging).
+   */
+  private _dropDirtyTombstonedEmployees(dirtySnapshot: Map<string, any>): void {
+    const tbEmp = getTombstones(this.data).employees || {};
+    if (!Object.keys(tbEmp).length) return;
+    const emps = (this.data.employees || []) as any[];
+    for (let i = emps.length - 1; i >= 0; i--) {
+      const e = emps[i];
+      if (!e || !dirtySnapshot.has(e.id)) continue;
+      const entry = tbEmp[e.id];
+      if (!entry || !entry.deleted_at) continue;
+      const delT = Date.parse(entry.deleted_at);
+      if (Number.isNaN(delT)) continue;
+      const recT = Date.parse((e as any).updated_at || '') || Number.POSITIVE_INFINITY;
+      if (recT <= delT) continue; // older than deletion — merge already handled it
+      emps.splice(i, 1);
+      dirtySnapshot.delete(e.id);
+      console.warn(`[Tombstone] dropped in-flight edit of deleted employee ${e.id} (delete wins over stale edit).`);
+    }
+  }
+
   public deleteSalaryRevision(id: string): void {
     if (!this.data.salary_revisions) this.data.salary_revisions = [];
+    const doomed = this.data.salary_revisions.find(r => r.id === id);
+    if (doomed) this._tombstone('salary_revisions', doomed);
     this.data.salary_revisions = this.data.salary_revisions.filter(r => r.id !== id);
     this.persistData();
     this.dbSqlite.run(`DELETE FROM salary_revisions WHERE id = ?`, [id], (err: any) => {
@@ -6105,6 +6192,8 @@ Sakar & SVN Group`;
   }
 
   public deleteAsset(id: string): void {
+    const doomed = (this.data.assets || []).find(a => a.id === id);
+    if (doomed) this._tombstone('assets', doomed);
     if (this.data.assets) {
       this.data.assets = this.data.assets.filter(a => a.id !== id);
     }
@@ -6140,6 +6229,8 @@ Sakar & SVN Group`;
   }
 
   public deleteTravelReimbursement(id: string): void {
+    const doomed = (this.data.travel_reimbursements || []).find(t => t.id === id);
+    if (doomed) this._tombstone('travel_reimbursements', doomed);
     if (this.data.travel_reimbursements) {
       this.data.travel_reimbursements = this.data.travel_reimbursements.filter(t => t.id !== id);
     }
@@ -6171,6 +6262,8 @@ Sakar & SVN Group`;
   }
 
   public deleteBroadcast(id: string): void {
+    const doomed = (this.data.broadcasts || []).find(b => b.id === id);
+    if (doomed) this._tombstone('broadcasts', doomed);
     if (this.data.broadcasts) {
       this.data.broadcasts = this.data.broadcasts.filter(b => b.id !== id);
     }
@@ -6490,13 +6583,19 @@ Sakar & SVN Group`;
             for (const e of (this.data.employees || []) as any[]) {
               if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
             }
-            this.data = mergeStores(this.data, rmwRow.payload, 'base');
+            this.data = mergeStores(this.data, rmwRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || '') || null });
             if (dirtySnapshot.size > 0) {
               const emps = (this.data.employees || []) as any[];
               for (let i = 0; i < emps.length; i++) {
                 const local = dirtySnapshot.get(emps[i]?.id);
                 if (local) emps[i] = local;
               }
+              // PHASE-2B: a delete on ANOTHER instance wins over this instance's
+              // in-flight edits to the same record — the edit raced a deletion it
+              // never saw, and re-applying it would resurrect the deleted record.
+              // Legitimate re-creation goes through insertEmployee (new record),
+              // never through updateEmployee of a tombstoned id.
+              this._dropDirtyTombstonedEmployees(dirtySnapshot);
             }
             this._loadedVersion = rmwRow.updated_at || this._loadedVersion;
           }
@@ -6558,13 +6657,16 @@ Sakar & SVN Group`;
               for (const e of (this.data.employees || []) as any[]) {
                 if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
               }
-              this.data = mergeStores(this.data, remoteRow.payload, 'base');
+              this.data = mergeStores(this.data, remoteRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || '') || null });
               if (dirtySnapshot.size > 0) {
                 const emps = (this.data.employees || []) as any[];
                 for (let i = 0; i < emps.length; i++) {
                   const local = dirtySnapshot.get(emps[i]?.id);
                   if (local) emps[i] = local;
                 }
+                // PHASE-2B: see _dropDirtyTombstonedEmployees — delete wins over
+                // a stale in-flight edit of the same record.
+                this._dropDirtyTombstonedEmployees(dirtySnapshot);
               }
               this._loadedVersion = remoteRow.updated_at || '';
               console.log(`[Supabase] Merged remote changes into local state (${beforeEmployees} → ${this.data?.employees?.length || 0} employees, ${dirtySnapshot.size} in-flight edits preserved).`);
@@ -6581,6 +6683,7 @@ Sakar & SVN Group`;
 
         // Success — update version tracker and mark persist time
         this._loadedVersion = newUpdatedAt;
+        this._storePersistedTs = Date.parse(newUpdatedAt) || null;
         this._conflictCount = 0;
         this._dirtyEmployeeIds.clear();
         this.lastPersistError = null;
@@ -6751,8 +6854,9 @@ Sakar & SVN Group`;
         // mutation whose cloud write was still in flight, or data a previous persist
         // failed to upload). Same-ID conflicts prefer the remote copy on an idle
         // reload because the remote is the shared source of truth.
-        this.data = mergeStores(this.data, row.payload, 'incoming');
+        this.data = mergeStores(this.data, row.payload, 'incoming', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || '') || null });
         this._loadedVersion = remoteUpdatedAt || '';
+        this._storeLoadedTs = Date.parse(remoteUpdatedAt || '') || null;
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
         console.log(`[Supabase] reloadFromSupabase OK — ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
@@ -6819,6 +6923,30 @@ Sakar & SVN Group`;
 
     // 1. Update in-memory data
     this.data = { ...this.data, ...backupData };
+    // PHASE-2B: restore is an intentional, authorized re-introduction of the
+    // backup's records — drop tombstones for any record the restore brings
+    // back (restore must always be able to restore). Tombstones for records
+    // NOT present in the backup remain authoritative, so a later stale writer
+    // still cannot resurrect records deleted after that backup was taken.
+    // Phase-1 restore gating (SUPER_HR + PIN) is untouched.
+    try {
+      const restoredTb = getTombstones(this.data);
+      const survivingTb: Record<string, Record<string, { deleted_at: string }>> = {};
+      for (const [coll, entries] of Object.entries(restoredTb)) {
+        const arr = (this.data as any)[coll];
+        if (!Array.isArray(arr)) { survivingTb[coll] = entries; continue; }
+        const keys = new Set(arr.map((x: any) => recordKey(x)));
+        const kept: Record<string, { deleted_at: string }> = {};
+        for (const [k, e] of Object.entries(entries)) {
+          if (keys.has(k)) continue; // restored record → intentional re-introduction
+          kept[k] = e;
+        }
+        survivingTb[coll] = kept;
+      }
+      (this.data as any).tombstones = survivingTb;
+    } catch (e: any) {
+      console.warn('[restoreFullBackupJSON] tombstone reconciliation skipped:', e?.message || e);
+    }
 
     // 2. Clear and rewrite tables in SQLite
     const runSql = (sql: string, params: any[] = []): Promise<void> => {
@@ -7327,6 +7455,22 @@ Sakar & SVN Group`;
     await runSql(`DELETE FROM overtime_requests`);
     await runSql(`DELETE FROM ff_settlements`);
     await runSql(`INSERT OR REPLACE INTO system_settings (key, value) VALUES ('database_seeded', '1')`);
+
+    // PHASE-2B: every purged employee record leaves a durable tombstone so a
+    // stale instance's union-merge cannot resurrect the pre-purge dataset.
+    for (const emp of (this.data.employees || [])) this._tombstone('employees', emp);
+    for (const att of (this.data.attendance || [])) this._tombstone('attendance', att);
+    for (const lv of (this.data.leave_applications || [])) this._tombstone('leave_applications', lv);
+    for (const pr of (this.data.payroll_runs || [])) this._tombstone('payroll_runs', pr);
+    for (const sl of (this.data.payslips || [])) this._tombstone('payslips', sl);
+    for (const ln of (this.data.loans || [])) this._tombstone('loans', ln);
+    for (const rv of (this.data.salary_revisions || [])) this._tombstone('salary_revisions', rv);
+    for (const as of (this.data.assets || [])) this._tombstone('assets', as);
+    for (const tr of (this.data.travel_reimbursements || [])) this._tombstone('travel_reimbursements', tr);
+    for (const ac of (this.data.attendance_corrections || [])) this._tombstone('attendance_corrections', ac);
+    for (const co of (this.data.compoff_requests || [])) this._tombstone('compoff_requests', co);
+    for (const ot of (this.data.overtime_requests || [])) this._tombstone('overtime_requests', ot);
+    for (const ff of (this.data.ff_settlements || [])) this._tombstone('ff_settlements', ff);
 
     // Reload all from SQLite to ensure memory arrays are cleared
     await this.loadAllFromSQLite();
