@@ -97,7 +97,7 @@ const probes: Probe[] = [
   { name: 'HOD',        create: { method: 'POST', path: '/api/hods',      body: { name: 'Test HOD QA', department: 'QA-Dept', company: 'SVN-1', active: true } }, listPath: '/api/hods',        find: (x) => x.name === 'Test HOD QA' },
   { name: 'User',       create: { method: 'POST', path: '/api/hr/users',  body: { username: 'qa_user_test', name: 'QA User', role: 'HR', password: 'x12345', company_rights: ['SVN-1'] } }, listPath: '/api/hr/users', find: (x) => x.username === 'qa_user_test' },
   { name: 'Shift',      create: { method: 'POST', path: '/api/shifts',    body: { code: 'QA-SHIFT', name: 'QA Shift', start_time: '09:00', end_time: '18:00' } }, listPath: '/api/shifts',      find: (x) => x.code === 'QA-SHIFT' },
-  { name: 'Department', create: { method: 'POST', path: '/api/departments', body: { department: 'QA Department' } }, listPath: '/api/departments', find: (x) => x.name === 'QA Department' || x.department === 'QA Department' },
+  { name: 'Department', create: { method: 'POST', path: '/api/departments', body: { department: 'QA Department' } }, listPath: '/api/departments', find: (x) => x === 'QA Department' || x?.name === 'QA Department' || x?.department === 'QA Department' },
   { name: 'Company',    create: { method: 'POST', path: '/api/companies', body: { id: 'QA1', name: 'QA Company Ltd', pin: '1234' } }, listPath: '/api/companies',    find: (x) => x.name === 'QA Company Ltd' } // PHASE-1: company create now requires Super Admin PIN (default '1234' in isolated db)
 ];
 

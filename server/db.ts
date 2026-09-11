@@ -3040,6 +3040,8 @@ export class PayrollDatabase {
       this.data.departments.push(cleanDept);
       this.dbSqlite.run(`INSERT OR IGNORE INTO departments (name) VALUES (?)`, [cleanDept]);
     }
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return this.data.departments;
   }
 
@@ -3487,6 +3489,8 @@ export class PayrollDatabase {
     }
     this.setMonthStatusState(company, month, 'FINALIZED', actor);
     this.logAudit('Workforce Finalized', `Worker attendance finalized for ${company} ${month}`, actor || 'HR');
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return {
       month, company, state: 'FINALIZED', finalized_at: new Date().toISOString(),
       roster_workers: report.rows.length,
@@ -3661,14 +3665,12 @@ export class PayrollDatabase {
     } else {
       this.data.attendance.push(att);
     }
-    // Persist to Supabase
-    if (this.supabaseAdmin) {
-      this.supabaseAdmin.from('vetan_erp_store').upsert({
-        id: 'live',
-        payload: JSON.stringify(this.data),
-        updated_at: new Date().toISOString()
-      });
-    }
+    // PHASE-2A: persist-before-success. The previous custom fire-and-forget
+    // upsert bypassed OCC conflict detection, single-flight coalescing and the
+    // retry path — and its errors were silently ignored. persistData() routes
+    // the write through the standard persistence machinery; the FlushMiddleware
+    // awaits it before the API responds. NO business/calculation change.
+    this.persistData();
   }
 
   public saveAttendance(bulk: Attendance[]) {
@@ -4314,6 +4316,8 @@ export class PayrollDatabase {
     this.dbSqlite.run(`INSERT INTO compoff_requests (id, employee_id, employee_name, company, date, reason, applied_date, reporting_hod, reporting_hod_name, status, escalated_reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [req.id, req.employee_id, req.employee_name, req.company, req.date, req.reason, req.applied_date, req.reporting_hod || null, req.reporting_hod_name || null, req.status]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return req;
   }
 
@@ -4363,6 +4367,8 @@ export class PayrollDatabase {
     this.dbSqlite.run(`UPDATE compoff_requests SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
       [req.status, req.hod_approved_date || null, req.hr_approved_date || null, req.hod_id || null, req.hr_id || null, id]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return true;
   }
 
@@ -4393,6 +4399,8 @@ export class PayrollDatabase {
     this.dbSqlite.run(`INSERT INTO overtime_requests (id, employee_id, employee_name, company, date, hours, reason, applied_date, reporting_hod, reporting_hod_name, status, escalated_reminder_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [req.id, req.employee_id, req.employee_name, req.company, req.date, req.hours, req.reason, req.applied_date, req.reporting_hod || null, req.reporting_hod_name || null, req.status]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return req;
   }
 
@@ -4465,6 +4473,8 @@ export class PayrollDatabase {
     this.dbSqlite.run(`UPDATE overtime_requests SET status = ?, hod_approved_date = ?, hr_approved_date = ?, hod_id = ?, hr_id = ? WHERE id = ?`,
       [req.status, req.hod_approved_date || null, req.hr_approved_date || null, req.hod_id || null, req.hr_id || null, id]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return true;
   }
 
@@ -5503,6 +5513,8 @@ Sakar & SVN Group`;
       [c.id, c.name, c.unit_name, c.logo, c.registered_office, c.factory_address, c.gst_number, c.pan_number, c.tan_number, c.cin_number, c.pf_number, c.esic_number, c.pt_number, c.settings || ''],
       (err: any) => { if (err) console.error('SQLite Sync Error on adding Company:', err); }
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return c;
   }
 
@@ -5517,6 +5529,8 @@ Sakar & SVN Group`;
       [c.id, c.name, c.unit_name, c.logo, c.registered_office, c.factory_address, c.gst_number, c.pan_number, c.tan_number, c.cin_number, c.pf_number, c.esic_number, c.pt_number, c.settings || ''],
       (err: any) => { if (err) console.error('SQLite Sync Error on Companies:', err); }
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return c;
   }
 
@@ -6086,6 +6100,8 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO assets (id, employee_id, employee_name, asset_name, serial_number, type, issue_date, return_date, status, condition) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [asset.id, asset.employee_id, asset.employee_name, asset.asset_name, asset.serial_number, asset.type, asset.issue_date, asset.return_date || null, asset.status, asset.condition]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   public deleteAsset(id: string): void {
@@ -6093,6 +6109,8 @@ Sakar & SVN Group`;
       this.data.assets = this.data.assets.filter(a => a.id !== id);
     }
     this.dbSqlite.run(`DELETE FROM assets WHERE id = ?`, [id]);
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   // --- Travel Allowance ---
@@ -6117,6 +6135,8 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO travel_reimbursements (id, employee_id, employee_name, month, fuel_liters, rate_per_liter, amount, travel_purpose, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [reimb.id, reimb.employee_id, reimb.employee_name, reimb.month, reimb.fuel_liters, reimb.rate_per_liter, reimb.amount, reimb.travel_purpose, reimb.status]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   public deleteTravelReimbursement(id: string): void {
@@ -6124,6 +6144,8 @@ Sakar & SVN Group`;
       this.data.travel_reimbursements = this.data.travel_reimbursements.filter(t => t.id !== id);
     }
     this.dbSqlite.run(`DELETE FROM travel_reimbursements WHERE id = ?`, [id]);
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   // --- Broadcasts/Notice Board ---
@@ -6144,6 +6166,8 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO broadcasts (id, title, message, target_type, target_value, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [notice.id, notice.title, notice.message, notice.target_type, notice.target_value, notice.created_at, notice.created_by]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   public deleteBroadcast(id: string): void {
@@ -6151,6 +6175,8 @@ Sakar & SVN Group`;
       this.data.broadcasts = this.data.broadcasts.filter(b => b.id !== id);
     }
     this.dbSqlite.run(`DELETE FROM broadcasts WHERE id = ?`, [id]);
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
   }
 
   // --- Users management ---
@@ -6504,6 +6530,7 @@ Sakar & SVN Group`;
         if (error) {
           const msg = error.message || String(error);
           console.error(`[Supabase] persist attempt ${attempt}/${maxRetries} FAILED:`, msg);
+          this.lastPersistError = msg; // PHASE-2A: surface failure to FlushMiddleware (prevents fake success)
           if (attempt < maxRetries) {
             await new Promise(r => setTimeout(r, 1000 * attempt));
             continue;
@@ -6549,7 +6576,7 @@ Sakar & SVN Group`;
             await new Promise(r => setTimeout(r, 500 * attempt));
             continue;
           }
-          return { ok: false, error: `OCC conflict after ${this._conflictCount} retries`, conflict: true };
+          return { ok: false, error: `OCC conflict after ${this._conflictCount} retries`, conflict: true, lastPersistError: (this.lastPersistError = `OCC conflict after ${this._conflictCount} retries`) } as any;
         }
 
         // Success — update version tracker and mark persist time
@@ -6563,6 +6590,7 @@ Sakar & SVN Group`;
       } catch (e: any) {
         const msg = e?.message || String(e);
         console.error(`[Supabase] persist attempt ${attempt}/${maxRetries} EXCEPTION:`, msg);
+        this.lastPersistError = msg; // PHASE-2A: surface failure to FlushMiddleware (prevents fake success)
         if (attempt < maxRetries) {
           await new Promise(r => setTimeout(r, 1000 * attempt));
           continue;
@@ -7302,6 +7330,9 @@ Sakar & SVN Group`;
 
     // Reload all from SQLite to ensure memory arrays are cleared
     await this.loadAllFromSQLite();
+    // PHASE-2A: persist-before-success — purge must reach the authoritative
+    // cloud store, otherwise a recycle can resurrect the pre-purge dataset.
+    this.persistData();
   }
 
   // Comp-off Ledger Operations
@@ -7383,6 +7414,8 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO policies (id, name, content, pdf_url, version, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [newPolicy.id, newPolicy.name, newPolicy.content, newPolicy.pdf_url, newPolicy.version, newPolicy.is_archived, newPolicy.created_at, newPolicy.updated_at]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return newPolicy;
   }
 
@@ -7416,6 +7449,8 @@ Sakar & SVN Group`;
       `INSERT OR REPLACE INTO policy_acknowledgements (id, employee_id, policy_name, read_date, acknowledgement_date, version) VALUES (?, ?, ?, ?, ?, ?)`,
       [newAck.id, newAck.employee_id, newAck.policy_name, newAck.read_date, newAck.acknowledgement_date, newAck.version]
     );
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return newAck;
   }
 
@@ -7466,6 +7501,8 @@ Sakar & SVN Group`;
       ]
     );
 
+    // PHASE-2A: persist-before-success — previously memory-only (lost on recycle)
+    this.persistData();
     return newPass;
   }
 
@@ -7494,6 +7531,9 @@ Sakar & SVN Group`;
         pass.out_gate_security_id, pass.in_gate_security_id, pass.return_out_gate_security_id, pass.return_in_gate_security_id, id
       ]
     );
+    // PHASE-2A: persist-before-success — route also persists (sync); this makes
+    // the function safe when invoked directly (double persist is single-flight coalesced)
+    this.persistData();
     return true;
   }
 }
