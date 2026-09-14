@@ -2336,12 +2336,14 @@ export async function createApp(supabaseAdmin?: any) {
       if (department && department !== 'ALL') rows = rows.filter((b: any) => (b.department || '') === department);
       rows = rows.slice().sort((a: any, b: any) => (a.month || '').localeCompare(b.month || '') || String(a.employee_name || '').localeCompare(String(b.employee_name || '')));
 
-      const manualTotal = rows.filter((b: any) => b.source === 'MANUAL').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
-      const autoTotal = rows.filter((b: any) => b.source === 'SALARY_AUTO').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      // Legacy rows written by payroll before the source field existed are SALARY_AUTO by origin.
+      const srcOf = (b: any) => (b.source === 'MANUAL' ? 'MANUAL' : 'SALARY_AUTO');
+      const manualTotal = rows.filter((b: any) => srcOf(b) === 'MANUAL').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoTotal = rows.filter((b: any) => srcOf(b) === 'SALARY_AUTO').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
       const manualMonths = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03'];
       const autoMonths = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
-      const manualPeriodTotal = rows.filter((b: any) => manualMonths.includes(b.month)).reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
-      const autoPeriodTotal = rows.filter((b: any) => autoMonths.includes(b.month)).reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const manualPeriodTotal = rows.filter((b: any) => manualMonths.includes(b.month) && srcOf(b) === 'MANUAL').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoPeriodTotal = rows.filter((b: any) => autoMonths.includes(b.month) && srcOf(b) !== 'MANUAL').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
 
       const byEmployee: Record<string, number> = {};
       const byMonth: Record<string, number> = {};
