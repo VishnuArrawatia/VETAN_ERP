@@ -65,7 +65,20 @@ export function isTombstoned(
   const delT = Date.parse(entry.deleted_at);
   if (Number.isNaN(delT)) return false;
   const recT = recordTime(item);
-  if (recT !== null) return recT <= delT; // record not newer than its deletion
+  if (recT !== null) {
+    if (recT <= delT) return true; // record not newer than its deletion
+    // PHASE-2C refinement: a record CLAIMING to be newer than its deletion is
+    // only a genuine re-creation if it is a NEW record (created AFTER the
+    // deletion). A stale editor's whole-record re-stamp bumps updated_at but
+    // keeps the ORIGINAL created_at — that is the deleted record edited after
+    // the fact, and the tombstone must win over it (delete+stale-edit case).
+    const cRaw = (item as any).created_at ?? (item as any).createdAt;
+    if (cRaw != null && cRaw !== '') {
+      const cT = typeof cRaw === 'number' ? cRaw : Date.parse(String(cRaw));
+      if (!Number.isNaN(cT)) return cT <= delT;
+    }
+    return false; // no created_at — cannot prove; allow (recreate semantics)
+  }
   if (storeTs !== null && storeTs !== undefined && !Number.isNaN(storeTs)) {
     return delT >= storeTs; // tombstone postdates the stale store's validity
   }
@@ -120,6 +133,68 @@ export function recordKey(item: any): string {
 }
 
 /**
+ * PHASE-2C FIELD-LEVEL MERGE — same-record concurrency for Employee profiles.
+ *
+ * Problem fixed: two instances holding the SAME employee (different edits — e.g.
+ * #1 changes photo, #2 changes mobile) previously resolved by whole-record
+ * last-writer-wins; the second save silently erased the first editor's field.
+ *
+ * Rule: for the `employees` collection, when BOTH sides carry a same-ID record
+ * whose recordTime differs, the merged record takes every field from the side
+ * whose embedded per-field stamp is newer (per-field *_modified_at; records
+ * without field stamps behave exactly as before — whole-record LWW). All other
+ * collections keep the existing record-level rule (Phase-2B tombstone union
+ * and the one-sided-stamp guard are untouched).
+ */
+export const FIELD_STAMP_SUFFIX = '_modified_at';
+
+/** Collections eligible for field-level merge. Phase-2C: employees only. */
+const FIELD_MERGE_COLLECTIONS = new Set<string>(['employees']);
+
+/** Fields that must never be field-merged (system-managed). */
+const NON_MERGEABLE_FIELDS = new Set<string>([
+  'updated_at', 'created_at', 'tombstones', 'session_epoch', 'needs_password_change'
+]);
+
+function fieldStampMs(value: any, field: string): number {
+  if (value === null || typeof value !== 'object') return 0;
+  const v = (value as any)[`${field}${FIELD_STAMP_SUFFIX}`];
+  if (v == null || v === '') return 0;
+  const t = typeof v === 'number' ? v : Date.parse(String(v));
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/**
+ * Field-level same-record merge. Caller guarantees both sides are objects with
+ * DIFFERENT recordTime values. Falls back to `winner` when stamps are absent,
+ * equal, or the field is system-managed (mirror/spread semantics, identical to
+ * the old whole-record behavior).
+ */
+export function mergeRecordFields(
+  base: any, incoming: any, winner: 'base' | 'incoming'
+): any {
+  const win = winner === 'incoming' ? incoming : base;
+  if (!base || typeof base !== 'object' || Array.isArray(base)) return win;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return win;
+  const out: any = { ...win };
+  const keys = new Set<string>([...Object.keys(base), ...Object.keys(incoming)]);
+  for (const field of keys) {
+    if (NON_MERGEABLE_FIELDS.has(field) || field.endsWith(FIELD_STAMP_SUFFIX)) continue;
+    const bt = fieldStampMs(base, field);
+    const it = fieldStampMs(incoming, field);
+    if (bt || it) {
+      if (it > bt) {
+        out[field] = incoming[field];
+        if (it) out[`${field}${FIELD_STAMP_SUFFIX}`] = incoming[`${field}${FIELD_STAMP_SUFFIX}`];
+      } else if (bt > it) {
+        out[field] = base[field];
+      } // bt === it (incl. both 0): keep winner's field
+    } // both unstamped: keep winner's field
+  }
+  return out;
+}
+
+/**
  * Union two record arrays by key.
  * Base items are added first; an incoming item only ever conflicts with an item
  * already placed from base. Same-key conflicts: later embedded timestamp wins;
@@ -158,6 +233,14 @@ export function mergeRecordArrays(base: any[], incoming: any[], prefer: StoreMer
     const t1 = recordTime(existing);
     const t2 = recordTime(item);
     if (t1 !== null && t2 !== null && t1 !== t2) {
+      // PHASE-2C: employees get field-level merge on same-record conflicts so
+      // concurrent editors of DIFFERENT fields never erase each other. (Also
+      // used by db.ts dirty-reapply via the exported helpers.) Other
+      // collections keep whole-record semantics.
+      if (FIELD_MERGE_COLLECTIONS.has(collection)) {
+        resultMap.set(key, mergeRecordFields(existing, item, t2 > t1 ? 'incoming' : 'base'));
+        return;
+      }
       if (t2 > t1) resultMap.set(key, item); // incoming record is newer
       return;
     }

@@ -78,7 +78,9 @@ async function start() {
     const after = (await get()).json.find((e: any) => e.id === 'ISO1');
     const beforeF = JSON.parse(strip(cur)), afterF = JSON.parse(strip(after));
     const changed = Object.keys(afterF).filter(k => JSON.stringify(afterF[k]) !== JSON.stringify(beforeF[k]));
-    ok(changed.every(k => [field, 'da'].includes(k)), `${label}: sirf '${field}' (+'da'-policy) badla — changed: [${changed.join(',')}]`);
+    // Phase-2C: the edited field carries its *_modified_at companion stamp —
+    // expected merge metadata, NOT an unrelated business-field change.
+    ok(changed.every(k => [field, 'da', `${field}_modified_at`].includes(k)), `${label}: sirf '${field}' (+'da'-policy, +companion stamp) badla — changed: [${changed.join(',')}]`);
     // deep: all critical fields identical
     const critical = ['aadhaar_number', 'uan', 'bank_account', 'ifsc', 'pan', 'dob', 'gender', 'marital_status', 'blood_group', 'esic_number', 'emergency_contact', 'qualification', 'total_experience', 'base_salary', 'hra', 'special_allowance', 'edu_allowance', 'medical_allowance', 'conveyance_allowance', 'salary_structure_type', 'pf_opt_in', 'professional_tax_opt_in', 'photo', 'email', 'phone'].filter(f => f !== field);
     const untouched = critical.every(f => JSON.stringify(afterF[f]) === JSON.stringify(beforeF[f]));

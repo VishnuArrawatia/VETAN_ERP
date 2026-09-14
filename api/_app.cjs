@@ -24438,7 +24438,15 @@ function isTombstoned(tombstones, collection, item, storeTs) {
   const delT = Date.parse(entry.deleted_at);
   if (Number.isNaN(delT)) return false;
   const recT = recordTime(item);
-  if (recT !== null) return recT <= delT;
+  if (recT !== null) {
+    if (recT <= delT) return true;
+    const cRaw = item.created_at ?? item.createdAt;
+    if (cRaw != null && cRaw !== "") {
+      const cT = typeof cRaw === "number" ? cRaw : Date.parse(String(cRaw));
+      if (!Number.isNaN(cT)) return cT <= delT;
+    }
+    return false;
+  }
   if (storeTs !== null && storeTs !== void 0 && !Number.isNaN(storeTs)) {
     return delT >= storeTs;
   }
@@ -24485,6 +24493,43 @@ function recordKey(item) {
   }
   return `json:${stableStringify(item)}`;
 }
+var FIELD_STAMP_SUFFIX = "_modified_at";
+var FIELD_MERGE_COLLECTIONS = /* @__PURE__ */ new Set(["employees"]);
+var NON_MERGEABLE_FIELDS = /* @__PURE__ */ new Set([
+  "updated_at",
+  "created_at",
+  "tombstones",
+  "session_epoch",
+  "needs_password_change"
+]);
+function fieldStampMs(value, field) {
+  if (value === null || typeof value !== "object") return 0;
+  const v = value[`${field}${FIELD_STAMP_SUFFIX}`];
+  if (v == null || v === "") return 0;
+  const t = typeof v === "number" ? v : Date.parse(String(v));
+  return Number.isNaN(t) ? 0 : t;
+}
+function mergeRecordFields(base, incoming, winner) {
+  const win = winner === "incoming" ? incoming : base;
+  if (!base || typeof base !== "object" || Array.isArray(base)) return win;
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return win;
+  const out = { ...win };
+  const keys = /* @__PURE__ */ new Set([...Object.keys(base), ...Object.keys(incoming)]);
+  for (const field of keys) {
+    if (NON_MERGEABLE_FIELDS.has(field) || field.endsWith(FIELD_STAMP_SUFFIX)) continue;
+    const bt = fieldStampMs(base, field);
+    const it = fieldStampMs(incoming, field);
+    if (bt || it) {
+      if (it > bt) {
+        out[field] = incoming[field];
+        if (it) out[`${field}${FIELD_STAMP_SUFFIX}`] = incoming[`${field}${FIELD_STAMP_SUFFIX}`];
+      } else if (bt > it) {
+        out[field] = base[field];
+      }
+    }
+  }
+  return out;
+}
 function mergeRecordArrays(base, incoming, prefer, opts) {
   const tombstones = opts?.tombstones || {};
   const collection = opts?.collection || "";
@@ -24509,6 +24554,10 @@ function mergeRecordArrays(base, incoming, prefer, opts) {
     const t1 = recordTime(existing);
     const t2 = recordTime(item);
     if (t1 !== null && t2 !== null && t1 !== t2) {
+      if (FIELD_MERGE_COLLECTIONS.has(collection)) {
+        resultMap.set(key, mergeRecordFields(existing, item, t2 > t1 ? "incoming" : "base"));
+        return;
+      }
       if (t2 > t1) resultMap.set(key, item);
       return;
     }
@@ -27446,12 +27495,22 @@ var PayrollDatabase = class _PayrollDatabase {
       this.dbSqlite.run(`UPDATE overtime_requests SET employee_id = ? WHERE employee_id = ?`, [newId, id]);
     }
     const mergedPartial = { ...updated };
+    for (const k of Object.keys(mergedPartial)) {
+      if (k.endsWith("_modified_at")) delete mergedPartial[k];
+    }
     if (idChanged) {
       mergedPartial.id = newId;
     }
     this.data.employees[idx] = { ...this.data.employees[idx], ...mergedPartial };
     const emp = this.data.employees[idx];
-    emp.updated_at = (/* @__PURE__ */ new Date()).toISOString();
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    for (const field of Object.keys(updated)) {
+      if (field === "id" || field === "updated_at" || field === "created_at") continue;
+      if (updated[field] !== oldEmp[field]) {
+        emp[`${field}_modified_at`] = nowIso;
+      }
+    }
+    emp.updated_at = nowIso;
     this._dirtyEmployeeIds.add(emp.id);
     emp.pf_opt_in = emp.pf_opt_in === 1 || emp.pf_opt_in === true;
     emp.esic_opt_in = emp.esic_opt_in === 1 || emp.esic_opt_in === true;
@@ -31096,7 +31155,7 @@ Sakar & SVN Group`;
               const emps = this.data.employees || [];
               for (let i = 0; i < emps.length; i++) {
                 const local = dirtySnapshot.get(emps[i]?.id);
-                if (local) emps[i] = local;
+                if (local) emps[i] = mergeRecordFields(emps[i], local, "incoming");
               }
               this._dropDirtyTombstonedEmployees(dirtySnapshot);
             }
@@ -31141,7 +31200,7 @@ Sakar & SVN Group`;
                 const emps = this.data.employees || [];
                 for (let i = 0; i < emps.length; i++) {
                   const local = dirtySnapshot.get(emps[i]?.id);
-                  if (local) emps[i] = local;
+                  if (local) emps[i] = mergeRecordFields(emps[i], local, "incoming");
                 }
                 this._dropDirtyTombstonedEmployees(dirtySnapshot);
               }

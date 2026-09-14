@@ -8,7 +8,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { verifyPassword, isHashed, hashPassword } from './auth';
 import crypto from 'crypto';
-import { mergeStores, addTombstone, getTombstones, isTombstoned, recordKey } from '../src/lib/storeMerge';
+import { mergeStores, mergeRecordFields, addTombstone, getTombstones, isTombstoned, recordKey } from '../src/lib/storeMerge';
 import { REGIME_CONFIGS, currentFY, fyMonths, buildForm16Income, computeNewRegimeTax } from './form16-engine';
 
 let sqlite3: any = null;
@@ -2683,6 +2683,11 @@ export class PayrollDatabase {
     }
 
     const mergedPartial = { ...updated };
+    // PHASE-2C: the client may echo per-field stamps from ITS copy — those are
+    // stale by definition. The authoritative stamps live server-side only.
+    for (const k of Object.keys(mergedPartial)) {
+      if (k.endsWith('_modified_at')) delete (mergedPartial as any)[k];
+    }
     if (idChanged) {
       mergedPartial.id = newId;
     }
@@ -2695,7 +2700,18 @@ export class PayrollDatabase {
     // backup push) — a stale full-blob write can no longer silently resurrect
     // old PAN/email/bank/photo values.
     const emp = this.data.employees[idx];
-    emp.updated_at = new Date().toISOString();
+    // PHASE-2C FIELD STAMPS: stamp ONLY fields whose value actually changes in
+    // this update. A full-object PUT for a mobile-only edit must NOT restamp
+    // untouched fields (photo etc.) — otherwise this later save could beat a
+    // concurrent editor's genuinely-newer photo with our stale value.
+    const nowIso = new Date().toISOString();
+    for (const field of Object.keys(updated)) {
+      if (field === 'id' || field === 'updated_at' || field === 'created_at') continue;
+      if ((updated as any)[field] !== (oldEmp as any)[field]) {
+        (emp as any)[`${field}_modified_at`] = nowIso;
+      }
+    }
+    emp.updated_at = nowIso;
     this._dirtyEmployeeIds.add(emp.id);
 
     // Normalize boolean fields (API may send 0/1 or true/false)
@@ -6583,12 +6599,17 @@ Sakar & SVN Group`;
             for (const e of (this.data.employees || []) as any[]) {
               if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
             }
-            this.data = mergeStores(this.data, rmwRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || '') || null });
+            this.data = mergeStores(this.data, rmwRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || '') || null, });
+            // PHASE-2C: re-apply in-flight edits FIELD-WISE. The remote copy of a
+            // dirty employee may carry a DIFFERENT editor's genuinely-newer work —
+            // whole-record replacement here would silently erase it (the exact
+            // same-record bug Phase-2C fixes). Tombstones still drop dirty
+            // employees that another instance deleted (see _dropDirtyTombstonedEmployees).
             if (dirtySnapshot.size > 0) {
               const emps = (this.data.employees || []) as any[];
               for (let i = 0; i < emps.length; i++) {
                 const local = dirtySnapshot.get(emps[i]?.id);
-                if (local) emps[i] = local;
+                if (local) emps[i] = mergeRecordFields(emps[i], local, 'incoming');
               }
               // PHASE-2B: a delete on ANOTHER instance wins over this instance's
               // in-flight edits to the same record — the edit raced a deletion it
@@ -6657,12 +6678,14 @@ Sakar & SVN Group`;
               for (const e of (this.data.employees || []) as any[]) {
                 if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
               }
-              this.data = mergeStores(this.data, remoteRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || '') || null });
+              this.data = mergeStores(this.data, remoteRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || '') || null, });
+              // PHASE-2C: field-wise re-apply (see RMW block) — remote may carry
+              // another editor's newer fields; whole-record swap would erase them.
               if (dirtySnapshot.size > 0) {
                 const emps = (this.data.employees || []) as any[];
                 for (let i = 0; i < emps.length; i++) {
                   const local = dirtySnapshot.get(emps[i]?.id);
-                  if (local) emps[i] = local;
+                  if (local) emps[i] = mergeRecordFields(emps[i], local, 'incoming');
                 }
                 // PHASE-2B: see _dropDirtyTombstonedEmployees — delete wins over
                 // a stale in-flight edit of the same record.
@@ -6854,7 +6877,7 @@ Sakar & SVN Group`;
         // mutation whose cloud write was still in flight, or data a previous persist
         // failed to upload). Same-ID conflicts prefer the remote copy on an idle
         // reload because the remote is the shared source of truth.
-        this.data = mergeStores(this.data, row.payload, 'incoming', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || '') || null });
+        this.data = mergeStores(this.data, row.payload, 'incoming', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || '') || null, });
         this._loadedVersion = remoteUpdatedAt || '';
         this._storeLoadedTs = Date.parse(remoteUpdatedAt || '') || null;
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
