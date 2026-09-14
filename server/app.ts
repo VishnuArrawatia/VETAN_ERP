@@ -2320,6 +2320,253 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  // ─── Bonus Provision — manual entry + automatic generation + full register ───
+  // BONUS PERIOD: Oct-25 → Sep-26. Manual months Oct-25…Mar-26; auto from Apr-26.
+  // Formula: Basic × 8.33%. Source: MANUAL | SALARY_AUTO. Idempotent generation.
+
+  // GET /api/bonus-provisions?employee=&month=&company=&unit=&department=
+  app.get('/api/bonus-provisions', (req, res) => {
+    try {
+      const { employee_id, month, company, unit, department } = req.query as Record<string, string>;
+      let rows = db.getBonusProvisions();
+      if (employee_id) rows = rows.filter((b: any) => b.employee_id === employee_id);
+      if (month) rows = rows.filter((b: any) => b.month === month);
+      if (company && company !== 'ALL') rows = rows.filter((b: any) => b.company === company);
+      if (unit && unit !== 'ALL') rows = rows.filter((b: any) => (b.unit || '') === unit);
+      if (department && department !== 'ALL') rows = rows.filter((b: any) => (b.department || '') === department);
+      rows = rows.slice().sort((a: any, b: any) => (a.month || '').localeCompare(b.month || '') || String(a.employee_name || '').localeCompare(String(b.employee_name || '')));
+
+      const manualTotal = rows.filter((b: any) => b.source === 'MANUAL').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoTotal = rows.filter((b: any) => b.source === 'SALARY_AUTO').reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const manualMonths = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03'];
+      const autoMonths = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'];
+      const manualPeriodTotal = rows.filter((b: any) => manualMonths.includes(b.month)).reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoPeriodTotal = rows.filter((b: any) => autoMonths.includes(b.month)).reduce((s: number, b: any) => s + (Number(b.bonus_amount) || 0), 0);
+
+      const byEmployee: Record<string, number> = {};
+      const byMonth: Record<string, number> = {};
+      for (const b of rows) {
+        byEmployee[b.employee_id] = (byEmployee[b.employee_id] || 0) + (Number(b.bonus_amount) || 0);
+        byMonth[b.month] = (byMonth[b.month] || 0) + (Number(b.bonus_amount) || 0);
+      }
+
+      res.json({
+        period: '2025-10 to 2026-09',
+        bonus_rate: 8.33,
+        rows,
+        totals: {
+          overall: manualTotal + autoTotal,
+          manual_total: manualTotal,
+          auto_total: autoTotal,
+          oct25_mar26_total: manualPeriodTotal,
+          apr26_sep26_total: autoPeriodTotal,
+          employee_wise: byEmployee,
+          month_wise: byMonth
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/bonus-provisions — manual provision entry (Oct-25…Mar-26 historical; later months allowed)
+  app.post('/api/bonus-provisions', (req, res) => {
+    try {
+      const b = req.body || {};
+      if (!b.employee_id) return res.status(400).json({ error: 'Employee is required' });
+      if (!b.month) return res.status(400).json({ error: 'Month is required (YYYY-MM)' });
+      if (!/^\d{4}-\d{2}$/.test(String(b.month))) return res.status(400).json({ error: 'Month must be YYYY-MM' });
+      const emp = db.getEmployeeById(String(b.employee_id));
+      if (!emp) return res.status(404).json({ error: 'Employee not found' });
+
+      // Duplicate protection: employee + month (manual and auto share the same key space)
+      const id = `BONUS-${b.employee_id}-${b.month}`;
+      const existing = db.getBonusProvisions().find((x: any) => x.id === id);
+      if (existing && existing.source === 'MANUAL') {
+        return res.status(409).json({ error: 'Duplicate: manual provision already exists for this employee and month', duplicate: true });
+      }
+
+      const basic = b.base_salary !== undefined && b.base_salary !== null && b.base_salary !== '' ? Number(b.base_salary) : Number(emp.base_salary) || 0;
+      const amount = b.bonus_amount !== undefined && b.bonus_amount !== null && b.bonus_amount !== '' ? Number(b.bonus_amount) : Math.round(basic * 0.0833);
+      if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'Invalid bonus amount' });
+
+      const operator = getOperator(req);
+      const record = {
+        id,
+        employee_id: emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || '',
+        department: emp.department || '',
+        month: String(b.month),
+        base_salary: basic,
+        bonus_rate: 8.33,
+        bonus_amount: amount,
+        source: 'MANUAL',
+        status: b.status || 'ACCUMULATED',
+        paid_in_month: b.paid_in_month ?? null,
+        remarks: b.remarks || '',
+        created_by: operator,
+        created_at: existing?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      db.saveBonusProvision(record);
+      db.logAudit('Bonus Provision (Manual)', `${emp.name}: ${record.month} provision INR ${amount} (Basic ${basic} × 8.33%)`, operator);
+      res.json({ success: true, provision: record, replacedAuto: !!existing });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/bonus-provisions/:id — edit manual provision (amount/remarks/status)
+  app.put('/api/bonus-provisions/:id', (req, res) => {
+    try {
+      const existing = db.getBonusProvisions().find((x: any) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Bonus provision not found' });
+      if (existing.source !== 'MANUAL') return res.status(400).json({ error: 'Only MANUAL provisions can be edited; SALARY_AUTO rows refresh from the Salary Sheet' });
+      const b = req.body || {};
+      const patch: any = {};
+      if (b.bonus_amount !== undefined) {
+        const v = Number(b.bonus_amount);
+        if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: 'Invalid bonus amount' });
+        patch.bonus_amount = v;
+      }
+      if (b.base_salary !== undefined) { const v = Number(b.base_salary); if (Number.isFinite(v) && v >= 0) patch.base_salary = v; }
+      if (b.remarks !== undefined) patch.remarks = String(b.remarks);
+      if (b.status !== undefined) patch.status = String(b.status);
+      db.saveBonusProvision({ ...existing, ...patch, id: existing.id });
+      db.logAudit('Bonus Provision Updated', `${existing.employee_name} ${existing.month}: manual provision updated`, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // DELETE /api/bonus-provisions/:id — remove a MANUAL provision
+  app.delete('/api/bonus-provisions/:id', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') return res.status(403).json({ error: 'Only Super Admin can delete bonus provisions' });
+      const existing = db.getBonusProvisions().find((x: any) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Bonus provision not found' });
+      db.deleteBonusProvision(req.params.id);
+      db.logAudit('Bonus Provision Deleted', `${existing.employee_name} ${existing.month} (${existing.source}) deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — delete not saved' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/bonus-provisions/generate — automatic generation from monthly Salary Sheets
+  // Reads each month's EFFECTIVE Basic (Apr-26 onward). MANUAL rows are never touched.
+  app.post('/api/bonus-provisions/generate', async (req, res) => {
+    try {
+      const { from_month, to_month } = req.body || {};
+      const result = db.generateAutomaticBonusProvisions({
+        fromMonth: from_month || undefined,
+        toMonth: to_month || undefined,
+        operator: getOperator(req)
+      });
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — provision generation not saved' });
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ─── Arrear Register — 100% MANUAL month-wise entries ───
+  // No automatic arrear calculation anywhere in this module. Future increment
+  // foundation fields (actual/revised/differences) are stored but never auto-computed.
+
+  // GET /api/arrears?employee_id=&month=&company=&unit=
+  app.get('/api/arrears', (req, res) => {
+    try {
+      const { employee_id, month, company, unit } = req.query as Record<string, string>;
+      let rows = db.getArrears();
+      if (employee_id) rows = rows.filter((a: any) => a.employee_id === employee_id);
+      if (month) rows = rows.filter((a: any) => a.arrear_month === month);
+      if (company && company !== 'ALL') rows = rows.filter((a: any) => a.company === company);
+      if (unit && unit !== 'ALL') rows = rows.filter((a: any) => (a.unit || '') === unit);
+      rows = rows.slice().sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+      const total = rows.reduce((s: number, a: any) => s + (Number(a.amount) || 0), 0);
+      res.json({ mode: 'MANUAL', rows, total });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/arrears — manual arrear entry (duplicate double-submit protection)
+  app.post('/api/arrears', async (req, res) => {
+    try {
+      const a = req.body || {};
+      if (!a.employee_id) return res.status(400).json({ error: 'Employee is required' });
+      const emp = db.getEmployeeById(String(a.employee_id));
+      if (!emp) return res.status(404).json({ error: 'Employee not found' });
+      const operator = getOperator(req);
+      const entry = {
+        ...a,
+        id: a.id || undefined,
+        employee_id: emp.id,
+        emp_code: emp.emp_code || emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || '',
+        department: emp.department || '',
+        source: 'MANUAL',
+        created_by: a.created_by || operator
+      };
+      const result = db.saveArrear(entry);
+      if (!result.success) return res.status(result.duplicate ? 409 : 400).json(result);
+      db.logAudit('Arrear Entry', `${emp.name}: ${entry.arrear_month} manual arrear INR ${entry.amount} (${entry.reason || 'no reason'})`, operator);
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — arrear not saved' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/arrears/:id — edit manual arrear (amount/reason/remarks/effects/status/foundation fields)
+  app.put('/api/arrears/:id', async (req, res) => {
+    try {
+      const existing = db.getArrears().find((x: any) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Arrear entry not found' });
+      const b = req.body || {};
+      const patch: any = { updated_by: getOperator(req) };
+      if (b.amount !== undefined) { const v = Number(b.amount); if (!Number.isFinite(v) || v <= 0) return res.status(400).json({ error: 'Invalid arrear amount' }); patch.amount = v; }
+      for (const k of ['reason', 'remarks', 'status', 'arrear_month', 'pf_effect', 'bonus_effect', 'effective_from', 'actual_salary', 'revised_salary', 'basic_actual', 'basic_revised', 'hra_actual', 'hra_revised', 'other_components_actual', 'other_components_revised', 'gross_actual', 'gross_revised', 'salary_difference', 'pf_difference', 'bonus_difference', 'net_arrear']) {
+        if (b[k] !== undefined) patch[k] = b[k];
+      }
+      db.saveArrear({ ...existing, ...patch, id: existing.id });
+      db.logAudit('Arrear Updated', `${existing.employee_name} ${existing.arrear_month}: manual arrear updated`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — arrear update not saved' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // DELETE /api/arrears/:id
+  app.delete('/api/arrears/:id', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') return res.status(403).json({ error: 'Only Super Admin can delete arrear entries' });
+      const existing = db.getArrears().find((x: any) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Arrear entry not found' });
+      db.deleteArrear(req.params.id);
+      db.logAudit('Arrear Deleted', `${existing.employee_name} ${existing.arrear_month} INR ${existing.amount} deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — arrear delete not saved' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Attendance Corrections / Miss Punch endpoints
   app.get('/api/attendance/corrections', (req, res) => {
     try {

@@ -93,6 +93,7 @@ import BusinessLogicVault from './components/BusinessLogicVault';
 import SalaryRevisionForm from './components/SalaryRevisionForm';
 import SalaryRestructure from './components/SalaryRestructure';
 import ArrearWorking from './components/ArrearWorking';
+import ArrearRegister from './components/ArrearRegister';
 import BulkSalaryRevisionUpload from './components/BulkSalaryRevisionUpload';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
@@ -3391,6 +3392,15 @@ export default function App() {
                       }}
                     />
 
+                    {/* Arrear Register — 100% MANUAL month-wise entries (no auto calculation) */}
+                    <div className="pt-2">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Arrear Register — Manual Entry</h4>
+                      <ArrearRegister
+                        employees={employees}
+                        activeCompany={activeCompany}
+                      />
+                    </div>
+
                     {/* Salary Revision Table List */}
                     <div className="space-y-3">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Historical Increments Audit Ledger</h4>
@@ -3479,7 +3489,6 @@ export default function App() {
 
               {activeTab === 'bonus' && (
                 <BonusRegister
-                  activeMonth={activeMonth}
                   activeCompany={activeCompany}
                   employees={employees}
                 />

@@ -82,6 +82,10 @@ interface Schema {
   month_status?: MonthStatus[];
   attendance_upload_batches?: AttendanceUploadBatch[];
   company_worker_payroll?: any[];
+  /** BONUS PROVISION register (Oct-25 → Sep-26 cycle). Written by payroll (auto) and HR (manual). */
+  bonus_provisions?: any[];
+  /** ARREAR register — 100% manual month-wise entries + future increment foundation fields. */
+  arrears?: any[];
   /** PHASE-2B: durable deletion metadata — prevents stale-writer delete resurrection. */
   tombstones?: Record<string, Record<string, { deleted_at: string }>>;
 }
@@ -496,7 +500,10 @@ export class PayrollDatabase {
     cheque_payments: [],
     minimum_wage_rates: [],
     month_status: [],
-    attendance_upload_batches: []
+    attendance_upload_batches: [],
+    // Bonus Provision register + Manual Arrear register (additive)
+    bonus_provisions: [],
+    arrears: []
   };
 
   private dbSqlite!: any;
@@ -1458,6 +1465,53 @@ export class PayrollDatabase {
       status TEXT DEFAULT 'ACCUMULATED',
       paid_in_month TEXT,
       created_at TEXT
+    )`);
+
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN unit TEXT`, () => { /* ignore if exists */ });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN department TEXT`, () => { /* ignore if exists */ });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN source TEXT`, () => { /* ignore if exists */ });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN remarks TEXT`, () => { /* ignore if exists */ });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN created_by TEXT`, () => { /* ignore if exists */ });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN updated_at TEXT`, () => { /* ignore if exists */ });
+
+    // ARREAR register — 100% MANUAL entries + future increment foundation fields.
+    // The *_actual / *_revised / *_difference columns are REFERENCE-ONLY structures
+    // for a future increment-arrear workflow. Nothing writes them automatically.
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS arrears (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT,
+      emp_code TEXT,
+      employee_name TEXT,
+      company TEXT,
+      unit TEXT,
+      department TEXT,
+      arrear_month TEXT,
+      amount REAL,
+      reason TEXT,
+      remarks TEXT,
+      pf_effect REAL,
+      bonus_effect REAL,
+      status TEXT DEFAULT 'DRAFT',
+      source TEXT DEFAULT 'MANUAL',
+      effective_from TEXT,
+      actual_salary REAL,
+      revised_salary REAL,
+      basic_actual REAL,
+      basic_revised REAL,
+      hra_actual REAL,
+      hra_revised REAL,
+      other_components_actual TEXT,
+      other_components_revised TEXT,
+      gross_actual REAL,
+      gross_revised REAL,
+      salary_difference REAL,
+      pf_difference REAL,
+      bonus_difference REAL,
+      net_arrear REAL,
+      created_by TEXT,
+      created_at TEXT,
+      updated_by TEXT,
+      updated_at TEXT
     )`);
 
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS salary_revisions (
@@ -5095,6 +5149,7 @@ export class PayrollDatabase {
           base_salary: rate_base,
           bonus_rate: 8.33,
           bonus_amount: earned_bonus,
+          source: 'SALARY_AUTO',
           status: 'ACCUMULATED',
           paid_in_month: null,
           created_at: new Date().toISOString()
@@ -5180,6 +5235,232 @@ export class PayrollDatabase {
       snapshot_loan_emi: loan_deduction,
       snapshot_total_loan_active: activeLoans.length,
     };
+  }
+
+  // ═══════════════ BONUS PROVISION — MANUAL ENTRY + AUTO GENERATION ═══════════════
+  //
+  // BONUS PERIOD: Oct-2025 → Sep-2026. Formula: Basic × 8.33% (Payment of Bonus Act).
+  //
+  // SPLIT:
+  //   Oct-25 … Mar-26 → HR enters MANUALLY (historical provisions; never auto-touched).
+  //   Apr-26 onward   → generated AUTOMATICALLY from that month's Salary Sheet Basic
+  //                     (effective-date salary resolution, identical to payroll engine).
+  //
+  // Records carry source = 'MANUAL' | 'SALARY_AUTO'. Generation is IDEMPOTENT:
+  //   • key = BONUS-<empId>-<month> (same key payroll's own provision writer uses),
+  //   • MANUAL records are never overwritten by auto-generation,
+  //   • existing SALARY_AUTO records are refreshed (rate may change on re-run),
+  //   • running generation twice never duplicates rows.
+
+  /** First month generated automatically in the Oct-25 → Sep-26 bonus cycle. */
+  public static readonly BONUS_AUTO_FROM_MONTH = '2026-04';
+  public static readonly BONUS_PERIOD_END_MONTH = '2026-09';
+
+  public getBonusProvisions(): any[] {
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    return this.data.bonus_provisions;
+  }
+
+  public saveBonusProvision(prov: any): void {
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    const nowIso = new Date().toISOString();
+    const index = this.data.bonus_provisions.findIndex(b => b.id === prov.id);
+    if (index >= 0) {
+      this.data.bonus_provisions[index] = { ...this.data.bonus_provisions[index], ...prov, updated_at: nowIso };
+    } else {
+      this.data.bonus_provisions.push({ ...prov, created_at: prov.created_at || nowIso, updated_at: nowIso });
+    }
+    this._mirrorBonusProvision(index >= 0 ? this.data.bonus_provisions[index] : this.data.bonus_provisions[this.data.bonus_provisions.length - 1]);
+    // PHASE-2A: persist-before-success
+    this.persistData();
+  }
+
+  public deleteBonusProvision(id: string): void {
+    const doomed = (this.data.bonus_provisions || []).find(b => b.id === id);
+    if (doomed) this._tombstone('bonus_provisions', doomed);
+    if (this.data.bonus_provisions) {
+      this.data.bonus_provisions = this.data.bonus_provisions.filter(b => b.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM bonus_provisions WHERE id = ?`, [id]);
+    this.persistData();
+  }
+
+  /**
+   * Generate automatic Bonus Provisions for months >= Apr-2026 from each month's
+   * effective Salary-Sheet Basic (effective-date revision resolution, identical to
+   * the payroll engine). MANUAL records are NEVER overwritten. IDEMPOTENT:
+   * re-running refreshes existing SALARY_AUTO rows in place, never duplicates.
+   */
+  public generateAutomaticBonusProvisions(opts?: { fromMonth?: string; toMonth?: string; operator?: string }): { created: number; updated: number; skippedManual: number } {
+    const fromMonth = opts?.fromMonth || PayrollDatabase.BONUS_AUTO_FROM_MONTH;
+    const toMonth = opts?.toMonth || PayrollDatabase.BONUS_PERIOD_END_MONTH;
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+
+    const byId = new Map<string, any>(this.data.bonus_provisions.map((b: any) => [b.id, b]));
+    let created = 0, updated = 0, skippedManual = 0;
+
+    for (const emp of this.data.employees || []) {
+      if (emp.status && emp.status !== 'ACTIVE') continue;
+      // Salary revisions are keyed by employee_code = employee id (payroll-engine convention).
+      const revisions = (this.data.salary_revisions || [])
+        .filter((r: any) => r.employee_code === emp.id || r.employee_id === emp.id)
+        .sort((a: any, b: any) => (a.effective_date || '').localeCompare(b.effective_date || ''));
+
+      for (const month of this._monthRange(fromMonth, toMonth)) {
+        // Effective-date salary resolution — same rule as the payroll engine:
+        // (1) most recent revision with effective_date <= end-of-month wins;
+        // (2) if NO revision applies yet but future revisions exist, use the
+        // earliest revision's old_salary (emp.base_salary may already have been
+        // overwritten to the NEW rate by addSalaryRevision) — pre-increment rate;
+        // (3) no revisions at all → emp.base_salary.
+        const monthEnd = `${month}-31`;
+        const applicable = revisions.filter((r: any) => r.effective_date && r.effective_date <= monthEnd);
+        let basic = 0;
+        if (applicable.length > 0) {
+          basic = Number(applicable[applicable.length - 1].new_salary) || 0;
+        } else if (revisions.length > 0) {
+          basic = Number(revisions[0].old_salary) || 0;
+        } else {
+          basic = Number(emp.base_salary) || 0;
+        }
+        if (basic <= 0) continue;
+
+        const id = `BONUS-${emp.id}-${month}`;
+        const existing = byId.get(id);
+        if (existing && existing.source === 'MANUAL') { skippedManual++; continue; }
+
+        const amount = Math.round(basic * 0.0833);
+        const record = {
+          id,
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          month,
+          base_salary: basic,
+          bonus_rate: 8.33,
+          bonus_amount: amount,
+          source: 'SALARY_AUTO',
+          status: existing?.status === 'PAID' ? 'PAID' : 'ACCUMULATED',
+          paid_in_month: existing?.paid_in_month ?? null,
+          created_at: existing?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        if (existing) { Object.assign(existing, record); updated++; }
+        else { this.data.bonus_provisions.push(record); byId.set(id, record); created++; }
+      }
+    }
+
+    if (created > 0 || updated > 0) {
+      for (const p of this.data.bonus_provisions) {
+        if (p.source === 'SALARY_AUTO') this._mirrorBonusProvision(p);
+      }
+      this.persistData();
+    }
+    if (opts?.operator) this.logAudit('Bonus Provision Generated', `Automatic bonus provisions: ${created} created, ${updated} refreshed (${fromMonth} → ${toMonth})`, opts.operator);
+    return { created, updated, skippedManual };
+  }
+
+  private _monthRange(fromMonth: string, toMonth: string): string[] {
+    const out: string[] = [];
+    const parts = fromMonth.split('-').map(Number);
+    const partsTo = toMonth.split('-').map(Number);
+    let y = parts[0], m = parts[1];
+    const ty = partsTo[0], tm = partsTo[1];
+    while (y < ty || (y === ty && m <= tm)) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`);
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  /** Best-effort SQLite mirror for a bonus provision row (authoritative store = cloud). */
+  private _mirrorBonusProvision(p: any): void {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO bonus_provisions (id, employee_id, employee_name, company, unit, department, month, base_salary, bonus_rate, bonus_amount, source, status, paid_in_month, remarks, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [p.id, p.employee_id ?? null, p.employee_name ?? null, p.company ?? null, p.unit ?? null, p.department ?? null, p.month, p.base_salary ?? 0, p.bonus_rate ?? 8.33, p.bonus_amount ?? 0, p.source ?? 'SALARY_AUTO', p.status ?? 'ACCUMULATED', p.paid_in_month ?? null, p.remarks ?? null, p.created_by ?? null, p.created_at ?? null, p.updated_at ?? null]
+      );
+    } catch { /* local mirror only — never break business flow on mirror errors */ }
+  }
+
+  // ═══════════════ ARREAR — 100% MANUAL REGISTER (+ future increment foundation) ═══════════════
+  //
+  // CURRENT MODE: MANUAL ONLY. HR adds month-wise arrear entries. NO automatic
+  // calculation, NO backdated generation, NO payroll mutation from this register.
+  //
+  // FUTURE FOUNDATION (structured, NOT activated): effective_from / actual_salary /
+  // revised_salary / *_actual / *_revised / salary_difference / pf_difference /
+  // bonus_difference / net_arrear — stored so a future increment-arrear workflow can
+  // populate them. Future model: Salary Difference + PF effect + Bonus effect
+  // = Final Arrear impact. No code path computes these today.
+
+  public getArrears(): any[] {
+    if (!this.data.arrears) this.data.arrears = [];
+    return this.data.arrears;
+  }
+
+  public saveArrear(entry: any): { success: boolean; error?: string; duplicate?: boolean } {
+    if (!this.data.arrears) this.data.arrears = [];
+    const nowIso = new Date().toISOString();
+    if (!entry.arrear_month) return { success: false, error: 'Arrear month is required' };
+    if (!entry.employee_id) return { success: false, error: 'Employee is required' };
+    const amount = Number(entry.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: 'Arrear amount must be a positive number' };
+
+    // ACCIDENTAL DUPLICATE PROTECTION: same employee + month + amount + reason is a
+    // probable double-submit. Legitimately different months / amounts / reasons pass.
+    const dup = this.data.arrears.find(a =>
+      a.id !== entry.id &&
+      a.employee_id === entry.employee_id &&
+      a.arrear_month === entry.arrear_month &&
+      Number(a.amount) === amount &&
+      String(a.reason || '') === String(entry.reason || '')
+    );
+    if (dup) return { success: false, duplicate: true, error: `Duplicate: already exists for ${entry.arrear_month} (amount ${amount})` };
+
+    const index = this.data.arrears.findIndex(a => a.id === entry.id);
+    if (index >= 0) {
+      this.data.arrears[index] = { ...this.data.arrears[index], ...entry, amount, source: 'MANUAL', updated_at: nowIso };
+      this._mirrorArrear(this.data.arrears[index]);
+    } else {
+      const rec = {
+        ...entry,
+        id: entry.id || `ARR-${Math.random().toString(36).substring(2, 11).toUpperCase()}`,
+        amount,
+        source: 'MANUAL',
+        status: entry.status || 'DRAFT',
+        pf_effect: entry.pf_effect !== undefined && entry.pf_effect !== null && entry.pf_effect !== '' ? Number(entry.pf_effect) : null,
+        bonus_effect: entry.bonus_effect !== undefined && entry.bonus_effect !== null && entry.bonus_effect !== '' ? Number(entry.bonus_effect) : null,
+        created_by: entry.created_by || null,
+        created_at: entry.created_at || nowIso,
+        updated_at: nowIso
+      };
+      this.data.arrears.push(rec);
+      this._mirrorArrear(rec);
+    }
+    // PHASE-2A: persist-before-success
+    this.persistData();
+    return { success: true };
+  }
+
+  public deleteArrear(id: string): void {
+    const doomed = (this.data.arrears || []).find(a => a.id === id);
+    if (doomed) this._tombstone('arrears', doomed);
+    if (this.data.arrears) {
+      this.data.arrears = this.data.arrears.filter(a => a.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM arrears WHERE id = ?`, [id]);
+    this.persistData();
+  }
+
+  /** Best-effort SQLite mirror for an arrear row (authoritative store = cloud). */
+  private _mirrorArrear(a: any): void {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO arrears (id, employee_id, emp_code, employee_name, company, unit, department, arrear_month, amount, reason, remarks, pf_effect, bonus_effect, status, source, effective_from, actual_salary, revised_salary, basic_actual, basic_revised, hra_actual, hra_revised, other_components_actual, other_components_revised, gross_actual, gross_revised, salary_difference, pf_difference, bonus_difference, net_arrear, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [a.id, a.employee_id ?? null, a.emp_code ?? null, a.employee_name ?? null, a.company ?? null, a.unit ?? null, a.department ?? null, a.arrear_month ?? null, a.amount ?? 0, a.reason ?? null, a.remarks ?? null, a.pf_effect ?? null, a.bonus_effect ?? null, a.status ?? 'DRAFT', a.source ?? 'MANUAL', a.effective_from ?? null, a.actual_salary ?? null, a.revised_salary ?? null, a.basic_actual ?? null, a.basic_revised ?? null, a.hra_actual ?? null, a.hra_revised ?? null, a.other_components_actual ? JSON.stringify(a.other_components_actual) : null, a.other_components_revised ? JSON.stringify(a.other_components_revised) : null, a.gross_actual ?? null, a.gross_revised ?? null, a.salary_difference ?? null, a.pf_difference ?? null, a.bonus_difference ?? null, a.net_arrear ?? null, a.created_by ?? null, a.created_at ?? null, a.updated_by ?? null, a.updated_at ?? null]
+      );
+    } catch { /* local mirror only */ }
   }
 
   public updatePayslipFullVariableInputs(id: string, inputs: any): Payslip | null {

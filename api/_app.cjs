@@ -24318,15 +24318,14 @@ var require_sqlite3 = __commonJS({
   }
 });
 
-// api/server-entry.ts
-var server_entry_exports = {};
-__export(server_entry_exports, {
+// server/app.ts
+var app_exports = {};
+__export(app_exports, {
   createApp: () => createApp,
+  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(server_entry_exports);
-
-// server/app.ts
+module.exports = __toCommonJS(app_exports);
 var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -25251,7 +25250,10 @@ var PayrollDatabase = class _PayrollDatabase {
       cheque_payments: [],
       minimum_wage_rates: [],
       month_status: [],
-      attendance_upload_batches: []
+      attendance_upload_batches: [],
+      // Bonus Provision register + Manual Arrear register (additive)
+      bonus_provisions: [],
+      arrears: []
     };
     this.inMemoryOnly = false;
     /** When true, persistData() will NOT push to Supabase (seed data protection). */
@@ -26270,6 +26272,54 @@ var PayrollDatabase = class _PayrollDatabase {
       status TEXT DEFAULT 'ACCUMULATED',
       paid_in_month TEXT,
       created_at TEXT
+    )`);
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN unit TEXT`, () => {
+    });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN department TEXT`, () => {
+    });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN source TEXT`, () => {
+    });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN remarks TEXT`, () => {
+    });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN created_by TEXT`, () => {
+    });
+    this.dbSqlite.run(`ALTER TABLE bonus_provisions ADD COLUMN updated_at TEXT`, () => {
+    });
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS arrears (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT,
+      emp_code TEXT,
+      employee_name TEXT,
+      company TEXT,
+      unit TEXT,
+      department TEXT,
+      arrear_month TEXT,
+      amount REAL,
+      reason TEXT,
+      remarks TEXT,
+      pf_effect REAL,
+      bonus_effect REAL,
+      status TEXT DEFAULT 'DRAFT',
+      source TEXT DEFAULT 'MANUAL',
+      effective_from TEXT,
+      actual_salary REAL,
+      revised_salary REAL,
+      basic_actual REAL,
+      basic_revised REAL,
+      hra_actual REAL,
+      hra_revised REAL,
+      other_components_actual TEXT,
+      other_components_revised TEXT,
+      gross_actual REAL,
+      gross_revised REAL,
+      salary_difference REAL,
+      pf_difference REAL,
+      bonus_difference REAL,
+      net_arrear REAL,
+      created_by TEXT,
+      created_at TEXT,
+      updated_by TEXT,
+      updated_at TEXT
     )`);
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS salary_revisions (
       id TEXT PRIMARY KEY,
@@ -29698,6 +29748,7 @@ var PayrollDatabase = class _PayrollDatabase {
           base_salary: rate_base,
           bonus_rate: 8.33,
           bonus_amount: earned_bonus,
+          source: "SALARY_AUTO",
           status: "ACCUMULATED",
           paid_in_month: null,
           created_at: (/* @__PURE__ */ new Date()).toISOString()
@@ -29794,6 +29845,213 @@ var PayrollDatabase = class _PayrollDatabase {
       snapshot_loan_emi: loan_deduction,
       snapshot_total_loan_active: activeLoans.length
     };
+  }
+  static {
+    // ═══════════════ BONUS PROVISION — MANUAL ENTRY + AUTO GENERATION ═══════════════
+    //
+    // BONUS PERIOD: Oct-2025 → Sep-2026. Formula: Basic × 8.33% (Payment of Bonus Act).
+    //
+    // SPLIT:
+    //   Oct-25 … Mar-26 → HR enters MANUALLY (historical provisions; never auto-touched).
+    //   Apr-26 onward   → generated AUTOMATICALLY from that month's Salary Sheet Basic
+    //                     (effective-date salary resolution, identical to payroll engine).
+    //
+    // Records carry source = 'MANUAL' | 'SALARY_AUTO'. Generation is IDEMPOTENT:
+    //   • key = BONUS-<empId>-<month> (same key payroll's own provision writer uses),
+    //   • MANUAL records are never overwritten by auto-generation,
+    //   • existing SALARY_AUTO records are refreshed (rate may change on re-run),
+    //   • running generation twice never duplicates rows.
+    /** First month generated automatically in the Oct-25 → Sep-26 bonus cycle. */
+    this.BONUS_AUTO_FROM_MONTH = "2026-04";
+  }
+  static {
+    this.BONUS_PERIOD_END_MONTH = "2026-09";
+  }
+  getBonusProvisions() {
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    return this.data.bonus_provisions;
+  }
+  saveBonusProvision(prov) {
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const index = this.data.bonus_provisions.findIndex((b) => b.id === prov.id);
+    if (index >= 0) {
+      this.data.bonus_provisions[index] = { ...this.data.bonus_provisions[index], ...prov, updated_at: nowIso };
+    } else {
+      this.data.bonus_provisions.push({ ...prov, created_at: prov.created_at || nowIso, updated_at: nowIso });
+    }
+    this._mirrorBonusProvision(index >= 0 ? this.data.bonus_provisions[index] : this.data.bonus_provisions[this.data.bonus_provisions.length - 1]);
+    this.persistData();
+  }
+  deleteBonusProvision(id) {
+    const doomed = (this.data.bonus_provisions || []).find((b) => b.id === id);
+    if (doomed) this._tombstone("bonus_provisions", doomed);
+    if (this.data.bonus_provisions) {
+      this.data.bonus_provisions = this.data.bonus_provisions.filter((b) => b.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM bonus_provisions WHERE id = ?`, [id]);
+    this.persistData();
+  }
+  /**
+   * Generate automatic Bonus Provisions for months >= Apr-2026 from each month's
+   * effective Salary-Sheet Basic (effective-date revision resolution, identical to
+   * the payroll engine). MANUAL records are NEVER overwritten. IDEMPOTENT:
+   * re-running refreshes existing SALARY_AUTO rows in place, never duplicates.
+   */
+  generateAutomaticBonusProvisions(opts) {
+    const fromMonth = opts?.fromMonth || _PayrollDatabase.BONUS_AUTO_FROM_MONTH;
+    const toMonth = opts?.toMonth || _PayrollDatabase.BONUS_PERIOD_END_MONTH;
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    const byId = new Map(this.data.bonus_provisions.map((b) => [b.id, b]));
+    let created = 0, updated = 0, skippedManual = 0;
+    for (const emp of this.data.employees || []) {
+      if (emp.status && emp.status !== "ACTIVE") continue;
+      const revisions = (this.data.salary_revisions || []).filter((r) => r.employee_code === emp.id || r.employee_id === emp.id).sort((a, b) => (a.effective_date || "").localeCompare(b.effective_date || ""));
+      for (const month of this._monthRange(fromMonth, toMonth)) {
+        const monthEnd = `${month}-31`;
+        const applicable = revisions.filter((r) => r.effective_date && r.effective_date <= monthEnd);
+        let basic = 0;
+        if (applicable.length > 0) {
+          basic = Number(applicable[applicable.length - 1].new_salary) || 0;
+        } else if (revisions.length > 0) {
+          basic = Number(revisions[0].old_salary) || 0;
+        } else {
+          basic = Number(emp.base_salary) || 0;
+        }
+        if (basic <= 0) continue;
+        const id = `BONUS-${emp.id}-${month}`;
+        const existing = byId.get(id);
+        if (existing && existing.source === "MANUAL") {
+          skippedManual++;
+          continue;
+        }
+        const amount = Math.round(basic * 0.0833);
+        const record = {
+          id,
+          employee_id: emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          month,
+          base_salary: basic,
+          bonus_rate: 8.33,
+          bonus_amount: amount,
+          source: "SALARY_AUTO",
+          status: existing?.status === "PAID" ? "PAID" : "ACCUMULATED",
+          paid_in_month: existing?.paid_in_month ?? null,
+          created_at: existing?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        if (existing) {
+          Object.assign(existing, record);
+          updated++;
+        } else {
+          this.data.bonus_provisions.push(record);
+          byId.set(id, record);
+          created++;
+        }
+      }
+    }
+    if (created > 0 || updated > 0) {
+      for (const p of this.data.bonus_provisions) {
+        if (p.source === "SALARY_AUTO") this._mirrorBonusProvision(p);
+      }
+      this.persistData();
+    }
+    if (opts?.operator) this.logAudit("Bonus Provision Generated", `Automatic bonus provisions: ${created} created, ${updated} refreshed (${fromMonth} \u2192 ${toMonth})`, opts.operator);
+    return { created, updated, skippedManual };
+  }
+  _monthRange(fromMonth, toMonth) {
+    const out = [];
+    const parts = fromMonth.split("-").map(Number);
+    const partsTo = toMonth.split("-").map(Number);
+    let y = parts[0], m = parts[1];
+    const ty = partsTo[0], tm = partsTo[1];
+    while (y < ty || y === ty && m <= tm) {
+      out.push(`${y}-${String(m).padStart(2, "0")}`);
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+    return out;
+  }
+  /** Best-effort SQLite mirror for a bonus provision row (authoritative store = cloud). */
+  _mirrorBonusProvision(p) {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO bonus_provisions (id, employee_id, employee_name, company, unit, department, month, base_salary, bonus_rate, bonus_amount, source, status, paid_in_month, remarks, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [p.id, p.employee_id ?? null, p.employee_name ?? null, p.company ?? null, p.unit ?? null, p.department ?? null, p.month, p.base_salary ?? 0, p.bonus_rate ?? 8.33, p.bonus_amount ?? 0, p.source ?? "SALARY_AUTO", p.status ?? "ACCUMULATED", p.paid_in_month ?? null, p.remarks ?? null, p.created_by ?? null, p.created_at ?? null, p.updated_at ?? null]
+      );
+    } catch {
+    }
+  }
+  // ═══════════════ ARREAR — 100% MANUAL REGISTER (+ future increment foundation) ═══════════════
+  //
+  // CURRENT MODE: MANUAL ONLY. HR adds month-wise arrear entries. NO automatic
+  // calculation, NO backdated generation, NO payroll mutation from this register.
+  //
+  // FUTURE FOUNDATION (structured, NOT activated): effective_from / actual_salary /
+  // revised_salary / *_actual / *_revised / salary_difference / pf_difference /
+  // bonus_difference / net_arrear — stored so a future increment-arrear workflow can
+  // populate them. Future model: Salary Difference + PF effect + Bonus effect
+  // = Final Arrear impact. No code path computes these today.
+  getArrears() {
+    if (!this.data.arrears) this.data.arrears = [];
+    return this.data.arrears;
+  }
+  saveArrear(entry) {
+    if (!this.data.arrears) this.data.arrears = [];
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (!entry.arrear_month) return { success: false, error: "Arrear month is required" };
+    if (!entry.employee_id) return { success: false, error: "Employee is required" };
+    const amount = Number(entry.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: "Arrear amount must be a positive number" };
+    const dup = this.data.arrears.find(
+      (a) => a.id !== entry.id && a.employee_id === entry.employee_id && a.arrear_month === entry.arrear_month && Number(a.amount) === amount && String(a.reason || "") === String(entry.reason || "")
+    );
+    if (dup) return { success: false, duplicate: true, error: `Duplicate: already exists for ${entry.arrear_month} (amount ${amount})` };
+    const index = this.data.arrears.findIndex((a) => a.id === entry.id);
+    if (index >= 0) {
+      this.data.arrears[index] = { ...this.data.arrears[index], ...entry, amount, source: "MANUAL", updated_at: nowIso };
+      this._mirrorArrear(this.data.arrears[index]);
+    } else {
+      const rec = {
+        ...entry,
+        id: entry.id || `ARR-${Math.random().toString(36).substring(2, 11).toUpperCase()}`,
+        amount,
+        source: "MANUAL",
+        status: entry.status || "DRAFT",
+        pf_effect: entry.pf_effect !== void 0 && entry.pf_effect !== null && entry.pf_effect !== "" ? Number(entry.pf_effect) : null,
+        bonus_effect: entry.bonus_effect !== void 0 && entry.bonus_effect !== null && entry.bonus_effect !== "" ? Number(entry.bonus_effect) : null,
+        created_by: entry.created_by || null,
+        created_at: entry.created_at || nowIso,
+        updated_at: nowIso
+      };
+      this.data.arrears.push(rec);
+      this._mirrorArrear(rec);
+    }
+    this.persistData();
+    return { success: true };
+  }
+  deleteArrear(id) {
+    const doomed = (this.data.arrears || []).find((a) => a.id === id);
+    if (doomed) this._tombstone("arrears", doomed);
+    if (this.data.arrears) {
+      this.data.arrears = this.data.arrears.filter((a) => a.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM arrears WHERE id = ?`, [id]);
+    this.persistData();
+  }
+  /** Best-effort SQLite mirror for an arrear row (authoritative store = cloud). */
+  _mirrorArrear(a) {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO arrears (id, employee_id, emp_code, employee_name, company, unit, department, arrear_month, amount, reason, remarks, pf_effect, bonus_effect, status, source, effective_from, actual_salary, revised_salary, basic_actual, basic_revised, hra_actual, hra_revised, other_components_actual, other_components_revised, gross_actual, gross_revised, salary_difference, pf_difference, bonus_difference, net_arrear, created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [a.id, a.employee_id ?? null, a.emp_code ?? null, a.employee_name ?? null, a.company ?? null, a.unit ?? null, a.department ?? null, a.arrear_month ?? null, a.amount ?? 0, a.reason ?? null, a.remarks ?? null, a.pf_effect ?? null, a.bonus_effect ?? null, a.status ?? "DRAFT", a.source ?? "MANUAL", a.effective_from ?? null, a.actual_salary ?? null, a.revised_salary ?? null, a.basic_actual ?? null, a.basic_revised ?? null, a.hra_actual ?? null, a.hra_revised ?? null, a.other_components_actual ? JSON.stringify(a.other_components_actual) : null, a.other_components_revised ? JSON.stringify(a.other_components_revised) : null, a.gross_actual ?? null, a.gross_revised ?? null, a.salary_difference ?? null, a.pf_difference ?? null, a.bonus_difference ?? null, a.net_arrear ?? null, a.created_by ?? null, a.created_at ?? null, a.updated_by ?? null, a.updated_at ?? null]
+      );
+    } catch {
+    }
   }
   updatePayslipFullVariableInputs(id, inputs) {
     const s = this.data.payslips.find((p) => p.id === id);
@@ -34161,6 +34419,226 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
+  app.get("/api/bonus-provisions", (req, res) => {
+    try {
+      const { employee_id, month, company, unit, department } = req.query;
+      let rows = db.getBonusProvisions();
+      if (employee_id) rows = rows.filter((b) => b.employee_id === employee_id);
+      if (month) rows = rows.filter((b) => b.month === month);
+      if (company && company !== "ALL") rows = rows.filter((b) => b.company === company);
+      if (unit && unit !== "ALL") rows = rows.filter((b) => (b.unit || "") === unit);
+      if (department && department !== "ALL") rows = rows.filter((b) => (b.department || "") === department);
+      rows = rows.slice().sort((a, b) => (a.month || "").localeCompare(b.month || "") || String(a.employee_name || "").localeCompare(String(b.employee_name || "")));
+      const manualTotal = rows.filter((b) => b.source === "MANUAL").reduce((s, b) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoTotal = rows.filter((b) => b.source === "SALARY_AUTO").reduce((s, b) => s + (Number(b.bonus_amount) || 0), 0);
+      const manualMonths = ["2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"];
+      const autoMonths = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"];
+      const manualPeriodTotal = rows.filter((b) => manualMonths.includes(b.month)).reduce((s, b) => s + (Number(b.bonus_amount) || 0), 0);
+      const autoPeriodTotal = rows.filter((b) => autoMonths.includes(b.month)).reduce((s, b) => s + (Number(b.bonus_amount) || 0), 0);
+      const byEmployee = {};
+      const byMonth = {};
+      for (const b of rows) {
+        byEmployee[b.employee_id] = (byEmployee[b.employee_id] || 0) + (Number(b.bonus_amount) || 0);
+        byMonth[b.month] = (byMonth[b.month] || 0) + (Number(b.bonus_amount) || 0);
+      }
+      res.json({
+        period: "2025-10 to 2026-09",
+        bonus_rate: 8.33,
+        rows,
+        totals: {
+          overall: manualTotal + autoTotal,
+          manual_total: manualTotal,
+          auto_total: autoTotal,
+          oct25_mar26_total: manualPeriodTotal,
+          apr26_sep26_total: autoPeriodTotal,
+          employee_wise: byEmployee,
+          month_wise: byMonth
+        }
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/bonus-provisions", (req, res) => {
+    try {
+      const b = req.body || {};
+      if (!b.employee_id) return res.status(400).json({ error: "Employee is required" });
+      if (!b.month) return res.status(400).json({ error: "Month is required (YYYY-MM)" });
+      if (!/^\d{4}-\d{2}$/.test(String(b.month))) return res.status(400).json({ error: "Month must be YYYY-MM" });
+      const emp = db.getEmployeeById(String(b.employee_id));
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+      const id = `BONUS-${b.employee_id}-${b.month}`;
+      const existing = db.getBonusProvisions().find((x) => x.id === id);
+      if (existing && existing.source === "MANUAL") {
+        return res.status(409).json({ error: "Duplicate: manual provision already exists for this employee and month", duplicate: true });
+      }
+      const basic = b.base_salary !== void 0 && b.base_salary !== null && b.base_salary !== "" ? Number(b.base_salary) : Number(emp.base_salary) || 0;
+      const amount = b.bonus_amount !== void 0 && b.bonus_amount !== null && b.bonus_amount !== "" ? Number(b.bonus_amount) : Math.round(basic * 0.0833);
+      if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: "Invalid bonus amount" });
+      const operator = getOperator(req);
+      const record = {
+        id,
+        employee_id: emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        month: String(b.month),
+        base_salary: basic,
+        bonus_rate: 8.33,
+        bonus_amount: amount,
+        source: "MANUAL",
+        status: b.status || "ACCUMULATED",
+        paid_in_month: b.paid_in_month ?? null,
+        remarks: b.remarks || "",
+        created_by: operator,
+        created_at: existing?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db.saveBonusProvision(record);
+      db.logAudit("Bonus Provision (Manual)", `${emp.name}: ${record.month} provision INR ${amount} (Basic ${basic} \xD7 8.33%)`, operator);
+      res.json({ success: true, provision: record, replacedAuto: !!existing });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.put("/api/bonus-provisions/:id", (req, res) => {
+    try {
+      const existing = db.getBonusProvisions().find((x) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Bonus provision not found" });
+      if (existing.source !== "MANUAL") return res.status(400).json({ error: "Only MANUAL provisions can be edited; SALARY_AUTO rows refresh from the Salary Sheet" });
+      const b = req.body || {};
+      const patch = {};
+      if (b.bonus_amount !== void 0) {
+        const v = Number(b.bonus_amount);
+        if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: "Invalid bonus amount" });
+        patch.bonus_amount = v;
+      }
+      if (b.base_salary !== void 0) {
+        const v = Number(b.base_salary);
+        if (Number.isFinite(v) && v >= 0) patch.base_salary = v;
+      }
+      if (b.remarks !== void 0) patch.remarks = String(b.remarks);
+      if (b.status !== void 0) patch.status = String(b.status);
+      db.saveBonusProvision({ ...existing, ...patch, id: existing.id });
+      db.logAudit("Bonus Provision Updated", `${existing.employee_name} ${existing.month}: manual provision updated`, getOperator(req));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/bonus-provisions/:id", async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") return res.status(403).json({ error: "Only Super Admin can delete bonus provisions" });
+      const existing = db.getBonusProvisions().find((x) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Bonus provision not found" });
+      db.deleteBonusProvision(req.params.id);
+      db.logAudit("Bonus Provision Deleted", `${existing.employee_name} ${existing.month} (${existing.source}) deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 delete not saved" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/bonus-provisions/generate", async (req, res) => {
+    try {
+      const { from_month, to_month } = req.body || {};
+      const result = db.generateAutomaticBonusProvisions({
+        fromMonth: from_month || void 0,
+        toMonth: to_month || void 0,
+        operator: getOperator(req)
+      });
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 provision generation not saved" });
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/arrears", (req, res) => {
+    try {
+      const { employee_id, month, company, unit } = req.query;
+      let rows = db.getArrears();
+      if (employee_id) rows = rows.filter((a) => a.employee_id === employee_id);
+      if (month) rows = rows.filter((a) => a.arrear_month === month);
+      if (company && company !== "ALL") rows = rows.filter((a) => a.company === company);
+      if (unit && unit !== "ALL") rows = rows.filter((a) => (a.unit || "") === unit);
+      rows = rows.slice().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      const total = rows.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+      res.json({ mode: "MANUAL", rows, total });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/arrears", async (req, res) => {
+    try {
+      const a = req.body || {};
+      if (!a.employee_id) return res.status(400).json({ error: "Employee is required" });
+      const emp = db.getEmployeeById(String(a.employee_id));
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+      const operator = getOperator(req);
+      const entry = {
+        ...a,
+        id: a.id || void 0,
+        employee_id: emp.id,
+        emp_code: emp.emp_code || emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        source: "MANUAL",
+        created_by: a.created_by || operator
+      };
+      const result = db.saveArrear(entry);
+      if (!result.success) return res.status(result.duplicate ? 409 : 400).json(result);
+      db.logAudit("Arrear Entry", `${emp.name}: ${entry.arrear_month} manual arrear INR ${entry.amount} (${entry.reason || "no reason"})`, operator);
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 arrear not saved" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.put("/api/arrears/:id", async (req, res) => {
+    try {
+      const existing = db.getArrears().find((x) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Arrear entry not found" });
+      const b = req.body || {};
+      const patch = { updated_by: getOperator(req) };
+      if (b.amount !== void 0) {
+        const v = Number(b.amount);
+        if (!Number.isFinite(v) || v <= 0) return res.status(400).json({ error: "Invalid arrear amount" });
+        patch.amount = v;
+      }
+      for (const k of ["reason", "remarks", "status", "arrear_month", "pf_effect", "bonus_effect", "effective_from", "actual_salary", "revised_salary", "basic_actual", "basic_revised", "hra_actual", "hra_revised", "other_components_actual", "other_components_revised", "gross_actual", "gross_revised", "salary_difference", "pf_difference", "bonus_difference", "net_arrear"]) {
+        if (b[k] !== void 0) patch[k] = b[k];
+      }
+      db.saveArrear({ ...existing, ...patch, id: existing.id });
+      db.logAudit("Arrear Updated", `${existing.employee_name} ${existing.arrear_month}: manual arrear updated`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 arrear update not saved" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/arrears/:id", async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") return res.status(403).json({ error: "Only Super Admin can delete arrear entries" });
+      const existing = db.getArrears().find((x) => x.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Arrear entry not found" });
+      db.deleteArrear(req.params.id);
+      db.logAudit("Arrear Deleted", `${existing.employee_name} ${existing.arrear_month} INR ${existing.amount} deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 arrear delete not saved" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/attendance/corrections", (req, res) => {
     try {
       const { company, employee_id } = req.query;
@@ -35983,324 +36461,9 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
+var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,
   getAppDb
 });
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- *
- * Express application factory — shared by local dev (server.ts) and
- * Vercel Serverless Functions (api/[[...]].ts).
- */
-/*! Bundled license information:
-
-depd/index.js:
-  (*!
-   * depd
-   * Copyright(c) 2014-2018 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-bytes/index.js:
-  (*!
-   * bytes
-   * Copyright(c) 2012-2014 TJ Holowaychuk
-   * Copyright(c) 2015 Jed Watson
-   * MIT Licensed
-   *)
-
-content-type/index.js:
-  (*!
-   * content-type
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-statuses/index.js:
-  (*!
-   * statuses
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-toidentifier/index.js:
-  (*!
-   * toidentifier
-   * Copyright(c) 2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-http-errors/index.js:
-  (*!
-   * http-errors
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-destroy/index.js:
-  (*!
-   * destroy
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-unpipe/index.js:
-  (*!
-   * unpipe
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-raw-body/index.js:
-  (*!
-   * raw-body
-   * Copyright(c) 2013-2014 Jonathan Ong
-   * Copyright(c) 2014-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-ee-first/index.js:
-  (*!
-   * ee-first
-   * Copyright(c) 2014 Jonathan Ong
-   * MIT Licensed
-   *)
-
-on-finished/index.js:
-  (*!
-   * on-finished
-   * Copyright(c) 2013 Jonathan Ong
-   * Copyright(c) 2014 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-body-parser/lib/read.js:
-body-parser/lib/types/raw.js:
-body-parser/lib/types/text.js:
-body-parser/index.js:
-  (*!
-   * body-parser
-   * Copyright(c) 2014-2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-media-typer/index.js:
-  (*!
-   * media-typer
-   * Copyright(c) 2014 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-mime-db/index.js:
-  (*!
-   * mime-db
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-mime-types/index.js:
-  (*!
-   * mime-types
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-type-is/index.js:
-  (*!
-   * type-is
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2014-2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-body-parser/lib/types/json.js:
-body-parser/lib/types/urlencoded.js:
-  (*!
-   * body-parser
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2014-2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-merge-descriptors/index.js:
-  (*!
-   * merge-descriptors
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-encodeurl/index.js:
-  (*!
-   * encodeurl
-   * Copyright(c) 2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-escape-html/index.js:
-  (*!
-   * escape-html
-   * Copyright(c) 2012-2013 TJ Holowaychuk
-   * Copyright(c) 2015 Andreas Lubbe
-   * Copyright(c) 2015 Tiancheng "Timothy" Gu
-   * MIT Licensed
-   *)
-
-parseurl/index.js:
-  (*!
-   * parseurl
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2014-2017 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-finalhandler/index.js:
-  (*!
-   * finalhandler
-   * Copyright(c) 2014-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-express/lib/router/layer.js:
-express/lib/router/route.js:
-express/lib/router/index.js:
-express/lib/middleware/init.js:
-express/lib/middleware/query.js:
-express/lib/view.js:
-express/lib/application.js:
-express/lib/request.js:
-express/lib/express.js:
-express/index.js:
-  (*!
-   * express
-   * Copyright(c) 2009-2013 TJ Holowaychuk
-   * Copyright(c) 2013 Roman Shtylman
-   * Copyright(c) 2014-2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-methods/index.js:
-  (*!
-   * methods
-   * Copyright(c) 2013-2014 TJ Holowaychuk
-   * Copyright(c) 2015-2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-safe-buffer/index.js:
-  (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
-
-content-disposition/index.js:
-  (*!
-   * content-disposition
-   * Copyright(c) 2014-2017 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-etag/index.js:
-  (*!
-   * etag
-   * Copyright(c) 2014-2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-fresh/index.js:
-  (*!
-   * fresh
-   * Copyright(c) 2012 TJ Holowaychuk
-   * Copyright(c) 2016-2017 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-range-parser/index.js:
-  (*!
-   * range-parser
-   * Copyright(c) 2012-2014 TJ Holowaychuk
-   * Copyright(c) 2015-2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-send/index.js:
-  (*!
-   * send
-   * Copyright(c) 2012 TJ Holowaychuk
-   * Copyright(c) 2014-2022 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-forwarded/index.js:
-  (*!
-   * forwarded
-   * Copyright(c) 2014-2017 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-proxy-addr/index.js:
-  (*!
-   * proxy-addr
-   * Copyright(c) 2014-2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-express/lib/utils.js:
-express/lib/response.js:
-  (*!
-   * express
-   * Copyright(c) 2009-2013 TJ Holowaychuk
-   * Copyright(c) 2014-2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-negotiator/index.js:
-  (*!
-   * negotiator
-   * Copyright(c) 2012 Federico Romero
-   * Copyright(c) 2012-2014 Isaac Z. Schlueter
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-accepts/index.js:
-  (*!
-   * accepts
-   * Copyright(c) 2014 Jonathan Ong
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-cookie/index.js:
-  (*!
-   * cookie
-   * Copyright(c) 2012-2014 Roman Shtylman
-   * Copyright(c) 2015 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-vary/index.js:
-  (*!
-   * vary
-   * Copyright(c) 2014-2017 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-
-serve-static/index.js:
-  (*!
-   * serve-static
-   * Copyright(c) 2010 Sencha Inc.
-   * Copyright(c) 2011 TJ Holowaychuk
-   * Copyright(c) 2014-2016 Douglas Christopher Wilson
-   * MIT Licensed
-   *)
-*/
