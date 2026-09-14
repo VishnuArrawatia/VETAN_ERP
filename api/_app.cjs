@@ -29976,6 +29976,111 @@ var PayrollDatabase = class _PayrollDatabase {
     }
     return out;
   }
+  /**
+   * BULK IMPORT of manual bonus provisions (Excel/CSV rows from the template).
+   * Server-side validation + month normalization + duplicate handling.
+   * Does NOT persist per row — caller persists once after the batch.
+   * MANUAL rows are never overwritten; SALARY_AUTO rows may be replaced by
+   * an explicit manual import (same key space as single-entry route).
+   */
+  importBonusProvisions(rows, operator) {
+    const results = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+    rows.forEach((row, i) => {
+      const rowNo = i + 2;
+      const code = String(row["EMPLOYEE CODE"] ?? row["EMPLOYEE_CODE"] ?? "").trim();
+      if (!code) {
+        errors++;
+        results.push({ row: rowNo, employee: "", status: "ERROR", message: "Employee code missing" });
+        return;
+      }
+      const emp = this.data.employees?.find((e) => e.id === code || e.emp_code === code);
+      if (!emp) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Employee not found" });
+        return;
+      }
+      const month = this._normalizeImportMonth(row["MONTH"] ?? row["Month"]);
+      if (!month) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Invalid month (use Oct-25 \u2026 Mar-26 or 2025-10)" });
+        return;
+      }
+      const basicRaw = Number(String(row["BASIC"] ?? row["Basic"] ?? "").replace(/[^0-9.\-]/g, ""));
+      const basic = Number.isFinite(basicRaw) && basicRaw > 0 ? basicRaw : Number(emp.base_salary) || 0;
+      if (basic <= 0) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Basic missing/invalid and employee has no Basic" });
+        return;
+      }
+      const amtRaw = Number(String(row["BONUS AMOUNT"] ?? row["BONUS_AMOUNT"] ?? "").replace(/[^0-9.\-]/g, ""));
+      const amount = Number.isFinite(amtRaw) && amtRaw > 0 ? Math.round(amtRaw) : Math.round(basic * 0.0833);
+      const id = `BONUS-${emp.id}-${month}`;
+      const existing = this.data.bonus_provisions.find((b) => b.id === id);
+      if (existing && existing.source === "MANUAL") {
+        skipped++;
+        results.push({ row: rowNo, employee: code, status: "SKIPPED_DUPLICATE", message: `${month}: manual provision already exists` });
+        return;
+      }
+      const record = {
+        id,
+        employee_id: emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        month,
+        base_salary: basic,
+        bonus_rate: 8.33,
+        bonus_amount: amount,
+        source: "MANUAL",
+        status: "ACCUMULATED",
+        paid_in_month: existing?.paid_in_month ?? null,
+        remarks: String(row["REMARKS"] ?? row["Remarks"] ?? "excel import"),
+        created_by: operator || "excel-import",
+        created_at: existing?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (existing) Object.assign(existing, record);
+      else this.data.bonus_provisions.push(record);
+      imported++;
+      results.push({ row: rowNo, employee: code, status: "IMPORTED", message: `${month}: \u20B9${amount} (Basic \u20B9${basic} \xD7 8.33%)` });
+    });
+    if (imported > 0) {
+      for (const p of this.data.bonus_provisions) if (p.source === "MANUAL") this._mirrorBonusProvision(p);
+    }
+    if (imported > 0 && operator) this.logAudit("Bonus Provisions Imported", `${imported} manual provisions imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
+  }
+  /** Month parser for imports: 'Oct-25'/'Oct-2026'/'2025-10'/'10-2025'/Excel date → 'YYYY-MM'. */
+  _normalizeImportMonth(v) {
+    if (v == null) return null;
+    if (v instanceof Date && !isNaN(v.getTime())) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}`;
+    const s = String(v).trim();
+    if (!s) return null;
+    const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    let m = s.match(/^(\d{4})-(\d{1,2})$/);
+    if (m) {
+      const mo = Number(m[2]);
+      return mo >= 1 && mo <= 12 ? `${m[1]}-${String(mo).padStart(2, "0")}` : null;
+    }
+    m = s.match(/^([A-Za-z]{3,})[-/\s](\d{2,4})$/);
+    if (m) {
+      const idx = MONTHS.findIndex((x) => m[1].toLowerCase().startsWith(x));
+      if (idx >= 0) {
+        let y = Number(m[2]);
+        if (y < 100) y += 2e3;
+        return `${y}-${String(idx + 1).padStart(2, "0")}`;
+      }
+    }
+    m = s.match(/^(\d{1,2})[-/\s](\d{4})$/);
+    if (m) {
+      const mo = Number(m[1]);
+      return mo >= 1 && mo <= 12 ? `${m[2]}-${String(mo).padStart(2, "0")}` : null;
+    }
+    return null;
+  }
   /** Best-effort SQLite mirror for a bonus provision row (authoritative store = cloud). */
   _mirrorBonusProvision(p) {
     try {
@@ -30033,6 +30138,81 @@ var PayrollDatabase = class _PayrollDatabase {
     }
     this.persistData();
     return { success: true };
+  }
+  /**
+   * BULK IMPORT of manual arrear entries (Excel/CSV rows from the template).
+   * Same duplicate rule as saveArrear. Does NOT persist per row — caller persists once.
+   */
+  importArrears(rows, operator) {
+    const results = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.arrears) this.data.arrears = [];
+    rows.forEach((row, i) => {
+      const rowNo = i + 2;
+      const code = String(row["EMPLOYEE CODE"] ?? row["EMPLOYEE_CODE"] ?? "").trim();
+      if (!code) {
+        errors++;
+        results.push({ row: rowNo, employee: "", status: "ERROR", message: "Employee code missing" });
+        return;
+      }
+      const emp = this.data.employees?.find((e) => e.id === code || e.emp_code === code);
+      if (!emp) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Employee not found" });
+        return;
+      }
+      const month = this._normalizeImportMonth(row["ARREAR MONTH"] ?? row["ARREAR_MONTH"] ?? row["MONTH"]);
+      if (!month) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Invalid arrear month (use Apr-26 \u2026 or 2026-04)" });
+        return;
+      }
+      const amount = Number(String(row["AMOUNT"] ?? row["Amount"] ?? "").replace(/[^0-9.\-]/g, ""));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Amount must be a positive number" });
+        return;
+      }
+      const reason = String(row["REASON"] ?? row["Reason"] ?? "").trim();
+      const dup = this.data.arrears.find((a) => a.employee_id === emp.id && a.arrear_month === month && Number(a.amount) === amount && String(a.reason || "") === reason);
+      if (dup) {
+        skipped++;
+        results.push({ row: rowNo, employee: code, status: "SKIPPED_DUPLICATE", message: `${month}: identical entry already exists` });
+        return;
+      }
+      const statusRaw = String(row["STATUS"] ?? row["Status"] ?? "DRAFT").trim().toUpperCase();
+      const status = ["DRAFT", "APPROVED", "PAID"].includes(statusRaw) ? statusRaw : "DRAFT";
+      const num = (k) => {
+        const n = Number(String(row[k] ?? "").replace(/[^0-9.\-]/g, ""));
+        return Number.isFinite(n) && String(row[k] ?? "").trim() !== "" ? n : null;
+      };
+      const rec = {
+        id: `ARR-${Math.random().toString(36).substring(2, 11).toUpperCase()}`,
+        employee_id: emp.id,
+        emp_code: emp.emp_code || emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        arrear_month: month,
+        amount,
+        reason,
+        remarks: String(row["REMARKS"] ?? row["Remarks"] ?? ""),
+        pf_effect: num("PF EFFECT") ?? num("PF_EFFECT"),
+        bonus_effect: num("BONUS EFFECT") ?? num("BONUS_EFFECT"),
+        status,
+        source: "MANUAL",
+        created_by: operator || "excel-import",
+        created_at: (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      this.data.arrears.push(rec);
+      this._mirrorArrear(rec);
+      imported++;
+      results.push({ row: rowNo, employee: code, status: "IMPORTED", message: `${month}: \u20B9${amount}${reason ? ` (${reason})` : ""}` });
+    });
+    if (imported > 0 && operator) this.logAudit("Arrears Imported", `${imported} manual arrears imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
   }
   deleteArrear(id) {
     const doomed = (this.data.arrears || []).find((a) => a.id === id);
@@ -34552,6 +34732,38 @@ async function createApp(supabaseAdmin) {
       });
       const pr = await db.persistDataSync();
       if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 provision generation not saved" });
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/bonus-provisions/import", async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: "No rows to import" });
+      if (rows.length > 1e3) return res.status(400).json({ error: "Too many rows (max 1000 per import)" });
+      const operator = getOperator(req);
+      const result = db.importBonusProvisions(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed - import not saved" });
+      }
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/arrears/import", async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: "No rows to import" });
+      if (rows.length > 1e3) return res.status(400).json({ error: "Too many rows (max 1000 per import)" });
+      const operator = getOperator(req);
+      const result = db.importArrears(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed - import not saved" });
+      }
       res.json({ success: true, ...result });
     } catch (e) {
       res.status(500).json({ error: e.message });

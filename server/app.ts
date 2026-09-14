@@ -2477,6 +2477,42 @@ export async function createApp(supabaseAdmin?: any) {
     }
   });
 
+  // POST /api/bonus-provisions/import - bulk import of MANUAL provisions from Excel rows
+  app.post('/api/bonus-provisions/import', async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows to import' });
+      if (rows.length > 1000) return res.status(400).json({ error: 'Too many rows (max 1000 per import)' });
+      const operator = getOperator(req);
+      const result = db.importBonusProvisions(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed - import not saved' });
+      }
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/arrears/import - bulk import of MANUAL arrears from Excel rows
+  app.post('/api/arrears/import', async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows to import' });
+      if (rows.length > 1000) return res.status(400).json({ error: 'Too many rows (max 1000 per import)' });
+      const operator = getOperator(req);
+      const result = db.importArrears(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed - import not saved' });
+      }
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ─── Arrear Register — 100% MANUAL month-wise entries ───
   // No automatic arrear calculation anywhere in this module. Future increment
   // foundation fields (actual/revised/differences) are stored but never auto-computed.

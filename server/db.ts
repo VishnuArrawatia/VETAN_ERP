@@ -5373,6 +5373,74 @@ export class PayrollDatabase {
     return out;
   }
 
+  /**
+   * BULK IMPORT of manual bonus provisions (Excel/CSV rows from the template).
+   * Server-side validation + month normalization + duplicate handling.
+   * Does NOT persist per row — caller persists once after the batch.
+   * MANUAL rows are never overwritten; SALARY_AUTO rows may be replaced by
+   * an explicit manual import (same key space as single-entry route).
+   */
+  public importBonusProvisions(rows: any[], operator?: string): { results: any[]; imported: number; skipped: number; errors: number } {
+    const results: any[] = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.bonus_provisions) this.data.bonus_provisions = [];
+
+    rows.forEach((row, i) => {
+      const rowNo = i + 2; // template row number (1-based header + guide row)
+      const code = String(row['EMPLOYEE CODE'] ?? row['EMPLOYEE_CODE'] ?? '').trim();
+      if (!code) { errors++; results.push({ row: rowNo, employee: '', status: 'ERROR', message: 'Employee code missing' }); return; }
+      const emp = this.data.employees?.find((e: any) => e.id === code || e.emp_code === code);
+      if (!emp) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Employee not found' }); return; }
+      const month = this._normalizeImportMonth(row['MONTH'] ?? row['Month']);
+      if (!month) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Invalid month (use Oct-25 … Mar-26 or 2025-10)' }); return; }
+      const basicRaw = Number(String(row['BASIC'] ?? row['Basic'] ?? '').replace(/[^0-9.\-]/g, ''));
+      const basic = Number.isFinite(basicRaw) && basicRaw > 0 ? basicRaw : (Number(emp.base_salary) || 0);
+      if (basic <= 0) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Basic missing/invalid and employee has no Basic' }); return; }
+      const amtRaw = Number(String(row['BONUS AMOUNT'] ?? row['BONUS_AMOUNT'] ?? '').replace(/[^0-9.\-]/g, ''));
+      const amount = Number.isFinite(amtRaw) && amtRaw > 0 ? Math.round(amtRaw) : Math.round(basic * 0.0833);
+      const id = `BONUS-${emp.id}-${month}`;
+      const existing = this.data.bonus_provisions.find((b: any) => b.id === id);
+      if (existing && existing.source === 'MANUAL') {
+        skipped++; results.push({ row: rowNo, employee: code, status: 'SKIPPED_DUPLICATE', message: `${month}: manual provision already exists` }); return;
+      }
+      const record = {
+        id, employee_id: emp.id, employee_name: emp.name, company: emp.company, unit: emp.unit || '', department: emp.department || '',
+        month, base_salary: basic, bonus_rate: 8.33, bonus_amount: amount, source: 'MANUAL',
+        status: 'ACCUMULATED', paid_in_month: existing?.paid_in_month ?? null,
+        remarks: String(row['REMARKS'] ?? row['Remarks'] ?? 'excel import'),
+        created_by: operator || 'excel-import',
+        created_at: existing?.created_at || new Date().toISOString(), updated_at: new Date().toISOString()
+      };
+      if (existing) Object.assign(existing, record);
+      else this.data.bonus_provisions.push(record);
+      imported++; results.push({ row: rowNo, employee: code, status: 'IMPORTED', message: `${month}: ₹${amount} (Basic ₹${basic} × 8.33%)` });
+    });
+    if (imported > 0) {
+      for (const p of this.data.bonus_provisions) if (p.source === 'MANUAL') this._mirrorBonusProvision(p);
+    }
+    if (imported > 0 && operator) this.logAudit('Bonus Provisions Imported', `${imported} manual provisions imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
+  }
+
+  /** Month parser for imports: 'Oct-25'/'Oct-2026'/'2025-10'/'10-2025'/Excel date → 'YYYY-MM'. */
+  private _normalizeImportMonth(v: any): string | null {
+    if (v == null) return null;
+    if (v instanceof Date && !isNaN(v.getTime())) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}`;
+    const s = String(v).trim();
+    if (!s) return null;
+    const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    let m = s.match(/^(\d{4})-(\d{1,2})$/);
+    if (m) { const mo = Number(m[2]); return (mo >= 1 && mo <= 12) ? `${m[1]}-${String(mo).padStart(2, '0')}` : null; }
+    m = s.match(/^([A-Za-z]{3,})[-/\s](\d{2,4})$/);
+    if (m) {
+      const idx = MONTHS.findIndex(x => m![1].toLowerCase().startsWith(x));
+      if (idx >= 0) { let y = Number(m[2]); if (y < 100) y += 2000; return `${y}-${String(idx + 1).padStart(2, '0')}`; }
+    }
+    m = s.match(/^(\d{1,2})[-/\s](\d{4})$/);
+    if (m) { const mo = Number(m[1]); return (mo >= 1 && mo <= 12) ? `${m[2]}-${String(mo).padStart(2, '0')}` : null; }
+    return null;
+  }
+
   /** Best-effort SQLite mirror for a bonus provision row (authoritative store = cloud). */
   private _mirrorBonusProvision(p: any): void {
     try {
@@ -5441,6 +5509,49 @@ export class PayrollDatabase {
     // PHASE-2A: persist-before-success
     this.persistData();
     return { success: true };
+  }
+
+  /**
+   * BULK IMPORT of manual arrear entries (Excel/CSV rows from the template).
+   * Same duplicate rule as saveArrear. Does NOT persist per row — caller persists once.
+   */
+  public importArrears(rows: any[], operator?: string): { results: any[]; imported: number; skipped: number; errors: number } {
+    const results: any[] = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.arrears) this.data.arrears = [];
+
+    rows.forEach((row, i) => {
+      const rowNo = i + 2;
+      const code = String(row['EMPLOYEE CODE'] ?? row['EMPLOYEE_CODE'] ?? '').trim();
+      if (!code) { errors++; results.push({ row: rowNo, employee: '', status: 'ERROR', message: 'Employee code missing' }); return; }
+      const emp = this.data.employees?.find((e: any) => e.id === code || e.emp_code === code);
+      if (!emp) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Employee not found' }); return; }
+      const month = this._normalizeImportMonth(row['ARREAR MONTH'] ?? row['ARREAR_MONTH'] ?? row['MONTH']);
+      if (!month) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Invalid arrear month (use Apr-26 … or 2026-04)' }); return; }
+      const amount = Number(String(row['AMOUNT'] ?? row['Amount'] ?? '').replace(/[^0-9.\-]/g, ''));
+      if (!Number.isFinite(amount) || amount <= 0) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Amount must be a positive number' }); return; }
+      const reason = String(row['REASON'] ?? row['Reason'] ?? '').trim();
+      const dup = this.data.arrears.find(a => a.employee_id === emp.id && a.arrear_month === month && Number(a.amount) === amount && String(a.reason || '') === reason);
+      if (dup) { skipped++; results.push({ row: rowNo, employee: code, status: 'SKIPPED_DUPLICATE', message: `${month}: identical entry already exists` }); return; }
+      const statusRaw = String(row['STATUS'] ?? row['Status'] ?? 'DRAFT').trim().toUpperCase();
+      const status = ['DRAFT', 'APPROVED', 'PAID'].includes(statusRaw) ? statusRaw : 'DRAFT';
+      const num = (k: string) => { const n = Number(String(row[k] ?? '').replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) && String(row[k] ?? '').trim() !== '' ? n : null; };
+      const rec = {
+        id: `ARR-${Math.random().toString(36).substring(2, 11).toUpperCase()}`,
+        employee_id: emp.id, emp_code: emp.emp_code || emp.id, employee_name: emp.name,
+        company: emp.company, unit: emp.unit || '', department: emp.department || '',
+        arrear_month: month, amount, reason,
+        remarks: String(row['REMARKS'] ?? row['Remarks'] ?? ''),
+        pf_effect: num('PF EFFECT') ?? num('PF_EFFECT'), bonus_effect: num('BONUS EFFECT') ?? num('BONUS_EFFECT'),
+        status, source: 'MANUAL',
+        created_by: operator || 'excel-import', created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      };
+      this.data.arrears.push(rec);
+      this._mirrorArrear(rec);
+      imported++; results.push({ row: rowNo, employee: code, status: 'IMPORTED', message: `${month}: ₹${amount}${reason ? ` (${reason})` : ''}` });
+    });
+    if (imported > 0 && operator) this.logAudit('Arrears Imported', `${imported} manual arrears imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
   }
 
   public deleteArrear(id: string): void {

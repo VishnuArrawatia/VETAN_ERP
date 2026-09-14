@@ -244,17 +244,51 @@ async function main() {
   ok(r.status === 500 || r.json?.success === false, `generation with cloud down → failure (got ${r.status})`);
   cloudFailMode = false;
 
+  // ════ 9b. EXCEL BULK IMPORT — bonus provisions + arrears ════
+  section('9b. Excel bulk import (bonus + arrear)');
+  r = await call(3481, 'POST', '/api/bonus-provisions/import', { rows: [
+    { 'EMPLOYEE CODE': 'EMPBA2', 'MONTH': 'Oct-25', 'BASIC': 30000, 'REMARKS': 'bulk oct' },
+    { 'EMPLOYEE CODE': 'EMPBA2', 'MONTH': '2025-11', 'BASIC': 30500, 'BONUS AMOUNT': 2600 },
+    { 'EMPLOYEE CODE': 'EMPBA1', 'MONTH': 'Oct-25', 'BASIC': 18000 },
+    { 'EMPLOYEE CODE': 'EMPBA1', 'MONTH': 'Foo-99', 'BASIC': 1000 },
+    { 'EMPLOYEE CODE': 'NOPE9', 'MONTH': 'Dec-25', 'BASIC': 1000 }
+  ]});
+  ok(r.status === 200 && r.json?.success, `bonus import endpoint works (${r.json?.error || 'ok'})`);
+  ok(r.json?.imported === 2 && r.json?.skipped === 1 && r.json?.errors === 2, `import counts 2/1/2 (got ${r.json?.imported}/${r.json?.skipped}/${r.json?.errors})`);
+  list = await call(3481, 'GET', '/api/bonus-provisions?month=2025-10');
+  const octB2 = list.json?.rows?.find((x: any) => x.employee_id === 'EMPBA2');
+  ok(octB2?.source === 'MANUAL' && octB2?.bonus_amount === Math.round(30000 * 0.0833), 'bulk-imported Oct-25 row correct (MANUAL, Basic×8.33%)');
+
+  r = await call(3481, 'POST', '/api/arrears/import', { rows: [
+    { 'EMPLOYEE CODE': 'EMPBA2', 'ARREAR MONTH': 'Aug-26', 'AMOUNT': 4300, 'REASON': 'Bulk import entry', 'PF EFFECT': 300, 'STATUS': 'APPROVED' },
+    { 'EMPLOYEE CODE': 'EMPBA1', 'ARREAR MONTH': '2026-04', 'AMOUNT': 5000, 'REASON': 'Salary adjustment' },
+    { 'EMPLOYEE CODE': 'EMPBA1', 'ARREAR MONTH': 'Sep-26', 'AMOUNT': -50 }
+  ]});
+  ok(r.status === 200 && r.json?.success, `arrear import endpoint works (${r.json?.error || 'ok'})`);
+  ok(r.json?.imported === 1 && r.json?.skipped === 1 && r.json?.errors === 1, `arrear import counts 1/1/1 (got ${r.json?.imported}/${r.json?.skipped}/${r.json?.errors})`);
+  r = await call(3481, 'GET', '/api/arrears?month=2026-08');
+  ok((r.json?.rows || []).some((x: any) => x.employee_id === 'EMPBA2' && x.status === 'APPROVED' && x.pf_effect === 300), 'bulk-imported arrear correct (APPROVED, pf_effect)');
+
+  await flush(app2); srv2.close();
+  const app3: any = await createApp(fakeSupabase as any);
+  const srv3 = app3.listen(3482);
+  ok(await waitReady(3482), 'instance #3 (post-import cold start) ready');
+  list = await call(3482, 'GET', '/api/bonus-provisions');
+  ok(list.json?.rows?.length === 17, `all 17 provisions survive cold start after import (got ${list.json?.rows?.length})`);
+  r = await call(3482, 'GET', '/api/arrears');
+  ok((r.json?.rows || []).length === 6, `all 6 arrears survive cold start (4 manual + 1 recovered after outage-flush + 1 imported) (got ${(r.json?.rows || []).length})`);
+
   // ════ 10. EXISTING BONUS RECORDS INTACT + PAY ROUTE STILL WORKS ════
   section('10. Existing bonus surface intact');
-  r = await call(3481, 'GET', '/api/bonus-register?month=2026-04');
+  r = await call(3482, 'GET', '/api/bonus-register?month=2026-04');
   ok(r.status === 200 && Array.isArray(r.json?.employees), 'existing /api/bonus-register GET still responds');
-  r = await call(3481, 'POST', '/api/bonus-register/pay', { month: '2026-10', company: 'ALL' });
+  r = await call(3482, 'POST', '/api/bonus-register/pay', { month: '2026-10', company: 'ALL' });
   ok(r.status === 200 && r.json?.success, `existing pay route works (updated=${r.json?.updated})`);
-  list = await call(3481, 'GET', '/api/bonus-provisions?month=2026-04');
+  list = await call(3482, 'GET', '/api/bonus-provisions?month=2026-04');
   const paidRow = list.json?.rows?.find((x: any) => x.employee_id === 'EMPBA2' && x.month === '2026-04');
   ok(paidRow?.status === 'PAID', 'pay route marks provision PAID through the same register');
 
-  srv2.close();
+  srv3.close();
   console.log(`\n${'═'.repeat(62)}\n  RESULT: ${pass} PASS, ${fail} FAIL\n${'═'.repeat(62)}`);
   process.exit(fail > 0 ? 1 : 0);
 }
