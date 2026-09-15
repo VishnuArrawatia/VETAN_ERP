@@ -1440,8 +1440,22 @@ export default function App() {
     }
   };
 
-  const fetchEmployeeProfileData = async (employee: Employee) => {
+  const fetchEmployeeProfileData = async (employeeArg: Employee) => {
     try {
+      // STALE-MODAL FIX: the list row this modal was opened from can be minutes
+      // old. Always pull the employee's CURRENT server state before populating
+      // the form — otherwise the modal shows (and can later re-save) stale
+      // values over newer server data.
+      let employee = employeeArg;
+      try {
+        const res = await fetch('/api/employees');
+        if (res.ok) {
+          const all = await res.json();
+          const arr = Array.isArray(all) ? all : (all.employees || []);
+          const found = arr.find((x: any) => x.id === employeeArg.id);
+          if (found) employee = found;
+        }
+      } catch { /* offline — fall back to the list copy */ }
       setSelectedEmployeeProfile(employee);
       setIsEditingProfile(false); // Reset edit state
       setEditId(employee.id);
@@ -2141,6 +2155,19 @@ export default function App() {
         photo: editPhoto
       };
 
+      // STALE-OVERWRITE FIX: send ONLY the fields the user actually changed.
+      // A full-object PUT echoes the modal's pre-edit copy of every other field
+      // — if that copy is stale it silently overwrites newer server values
+      // (reproduced: cost_center was wiped by a stale modal re-save).
+      const baseline = selectedEmployeeProfile as any;
+      const delta: Record<string, any> = {};
+      for (const [k, v] of Object.entries(payload)) {
+        if (JSON.stringify(v) !== JSON.stringify(baseline[k] ?? undefined)) delta[k] = v;
+      }
+      if (Object.keys(delta).length === 0) {
+        alert('No changes detected — nothing to save.');
+        return;
+      }
       const res = await fetch(`/api/employees/${selectedEmployeeProfile.id}`, {
         method: 'PUT',
         headers: { 
@@ -2148,7 +2175,7 @@ export default function App() {
           'X-Operator-Role': activeHR?.role || 'COMPANY_HR',
           'X-Operator-Name': activeHR?.name || 'Admin'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(delta)
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -7318,6 +7345,15 @@ export default function App() {
 
               {/* Modal Footer */}
               <div className="bg-slate-100 p-4 border-t flex justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { if (selectedEmployeeProfile) fetchEmployeeProfileData(selectedEmployeeProfile); }}
+                  title="Server se latest saved data reload karo"
+                  className="px-4 py-2 mr-auto flex items-center gap-1.5 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white border border-blue-100 font-bold text-xs rounded-xl transition cursor-pointer select-none"
+                >
+                  <RefreshCw size={12} />
+                  Refresh
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedEmployeeProfile(null)}
