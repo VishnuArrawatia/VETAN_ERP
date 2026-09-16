@@ -8,6 +8,8 @@ interface BonusRegisterProps {
   activeMonth: string;
   activeCompany: string;
   employees: Employee[];
+  /** Bumps on global Refresh — re-pulls register from server. */
+  dataVersion?: number;
 }
 
 const MANUAL_MONTHS = ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03'];
@@ -33,7 +35,7 @@ interface ProvisionRow {
   remarks?: string;
 }
 
-export default function BonusRegister({ activeCompany, employees }: BonusRegisterProps) {
+export default function BonusRegister({ activeCompany, employees, dataVersion = 0 }: BonusRegisterProps) {
   const [rows, setRows] = useState<ProvisionRow[]>([]);
   const [totals, setTotals] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export default function BonusRegister({ activeCompany, employees }: BonusRegiste
       setLoading(false);
     }
   };
-  useEffect(() => { fetchRows(); }, []);
+  useEffect(() => { fetchRows(); }, [dataVersion]);
 
   const filtered = rows.filter(r =>
     (!fMonth || r.month === fMonth) &&

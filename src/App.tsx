@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, 
@@ -278,6 +278,11 @@ export default function App() {
 
   const [activeMonth, setActiveMonth] = useState('2026-05');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce' | 'bonus' | 'gratuity'>('dashboard');
+  // ── Strong Refresh engine state ──
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [refreshFailures, setRefreshFailures] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0); // bumps → ManagementDashboard re-pulls its cards
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy' | 'salary'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
@@ -1676,6 +1681,55 @@ export default function App() {
     }
   };
 
+  // ── STRONG REFRESH: awaited parallel reload of ALL core data, with
+  // spinner/timestamp/failure feedback. Always reflects server truth — the
+  // underlying fetchers already use cache:'no-store' + cache-busting.
+  const refreshAllData = async () => {
+    if (refreshing) return; // single-flight — no overlapping refresh storms
+    setRefreshing(true);
+    try {
+      const jobs = [
+        fetchEmployees(), fetchPayrollRuns(), fetchLoans(), fetchRevisions(),
+        fetchLeaveApps(), fetchCorrectionsList(), fetchGatePasses(),
+        fetchCompoffRequests(), fetchDepartments(), fetchCompanies(),
+        fetchLoanPolicy(), fetchFAndF()
+      ];
+      if (selectedEmployeeProfile) jobs.push(fetchEmployeeProfileData(selectedEmployeeProfile));
+      await Promise.allSettled(jobs);
+      // Honest reachability probe (lightweight) — surface server-unreachable
+      // instead of silently showing offline-store fallback data.
+      let failures = 0;
+      try {
+        const probe = await fetch('/api/companies', { cache: 'no-store' });
+        if (!probe.ok) failures = 1;
+      } catch { failures = 1; }
+      setRefreshFailures(failures);
+      setLastRefreshed(new Date());
+      setRefreshVersion(v => v + 1);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const refreshRef = useRef<() => Promise<void>>();
+  refreshRef.current = refreshAllData; // fresh closure every render (no stale company/month)
+  const lastRefreshRef = useRef<Date | null>(null);
+  lastRefreshRef.current = lastRefreshed;
+  // AUTO-REFRESH on tab focus/return: jab user wapas aaye, data automatically
+  // server se fresh pull ho jata hai (30s throttle — rapid tab-switch par load nahi).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const last = lastRefreshRef.current?.getTime() || 0;
+      if (Date.now() - last > 30000) refreshRef.current?.();
+    };
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   // Create single employee manually
   /** Standardize employee name to Proper Case */
   const standardizeName = (name: string): string => {
@@ -2516,6 +2570,7 @@ export default function App() {
       <ManagementDashboard 
         employees={employees}
         activeCompany={activeCompany}
+        dataVersion={refreshVersion}
         leaveApps={leaveApps}
         payrollRuns={payrollRuns}
         monthlySlips={monthlySlips}
@@ -2627,25 +2682,15 @@ export default function App() {
             )}
 
             <button
-              onClick={() => {
-                fetchEmployees();
-                fetchPayrollRuns();
-                fetchLoans();
-                fetchRevisions();
-                fetchLeaveApps();
-                fetchCorrectionsList();
-                fetchGatePasses();
-                fetchCompoffRequests();
-                fetchDepartments();
-                fetchCompanies();
-                fetchLoanPolicy();
-                fetchFAndF();
-              }}
-              title="Refresh Data"
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100 transition cursor-pointer flex items-center gap-1 ml-auto md:ml-2"
+              onClick={() => { refreshAllData(); }}
+              disabled={refreshing}
+              title={refreshing ? 'Refreshing all data…' : (lastRefreshed ? `Refresh Data — last updated ${lastRefreshed.toLocaleTimeString('en-IN')}` : 'Refresh Data')}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-100 transition cursor-pointer flex items-center gap-1 ml-auto md:ml-2 ${refreshing ? 'opacity-70 cursor-wait' : ''}`}
             >
-              <RefreshCw size={12} />
-              Refresh
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+              {lastRefreshed && !refreshing && <span className="text-[9px] font-semibold opacity-70">· {lastRefreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
+              {refreshFailures > 0 && !refreshing && <span className="text-[9px] font-bold text-amber-500" title="Server reachable nahi tha — offline data dikh sakta hai. Dobara try karein.">⚠</span>}
             </button>
 
             <button
@@ -3437,6 +3482,7 @@ export default function App() {
                       <ArrearRegister
                         employees={employees}
                         activeCompany={activeCompany}
+                        dataVersion={refreshVersion}
                       />
                     </div>
 
@@ -3530,6 +3576,7 @@ export default function App() {
                 <BonusRegister
                   activeCompany={activeCompany}
                   employees={employees}
+                  dataVersion={refreshVersion}
                 />
               )}
 
@@ -3537,6 +3584,7 @@ export default function App() {
                 <GratuityRegister
                   activeCompany={activeCompany}
                   employees={employees}
+                  dataVersion={refreshVersion}
                 />
               )}
 

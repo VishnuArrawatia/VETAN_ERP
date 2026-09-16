@@ -6,6 +6,8 @@ import * as XLSX from 'xlsx';
 interface GratuityRegisterProps {
   employees: Employee[];
   activeCompany: string;
+  /** Bumps on global Refresh — re-pulls register + reconciliation from server. */
+  dataVersion?: number;
 }
 
 const MONTHS = (() => {
@@ -56,7 +58,7 @@ interface ReconRow {
   forfeited: boolean;
 }
 
-export default function GratuityRegister({ employees, activeCompany }: GratuityRegisterProps) {
+export default function GratuityRegister({ employees, activeCompany, dataVersion = 0 }: GratuityRegisterProps) {
   const [tab, setTab] = useState<'register' | 'recon'>('register');
   const [rows, setRows] = useState<GratRow[]>([]);
   const [totals, setTotals] = useState({ overall: 0, manual_total: 0, auto_total: 0 });
@@ -90,7 +92,7 @@ export default function GratuityRegister({ employees, activeCompany }: GratuityR
       if (res.ok) setRecon(await res.json());
     } catch (e) { console.error('Gratuity recon fetch error:', e); }
   };
-  useEffect(() => { fetchRows(); fetchRecon(); }, []);
+  useEffect(() => { fetchRows(); fetchRecon(); }, [dataVersion]);
 
   const filtered = rows.filter(r =>
     (!fMonth || r.month === fMonth) &&

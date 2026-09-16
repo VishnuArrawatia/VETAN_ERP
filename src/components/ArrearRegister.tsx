@@ -7,6 +7,8 @@ import { downloadArrearTemplate, parseImportFile, normalizeMonth, type ImportRes
 interface ArrearRegisterProps {
   employees: Employee[];
   activeCompany: string;
+  /** Bumps on global Refresh — re-pulls register from server. */
+  dataVersion?: number;
 }
 
 const MONTHS = (() => {
@@ -53,7 +55,7 @@ interface ArrearRow {
   net_arrear?: number | null;
 }
 
-export default function ArrearRegister({ employees, activeCompany }: ArrearRegisterProps) {
+export default function ArrearRegister({ employees, activeCompany, dataVersion = 0 }: ArrearRegisterProps) {
   const [rows, setRows] = useState<ArrearRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -84,7 +86,7 @@ export default function ArrearRegister({ employees, activeCompany }: ArrearRegis
       setLoading(false);
     }
   };
-  useEffect(() => { fetchRows(); }, []);
+  useEffect(() => { fetchRows(); }, [dataVersion]);
 
   const filtered = rows.filter(r =>
     (!fMonth || r.arrear_month === fMonth) &&

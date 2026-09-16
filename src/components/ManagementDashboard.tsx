@@ -52,6 +52,8 @@ interface ManagementDashboardProps {
   compoffRequests?: any[];
   ffRecords?: any[];
   onLogout?: () => void;
+  /** Bumps on every global Refresh / focus-return — MD cards re-pull server truth. */
+  dataVersion?: number;
 }
 
 export default function ManagementDashboard({
@@ -67,7 +69,8 @@ export default function ManagementDashboard({
   setActiveMonth,
   compoffRequests = [],
   ffRecords = [],
-  onLogout
+  onLogout,
+  dataVersion = 0
 }: ManagementDashboardProps) {
   // Filter employees by activeCompany — ALL downstream code must use this filtered list
   const filteredEmps = activeCompany && activeCompany !== 'ALL' && activeCompany !== 'GROUP'
@@ -101,7 +104,7 @@ export default function ManagementDashboard({
       .then(d => { if (alive) setGratuityLiability({ total: Number(d?.totals?.overall) || 0, vested: 0, loaded: true }); })
       .catch(() => { if (alive) setGratuityLiability({ total: 0, vested: 0, loaded: false }); });
     return () => { alive = false; };
-  }, []);
+  }, [dataVersion]);
 
   // --- STATS COMPUTATIONS ---
   const stats = useMemo(() => {
