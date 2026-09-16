@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Building2, 
@@ -81,6 +81,22 @@ export default function ManagementDashboard({
   const [selectedUnit, setSelectedUnit] = useState<string>(companies[0]?.id || 'SVN-1');
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
+
+  // MD read-only Bonus Provision + Arrear totals — fetched here (read-only GETs) so App.tsx stays untouched.
+  const [bonusProvision, setBonusProvision] = useState<{ total: number; manual: number; auto: number; loaded: boolean } | null>(null);
+  const [arrearTotal, setArrearTotal] = useState<{ total: number; count: number; loaded: boolean } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/bonus-provisions', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(d => { if (alive) setBonusProvision({ total: Number(d?.totals?.overall) || 0, manual: Number(d?.totals?.manual_total) || 0, auto: Number(d?.totals?.auto_total) || 0, loaded: true }); })
+      .catch(() => { if (alive) setBonusProvision({ total: 0, manual: 0, auto: 0, loaded: false }); });
+    fetch('/api/arrears', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(d => { if (alive) setArrearTotal({ total: Number(d?.total) || 0, count: Array.isArray(d?.rows) ? d.rows.length : 0, loaded: true }); })
+      .catch(() => { if (alive) setArrearTotal({ total: 0, count: 0, loaded: false }); });
+    return () => { alive = false; };
+  }, []);
 
   // --- STATS COMPUTATIONS ---
   const stats = useMemo(() => {
@@ -649,6 +665,26 @@ export default function ManagementDashboard({
                     {stats.totalOvertimeHrs === 0 ? "Pending Data Upload" : `${stats.totalOvertimeHrs.toLocaleString()} Hrs`}
                   </p>
                   <span className="text-[9px] text-slate-500 block">Floor overtime logged</span>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-1">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Bonus Provision (Oct-25 → Sep-26)</span>
+                  <p className="text-xl font-black font-mono text-fuchsia-400 tracking-tight">
+                    {bonusProvision === null ? "…" : bonusProvision.total === 0 ? "Pending Data Upload" : `₹${bonusProvision.total.toLocaleString('en-IN')}`}
+                  </p>
+                  <span className="text-[9px] text-slate-500 block">
+                    {bonusProvision && bonusProvision.total > 0 ? `Manual ₹${bonusProvision.manual.toLocaleString('en-IN')} · Auto ₹${bonusProvision.auto.toLocaleString('en-IN')}` : "8.33% of Basic — cycle total"}
+                  </span>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-1">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Arrear Payable (Manual)</span>
+                  <p className="text-xl font-black font-mono text-rose-400 tracking-tight">
+                    {arrearTotal === null ? "…" : arrearTotal.count === 0 ? "No Arrear Entries" : `₹${arrearTotal.total.toLocaleString('en-IN')}`}
+                  </p>
+                  <span className="text-[9px] text-slate-500 block">
+                    {arrearTotal && arrearTotal.count > 0 ? `${arrearTotal.count} manual entr${arrearTotal.count === 1 ? 'y' : 'ies'}` : "Manual month-wise register"}
+                  </span>
                 </div>
 
               </div>
