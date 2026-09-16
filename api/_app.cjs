@@ -32175,6 +32175,30 @@ Sakar & SVN Group`;
       return null;
     }
   }
+  /**
+   * LIVE SYNC (Phase-2E): cheap cloud version probe — selects ONLY the
+   * updated_at column of the authoritative store row (no payload transfer).
+   * Clients poll this (~15s) to detect that SOMEONE changed shared data, then
+   * refresh their own views. Never returns timestamps: safe to expose.
+   */
+  async getCloudVersion() {
+    const employeeCount = this.data?.employees?.length || 0;
+    if (!this.supabaseAdmin) return { version: "local", employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    try {
+      const TIMEOUT_MS = 5e3;
+      const timeoutPromise = new Promise(
+        (_, reject) => setTimeout(() => reject(new Error("version probe timeout")), TIMEOUT_MS)
+      );
+      const queryPromise = this.supabaseAdmin.from("vetan_erp_store").select("updated_at").eq("id", "live").maybeSingle();
+      const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error || !row) {
+        return { version: this._loadedVersion || "unknown", employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+      }
+      return { version: row.updated_at || "", employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    } catch {
+      return { version: this._loadedVersion || "unknown", employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    }
+  }
   /** Force an awaited upsert to Supabase (for critical writes). */
   async forcePersistToSupabase() {
     if (!this.supabaseAdmin) return { ok: false, error: "No Supabase client" };
@@ -33232,6 +33256,15 @@ async function createApp(supabaseAdmin) {
     }
     return [];
   }
+  app.get("/api/version", async (req, res) => {
+    try {
+      const v = await db.getCloudVersion();
+      res.setHeader("Cache-Control", "no-store");
+      res.json(v);
+    } catch (e) {
+      res.status(200).json({ version: "unknown", employees: 0, loadedFromSeed: true });
+    }
+  });
   app.get("/api/db-status", (req, res) => {
     const isMock = db.inMemoryOnly;
     const employeeCount = db.data?.employees?.length || 0;

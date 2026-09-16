@@ -273,6 +273,20 @@ export async function createApp(supabaseAdmin?: any) {
   }
 
   // Database and server status API
+  // LIVE SYNC (Phase-2E): lightweight version beacon for client auto-refresh.
+  // Auth-free by design — exposes NOTHING except a cloud timestamp and employee
+  // count (both already public via the login screen's health display). Clients
+  // poll it, and when the version changes they refresh their own data views.
+  app.get('/api/version', async (req, res) => {
+    try {
+      const v = await db.getCloudVersion();
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(v);
+    } catch (e: any) {
+      res.status(200).json({ version: 'unknown', employees: 0, loadedFromSeed: true });
+    }
+  });
+
   app.get('/api/db-status', (req, res) => {
     const isMock = db.inMemoryOnly;
     const employeeCount = (db as any).data?.employees?.length || 0;

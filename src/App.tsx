@@ -667,11 +667,22 @@ export default function App() {
       if (loggedInEmployee) {
         headers.set('X-Employee-ID', loggedInEmployee.id || '');
       }
-      const response = await originalFetch(input, {
-        ...init,
-        headers,
-        cache: 'no-store'  // FIX 1: Disable browser/CDN caching — always fetch live data
-      });
+      // LIVE SYNC (Phase-2E): while a mutation (save/edit/delete) is in flight,
+      // mark it so the version-poller pauses — our OWN save's version-bump must
+      // never trigger a redundant refresh of the screen we are typing on.
+      const method = String((init?.method || (typeof input === 'object' && input !== null && 'method' in (input as any) ? (input as any).method : 'GET')) || 'GET').toUpperCase();
+      const isMutation = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+      if (isMutation) savingRef.current += 1;
+      let response: Response;
+      try {
+        response = await originalFetch(input, {
+          ...init,
+          headers,
+          cache: 'no-store'  // FIX 1: Disable browser/CDN caching — always fetch live data
+        });
+      } finally {
+        if (isMutation) savingRef.current = Math.max(0, savingRef.current - 1);
+      }
 
       // FIX 2: Check for persist warnings from the server
       if (response.headers.get('X-Persist-Warning')) {
@@ -1722,6 +1733,54 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  // ═══ LIVE SYNC (Phase-2E) refs — declared early so the global fetch
+  // interceptor can mark save-in-flight for the poller. ═══
+  const liveSyncVerRef = useRef<string | null>(null);
+  const liveSyncBusyRef = useRef(false);
+  /** LIVE SYNC: number of in-flight mutations (poller pauses while > 0). */
+  const savingRef = useRef(0);
+  const liveSyncErrRef = useRef(0);
+
+  // LIVE SYNC poller — refs declared early (above); see Phase-2E comment there.
+  useEffect(() => {
+    if (currentSessionMode === 'LOGIN') return; // login screen needs no sync
+    let stopped = false;
+    let timer: any = null;
+    const tick = async () => {
+      if (stopped) return;
+      if (document.visibilityState !== 'visible') { schedule(15_000); return; }
+      if (liveSyncBusyRef.current || savingRef.current > 0) { schedule(5_000); return; }
+      liveSyncBusyRef.current = true;
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json().catch(() => null);
+          const v = j?.version || null;
+          liveSyncErrRef.current = 0;
+          if (v && liveSyncVerRef.current !== null && v !== liveSyncVerRef.current) {
+            // Someone saved somewhere — pull fresh data for this screen.
+            await refreshRef.current?.();
+          }
+          if (v) liveSyncVerRef.current = v;
+        } else {
+          liveSyncErrRef.current++;
+        }
+      } catch {
+        liveSyncErrRef.current++;
+      } finally {
+        liveSyncBusyRef.current = false;
+        schedule(liveSyncErrRef.current >= 2 ? 60_000 : 15_000);
+      }
+    };
+    const schedule = (ms: number) => {
+      if (stopped) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(tick, ms);
+    };
+    schedule(15_000);
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+  }, [currentSessionMode]);
 
   // Create single employee manually
   /** Standardize employee name to Proper Case */

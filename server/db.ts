@@ -7679,6 +7679,37 @@ Sakar & SVN Group`;
     }
   }
 
+  /**
+   * LIVE SYNC (Phase-2E): cheap cloud version probe — selects ONLY the
+   * updated_at column of the authoritative store row (no payload transfer).
+   * Clients poll this (~15s) to detect that SOMEONE changed shared data, then
+   * refresh their own views. Never returns timestamps: safe to expose.
+   */
+  public async getCloudVersion(): Promise<{ version: string; employees: number; loadedFromSeed: boolean }> {
+    const employeeCount = (this.data as any)?.employees?.length || 0;
+    if (!this.supabaseAdmin) return { version: 'local', employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    try {
+      const TIMEOUT_MS = 5_000;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('version probe timeout')), TIMEOUT_MS)
+      );
+      const queryPromise = this.supabaseAdmin
+        .from('vetan_erp_store')
+        .select('updated_at')
+        .eq('id', 'live')
+        .maybeSingle();
+      const { data: row, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error || !row) {
+        // Fail-soft: report this instance's last known version (no version bump
+        // on error — prevents false change-signals across the fleet).
+        return { version: this._loadedVersion || 'unknown', employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+      }
+      return { version: row.updated_at || '', employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    } catch {
+      return { version: this._loadedVersion || 'unknown', employees: employeeCount, loadedFromSeed: !!this.loadedFromSeed };
+    }
+  }
+
   /** Force an awaited upsert to Supabase (for critical writes). */
   public async forcePersistToSupabase(): Promise<{ ok: boolean; error?: string }> {
     if (!this.supabaseAdmin) return { ok: false, error: 'No Supabase client' };
