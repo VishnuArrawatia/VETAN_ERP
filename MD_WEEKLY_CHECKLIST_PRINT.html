@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VETAN ERP — MD Weekly Data-Integrity Checklist (A4 Print)</title>
+<style>
+  /* ══════════ A4 PRINT SETUP ══════════ */
+  @page { size: A4 portrait; margin: 10mm 9mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #eef1f5; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Noto Sans", sans-serif; color: #1e293b; }
+  .sheet { width: 210mm; min-height: 297mm; margin: 8px auto; background: #fff; padding: 9mm 9mm 7mm; box-shadow: 0 2px 14px rgba(15,23,42,.18); }
+  @media print {
+    body { background: #fff; }
+    .sheet { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+    .no-print { display: none !important; }
+  }
+
+  /* ══════════ SCREEN-ONLY PRINT BUTTON ══════════ */
+  .no-print { position: fixed; right: 18px; bottom: 18px; z-index: 50; }
+  .no-print button {
+    background: #0f172a; color: #fff; border: none; padding: 12px 22px; border-radius: 999px;
+    font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 18px rgba(15,23,42,.35);
+  }
+  .no-print button:hover { background: #1e293b; }
+
+  /* ══════════ LAYOUT ══════════ */
+  .hdr { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; border-bottom: 3px solid #0f172a; padding-bottom: 6px; }
+  .brand { display: flex; gap: 8px; align-items: center; }
+  .logo { width: 34px; height: 34px; border-radius: 8px; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; letter-spacing: .5px; }
+  h1 { font-size: 15.5px; font-weight: 900; letter-spacing: .2px; }
+  .sub { font-size: 9.5px; color: #64748b; margin-top: 1px; }
+  .meta { text-align: right; font-size: 9px; color: #475569; line-height: 1.5; }
+  .meta b { color: #0f172a; }
+
+  .habits { display: flex; gap: 6px; margin: 7px 0 8px; }
+  .habit { flex: 1; background: #f1f5f9; border: 1px solid #e2e8f0; border-left: 4px solid #0ea569; border-radius: 6px; padding: 5px 8px; font-size: 9.3px; line-height: 1.45; }
+  .habit b { color: #065f46; }
+  .habit.warn { border-left-color: #d97706; }
+  .habit.warn b { color: #92400e; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .card { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 10.5px; font-weight: 900; background: #0f172a; color: #fff; padding: 4px 9px; display: flex; justify-content: space-between; align-items: center; }
+  .card h2 .tag { font-size: 8px; font-weight: 700; background: #1e293b; border: 1px solid #334155; padding: 1px 7px; border-radius: 999px; }
+  .card .bd { padding: 6px 9px 7px; font-size: 9.4px; line-height: 1.5; }
+  .ok { color: #047857; font-weight: 800; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.2px; }
+  th, td { border: 1px solid #e2e8f0; padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; font-size: 8.6px; text-transform: uppercase; letter-spacing: .4px; color: #475569; }
+  td b { color: #0f172a; }
+  .mono { font-family: Consolas, Menlo, monospace; font-size: 8.8px; }
+
+  .checks { list-style: none; }
+  .checks li { display: flex; gap: 6px; align-items: flex-start; padding: 2.5px 0; }
+  .box { flex: 0 0 auto; width: 10px; height: 10px; border: 1.6px solid #334155; border-radius: 2.5px; margin-top: 1.5px; }
+
+  .flag-red { background: #fef2f2; }
+  .flag-red th { background: #fee2e2; color: #991b1b; }
+  .lvl { display: inline-block; font-size: 8px; font-weight: 900; padding: 0 6px; border-radius: 999px; }
+  .lvl.y { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .lvl.r { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+  .golden { margin-top: 7px; background: #ecfdf5; border: 1.5px dashed #059669; border-radius: 8px; padding: 6px 10px; font-size: 9.6px; font-weight: 700; color: #065f46; text-align: center; }
+  .signrow { display: flex; gap: 7px; margin-top: 7px; align-items: stretch; }
+  .tickcell { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 6px; text-align: center; font-size: 9px; font-weight: 800; color: #475569; }
+  .sig { flex: 2.2; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px 6px; font-size: 8.6px; color: #64748b; display: flex; flex-direction: column; justify-content: flex-end; }
+  .sig .line { border-bottom: 1.2px solid #94a3b8; height: 14px; margin-bottom: 2px; }
+  .foot { margin-top: 5px; font-size: 7.8px; color: #94a3b8; text-align: center; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="brand">
+      <div class="logo">VETAN</div>
+      <div>
+        <h1>MD WEEKLY DATA-INTEGRITY SELF-CHECK</h1>
+        <div class="sub">Har Somwar &nbsp;·&nbsp; ~10 minute &nbsp;·&nbsp; <span class="ok">100% READ-ONLY — sirf dekhna hai, kuch bhi edit/save/delete NAHI</span></div>
+      </div>
+    </div>
+    <div class="meta">
+      <b>VETAN ERP — SVN Group</b><br>
+      Baseline: 16-Sep-2026<br>
+      Week: ______ → ______
+    </div>
+  </div>
+
+  <!-- HABITS -->
+  <div class="habits">
+    <div class="habit"><b>1 · Sirf yehi link:</b> <span class="mono">https://vetan-svn.vercel.app/</span> — Alpha link (<span class="mono">vetan-erp-yddg-alpha</span>) <b>kabhi nahi</b>.</div>
+    <div class="habit warn"><b>2 · Nayi tab + Ctrl+Shift+R</b> → phir login. Purana bandha tab band karo — purana tab purana data dikha sakta hai.</div>
+  </div>
+
+  <div class="grid">
+
+    <!-- A -->
+    <div class="card">
+      <h2>A · HEAD-COUNT SACH <span class="tag">2 min</span></h2>
+      <div class="bd">
+        <table>
+          <tr><th>Kya dekhna hai (Dashboard → Group Executive Summary)</th><th>Baseline</th></tr>
+          <tr><td>Total employees</td><td><b>107</b></td></tr>
+          <tr><td>Company-wise</td><td>SVN-1: 47 · Sakar-I: 30 · SVN-II: 18 · Sakar-III: 10 · Zenivo: 1 · Flare: 1</td></tr>
+          <tr><td>Test/dummy employee (<span class="mono">EMP001…EMP007</span>)</td><td><b class="ok">KABHI nahi dikhna chahiye</b></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="card">
+      <h2>B · LIABILITY CARDS (3) <span class="tag">2 min</span></h2>
+      <div class="bd">
+        <table>
+          <tr><th>Card</th><th>Kya dikhna chahiye</th></tr>
+          <tr><td><b>Bonus Provision</b> (Oct-25 → Sep-26)</td><td>Total ≈ <b>₹12,08,000</b> + Manual/Auto split</td></tr>
+          <tr><td><b>Arrear Payable</b></td><td>HR ki entries (0 bhi sahi — poochho is month arrear hai ya nahi)</td></tr>
+          <tr><td><b>Gratuity Liability</b></td><td>Abhi "Not Generated" theek; Generate ke baad total aana chahiye</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="card">
+      <h2>C · PAYROLL CURRENT MONTH <span class="tag">2 min</span></h2>
+      <div class="bd">
+        <table>
+          <tr><th>Month</th><th>Payslips</th></tr>
+          <tr><td>Apr-26</td><td><b>79</b></td></tr>
+          <tr><td>May-26</td><td><b>37</b></td></tr>
+          <tr><td>Sep-26 (current)</td><td><b>0</b> = abhi process nahi (theek). Month-end ke baad bhi 0 → HR se poochho</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- D -->
+    <div class="card">
+      <h2>D · RANDOM EMPLOYEE SPOT-CHECK <span class="tag">2 min</span></h2>
+      <div class="bd">
+        <ul class="checks">
+          <li><span class="box"></span><span>Koi 2 employee kholo — <b>Photo</b> dikh rahi hai (purani photo wapas nahi aa sakti)</span></li>
+          <li><span class="box"></span><span><b>Mobile / UAN / Marital Status</b> — HR ka last update hi dikh raha hai (purani value NAHI)</span></li>
+          <li><span class="box"></span><span><b>Reporting HOD + Cost Center</b> — sahi bhare hue (achanak blank nahi)</span></li>
+          <li><span class="box"></span><span>Modal me <b>Refresh do baar</b> — dono baar <b>same value</b> (badal jaye = RED FLAG)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- E -->
+    <div class="card">
+      <h2>E · AUDIT SILENCE CHECK <span class="tag">1 min</span></h2>
+      <div class="bd">
+        <ul class="checks">
+          <li><span class="box"></span><span>Aapki permission ke bina <b>"Restore" / "Purge" / "Database Clear"</b> entry NAHI</span></li>
+          <li><span class="box"></span><span>"Employee Deleted/Purged" ho to peeche <b>wajah</b> ho (resignation etc.)</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- F -->
+    <div class="card">
+      <h2>F · CROSS-COMPANY CHECK <span class="tag">1 min</span></h2>
+      <div class="bd">
+        <ul class="checks">
+          <li><span class="box"></span><span>2 alag companies ke 1-1 employee — dono me <b>apni-apni company</b> ka data</span></li>
+          <li><span class="box"></span><span>Cross-company data dikhe → <b>RED FLAG</b></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- RED FLAGS -->
+    <div class="card wide">
+      <h2>🚩 RED FLAG PROTOCOL <span class="tag">koi bhi check fail ho to</span></h2>
+      <div class="bd">
+        <table class="flag-red">
+          <tr><th style="width:14%">Level</th><th style="width:34%">Kab</th><th>Kya karna</th></tr>
+          <tr><td><span class="lvl y">C-1 · YELLOW</span></td><td>Sirf number alag (headcount / bonus total)</td><td>Vishnu/super-admin ko ek line likho: <i>"Check __ me ___ dikha, expected ___"</i> — <b>khud kuch edit/save mat karo</b></td></tr>
+          <tr><td><span class="lvl y">C-2 · YELLOW</span></td><td>Card khaali / "…" ya section load na ho</td><td>Pehle <b>Ctrl+Shift+R</b>, 1 min baad dobara dekho; phir bhi same → C-1 jaisa report</td></tr>
+          <tr><td><span class="lvl r">C-3 · RED</span></td><td>Purani value wapas · dummy employee · bina-wajah Restore/Purge entry</td><td><b>Screenshot + date/time</b> lo → turant Vishnu ko bhejo. Correction tak us section me <b>koi entry nahi</b></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GOLDEN RULE -->
+  <div class="golden">🏆 GOLDEN RULE — "Dekhna allowed, chhoona mana." &nbsp;MD ka kaam sach ko verify karna hai; correction HR/system-admin ke through hi jayegi.</div>
+
+  <!-- SIGN -->
+  <div class="signrow">
+    <div class="tickcell">A ☐</div><div class="tickcell">B ☐</div><div class="tickcell">C ☐</div>
+    <div class="tickcell">D ☐</div><div class="tickcell">E ☐</div><div class="tickcell">F ☐</div>
+    <div class="sig"><div class="line"></div>MD Signature / Date</div>
+  </div>
+  <div class="foot">VETAN ERP · MD Weekly Data-Integrity Checklist · Baseline values live-verified 16-Sep-2026 · Print: A4 portrait</div>
+</div>
+
+<div class="no-print"><button onclick="window.print()">🖨️ Print / Save as PDF (A4)</button></div>
+</body>
+</html>
