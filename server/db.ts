@@ -92,6 +92,13 @@ interface Schema {
   tombstones?: Record<string, Record<string, { deleted_at: string }>>;
 }
 
+/**
+ * PHASE-2D: these demo ids must NEVER enter a business dataset. They exist only
+ * for local-dev SQLite bootstrap via importSeedDataFromSQLite; in-memory seed
+ * starts with EMPTY business collections (see seedDataInMemoryDirectly).
+ */
+const OUT_OF_BUSINESS_SEED_IDS = new Set<string>(['EMP001', 'EMP002', 'EMP003', 'EMP004', 'EMP005', 'EMP006', 'EMP007']);
+
 const SEED_EMPLOYEES: Employee[] = [
   {
     id: 'EMP001',
@@ -576,6 +583,9 @@ export class PayrollDatabase {
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.loadedFromSeed = false; // Real data loaded — allow persistData()
+            // PHASE-2D: adopt the cloud's tombstone map so a cold start that
+            // later falls back to seed can never re-introduce deleted records.
+            this._cloudTombstones = getTombstones(payload);
             this.enforceCompanyCorrections();
             // FIX: Clean up orphaned payroll runs — keep only one per month
             this.cleanupOrphanedPayrollRuns();
@@ -628,6 +638,42 @@ export class PayrollDatabase {
     return new Promise<void>((originalResolve, reject) => {
       const resolve = () => {
         this.enforceCompanyCorrections();
+        // PHASE-2D (SEED-WINDOW FAlL-CLOSED): when Supabase IS configured but
+        // its initial load failed/timed out, the instance would previously boot
+        // on the FULL demo seed (7 dummy employees, demo payslips/attendance).
+        // Even though persist paths are blocked while loadedFromSeed=true, the
+        // api/index.ts cold-start retry calls reloadFromSupabase, whose union
+        // merge treated those seed rows as base-side one-sided records — and
+        // once Supabase recovered, an in-memory store polluted with demo data
+        // could leak into authoritative writes (live-proven: dummy employees
+        // reappeared in production). Never fabricate business data in a
+        // serverless cloud instance: boot EMPTY and wait for the cloud row.
+        const seedBlocked = (d: any) => {
+          if (!d || typeof d !== 'object') return false;
+          const emps = Array.isArray(d.employees) ? d.employees : [];
+          return emps.length > 0 && emps.some((e: any) => e && typeof e.id === 'string' && /^EMP00\d$/.test(e.id));
+        };
+        if (this.supabaseAdmin && this.loadedFromSeed && seedBlocked(this.data)) {
+          console.warn('[PHASE-2D] Supabase-configured instance fell back to DEMO seed — clearing business data (fail-closed). Cloud is the only source of truth.');
+          const empty: any = { ...this.data };
+          empty.employees = [];
+          empty.attendance = [];
+          empty.leave_applications = [];
+          empty.payslips = [];
+          empty.payroll_runs = [];
+          empty.loans = [];
+          empty.ff_settlements = [];
+          empty.salary_revisions = [];
+          empty.assets = [];
+          empty.travel_reimbursements = [];
+          empty.broadcasts = [];
+          empty.bonus_provisions = [];
+          empty.arrears = [];
+          empty.gratuity_provisions = [];
+          this.data = empty;
+          // Gates (companies/departments/users) stay — they are configuration,
+          // not business data; an empty gates list would break login/landing.
+        }
         originalResolve();
       };
       // Helper to wrap database run commands for JSON persistence
@@ -884,9 +930,14 @@ export class PayrollDatabase {
   }
 
   private seedDataInMemoryDirectly() {
-    this.data.employees = [...SEED_EMPLOYEES];
-    this.data.attendance = [...SEED_ATTENDANCE];
-    this.data.leave_applications = [...SEED_LEAVES];
+    // PHASE-2D: business-data collections start EMPTY on every seed boot.
+    // The historical demo employees (7 dummies) leaked into authoritative
+    // cloud writes through the cold-start seed-window (live-proven in
+    // production). Demo records remain only for local-dev SQLite bootstrap
+    // (importSeedDataFromSQLite) and are excluded from business data there.
+    this.data.employees = [];
+    this.data.attendance = [];
+    this.data.leave_applications = [];
     this.data.departments = ['Production', 'QC', 'Maintenance', 'Stores', 'Purchase', 'Accounts', 'HR', 'Dispatch', 'Sales', 'Marketing', 'R&D', 'Administration'];
     this.data.companies = [
       {
@@ -982,6 +1033,8 @@ export class PayrollDatabase {
     ];
 
     const month = '2026-05';
+    // PHASE-2D: demo payroll computation only when demo employees exist
+    // (local-dev bootstrap). In-memory seed now starts business-empty.
     const computedSlips: Payslip[] = [];
     let gross_total = 0;
     let deduct_total = 0;
@@ -2012,6 +2065,7 @@ export class PayrollDatabase {
 
     // Seed Employees
     for (const emp of SEED_EMPLOYEES) {
+      if (OUT_OF_BUSINESS_SEED_IDS.has(emp.id)) continue; // PHASE-2D: demo records never seed business data
       let compCode = emp.company;
       if (compCode as string === 'SVN-1') compCode = 'SVN-1';
       else if (compCode as string === 'SVN II' || compCode as string === 'SVN-II') compCode = 'SVN-II';
@@ -6590,6 +6644,64 @@ Sakar & SVN Group`;
    * was made against a copy the deleter had already removed. Returns the ids
    * dropped (for logging).
    */
+  /** PHASE-2D: last cloud tombstone map — used by _dropCloudTombstonedCollections. */
+  private _cloudTombstones: any = null;
+
+  /**
+   * PHASE-2D (CLOUD-TOMBSTONE BELT): after ANY merge with the authoritative
+   * cloud payload, drop local rows that the cloud has TOMBSTONED unless the
+   * local copy is a genuinely newer re-creation/update (own newer timestamp
+   * created after the deletion — recreated records stay safe).
+   *
+   * WHY THIS EXISTS: `loadedFromSeed` correctly blocks persist paths, but the
+   * union merges in reloadFromSupabase and the RMW/conflict paths still merge
+   * SEED rows into this.data as base-side one-sided records. A tombstone
+   * cannot prove those seed copies stale (they carry no timestamps → storeTs
+   * is null → isTombstoned returns false), so the seed row survives the merge
+   * in memory and the instance's next legitimate write carries it into the
+   * authoritative cloud store. This is the live-proven "deleted employees
+   * reappear" path. Dropping locally here closes the class permanently:
+   * a tombstoned id can only re-enter through insertEmployee (new record with
+   * its own created_at newer than the deletion), never through a stale copy.
+   */
+  private _dropCloudTombstonedCollections(cloudTombstones: any): void {
+    try {
+      if (!cloudTombstones || typeof cloudTombstones !== 'object') return;
+      const data = this.data as any;
+      if (!data || typeof data !== 'object') return;
+      for (const [collection, entries] of Object.entries(cloudTombstones as Record<string, Record<string, { deleted_at: string }>>)) {
+        if (!entries || typeof entries !== 'object') continue;
+        const arr = data[collection];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        const filtered = arr.filter((item: any) => {
+          if (!item || typeof item !== 'object') return true;
+          // (1) Engine semantics (same rules the merge itself uses): a TIMED copy
+          // that provably predates its deletion is suppressed; a timed genuine
+          // re-creation (created_at after the deletion) survives. Untimed copies
+          // are NOT suppressed here — they are handled by (2).
+          if (isTombstoned(cloudTombstones as any, collection, item, null)) return false;
+          // (2) DEMO-SEED LEAK GUARD: seed rows carry no timestamps, so a
+          // tombstone alone cannot prove them stale — but they are recognisable
+          // by their fixed demo ids (EMP001–EMP007). A tombstoned demo-id row
+          // re-introduced by any merge is by definition seed contamination,
+          // never a legitimate re-creation (real employees use SV*-pattern ids).
+          const key = recordKey(item);
+          if (key && /^id:EMP00[1-7]$/.test(key)) {
+            const entry = (cloudTombstones as any)[collection]?.[key];
+            if (entry?.deleted_at) return false; // drop
+          }
+          return true;
+        });
+        if (filtered.length !== arr.length) {
+          console.warn(`[PHASE-2D] Dropped ${arr.length - filtered.length} tombstoned ${collection} row(s) re-introduced by a merge (seed-window/resurrection guard).`);
+          data[collection] = filtered;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[PHASE-2D] tombstone drop pass skipped:', e?.message || e);
+    }
+  }
+
   private _dropDirtyTombstonedEmployees(dirtySnapshot: Map<string, any>): void {
     const tbEmp = getTombstones(this.data).employees || {};
     if (!Object.keys(tbEmp).length) return;
@@ -7241,6 +7353,10 @@ Sakar & SVN Group`;
               if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
             }
             this.data = mergeStores(this.data, rmwRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || '') || null, });
+            // PHASE-2D: belt — tombstoned records re-introduced from this
+            // instance's stale/seed memory must never be carried into the
+            // authoritative store by this persist.
+            this._dropCloudTombstonedCollections(this._cloudTombstones);
             // PHASE-2C: re-apply in-flight edits FIELD-WISE. The remote copy of a
             // dirty employee may carry a DIFFERENT editor's genuinely-newer work —
             // whole-record replacement here would silently erase it (the exact
@@ -7320,6 +7436,9 @@ Sakar & SVN Group`;
                 if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
               }
               this.data = mergeStores(this.data, remoteRow.payload, 'base', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || '') || null, });
+              // PHASE-2D: belt (same as RMW path) — drop tombstoned re-entries
+              // before in-flight edits are re-applied and the write retries.
+              this._dropCloudTombstonedCollections(this._cloudTombstones);
               // PHASE-2C: field-wise re-apply (see RMW block) — remote may carry
               // another editor's newer fields; whole-record swap would erase them.
               if (dirtySnapshot.size > 0) {
@@ -7519,6 +7638,13 @@ Sakar & SVN Group`;
         // failed to upload). Same-ID conflicts prefer the remote copy on an idle
         // reload because the remote is the shared source of truth.
         this.data = mergeStores(this.data, row.payload, 'incoming', { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || '') || null, });
+        // PHASE-2D: keep the authoritative tombstone map current every reload.
+        this._cloudTombstones = getTombstones(row.payload);
+        // PHASE-2D: belt — drop any tombstoned record the union re-introduced
+        // (e.g. seed rows merged as base-side one-sided records during the
+        // cold-start fallback window). Prevents the next legitimate write from
+        // carrying deleted records back into the authoritative cloud store.
+        this._dropCloudTombstonedCollections(this._cloudTombstones);
         this._loadedVersion = remoteUpdatedAt || '';
         this._storeLoadedTs = Date.parse(remoteUpdatedAt || '') || null;
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();

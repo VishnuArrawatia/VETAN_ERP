@@ -24839,6 +24839,7 @@ function computeNewRegimeTax(grossTotalIncome, config) {
 // server/db.ts
 var sqlite3 = null;
 var DB_SQLITE_FILE = import_path.default.join(process.cwd(), "Payroll.db");
+var OUT_OF_BUSINESS_SEED_IDS = /* @__PURE__ */ new Set(["EMP001", "EMP002", "EMP003", "EMP004", "EMP005", "EMP006", "EMP007"]);
 var SEED_EMPLOYEES = [
   {
     id: "EMP001",
@@ -25275,6 +25276,14 @@ var PayrollDatabase = class _PayrollDatabase {
      *  suppresses the stale (untimed) copy during OCC/RMW merges. */
     this._storeLoadedTs = null;
     this._storePersistedTs = null;
+    /**
+     * PHASE-2B: after an OCC merge, drop this instance's in-flight employee edits
+     * for records that a REMOTE instance has deleted. The deletion wins; the edit
+     * was made against a copy the deleter had already removed. Returns the ids
+     * dropped (for logging).
+     */
+    /** PHASE-2D: last cloud tombstone map — used by _dropCloudTombstonedCollections. */
+    this._cloudTombstones = null;
     /** Track last persist success/failure for HR error surfacing */
     this.lastPersistError = null;
     this.lastPersistSuccess = true;
@@ -25322,6 +25331,7 @@ var PayrollDatabase = class _PayrollDatabase {
             this.dbSqlite = new MockDatabase();
             this.inMemoryOnly = true;
             this.loadedFromSeed = false;
+            this._cloudTombstones = getTombstones(payload);
             this.enforceCompanyCorrections();
             this.cleanupOrphanedPayrollRuns();
             console.log(`Loaded ERP data from Supabase (${this.data.employees.length} employees, version: ${this._loadedVersion}).`);
@@ -25363,6 +25373,30 @@ var PayrollDatabase = class _PayrollDatabase {
     return new Promise((originalResolve, reject) => {
       const resolve = () => {
         this.enforceCompanyCorrections();
+        const seedBlocked = (d) => {
+          if (!d || typeof d !== "object") return false;
+          const emps = Array.isArray(d.employees) ? d.employees : [];
+          return emps.length > 0 && emps.some((e) => e && typeof e.id === "string" && /^EMP00\d$/.test(e.id));
+        };
+        if (this.supabaseAdmin && this.loadedFromSeed && seedBlocked(this.data)) {
+          console.warn("[PHASE-2D] Supabase-configured instance fell back to DEMO seed \u2014 clearing business data (fail-closed). Cloud is the only source of truth.");
+          const empty = { ...this.data };
+          empty.employees = [];
+          empty.attendance = [];
+          empty.leave_applications = [];
+          empty.payslips = [];
+          empty.payroll_runs = [];
+          empty.loans = [];
+          empty.ff_settlements = [];
+          empty.salary_revisions = [];
+          empty.assets = [];
+          empty.travel_reimbursements = [];
+          empty.broadcasts = [];
+          empty.bonus_provisions = [];
+          empty.arrears = [];
+          empty.gratuity_provisions = [];
+          this.data = empty;
+        }
         originalResolve();
       };
       const wrapDatabase = (dbInstance) => {
@@ -25586,9 +25620,9 @@ var PayrollDatabase = class _PayrollDatabase {
     this.persistData();
   }
   seedDataInMemoryDirectly() {
-    this.data.employees = [...SEED_EMPLOYEES];
-    this.data.attendance = [...SEED_ATTENDANCE];
-    this.data.leave_applications = [...SEED_LEAVES];
+    this.data.employees = [];
+    this.data.attendance = [];
+    this.data.leave_applications = [];
     this.data.departments = ["Production", "QC", "Maintenance", "Stores", "Purchase", "Accounts", "HR", "Dispatch", "Sales", "Marketing", "R&D", "Administration"];
     this.data.companies = [
       {
@@ -26786,6 +26820,7 @@ var PayrollDatabase = class _PayrollDatabase {
       });
     }
     for (const emp of SEED_EMPLOYEES) {
+      if (OUT_OF_BUSINESS_SEED_IDS.has(emp.id)) continue;
       let compCode = emp.company;
       if (compCode === "SVN-1") compCode = "SVN-1";
       else if (compCode === "SVN II" || compCode === "SVN-II") compCode = "SVN-II";
@@ -31309,11 +31344,50 @@ Sakar & SVN Group`;
     }
   }
   /**
-   * PHASE-2B: after an OCC merge, drop this instance's in-flight employee edits
-   * for records that a REMOTE instance has deleted. The deletion wins; the edit
-   * was made against a copy the deleter had already removed. Returns the ids
-   * dropped (for logging).
+   * PHASE-2D (CLOUD-TOMBSTONE BELT): after ANY merge with the authoritative
+   * cloud payload, drop local rows that the cloud has TOMBSTONED unless the
+   * local copy is a genuinely newer re-creation/update (own newer timestamp
+   * created after the deletion — recreated records stay safe).
+   *
+   * WHY THIS EXISTS: `loadedFromSeed` correctly blocks persist paths, but the
+   * union merges in reloadFromSupabase and the RMW/conflict paths still merge
+   * SEED rows into this.data as base-side one-sided records. A tombstone
+   * cannot prove those seed copies stale (they carry no timestamps → storeTs
+   * is null → isTombstoned returns false), so the seed row survives the merge
+   * in memory and the instance's next legitimate write carries it into the
+   * authoritative cloud store. This is the live-proven "deleted employees
+   * reappear" path. Dropping locally here closes the class permanently:
+   * a tombstoned id can only re-enter through insertEmployee (new record with
+   * its own created_at newer than the deletion), never through a stale copy.
    */
+  _dropCloudTombstonedCollections(cloudTombstones) {
+    try {
+      if (!cloudTombstones || typeof cloudTombstones !== "object") return;
+      const data = this.data;
+      if (!data || typeof data !== "object") return;
+      for (const [collection, entries] of Object.entries(cloudTombstones)) {
+        if (!entries || typeof entries !== "object") continue;
+        const arr = data[collection];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        const filtered = arr.filter((item) => {
+          if (!item || typeof item !== "object") return true;
+          if (isTombstoned(cloudTombstones, collection, item, null)) return false;
+          const key = recordKey(item);
+          if (key && /^id:EMP00[1-7]$/.test(key)) {
+            const entry = cloudTombstones[collection]?.[key];
+            if (entry?.deleted_at) return false;
+          }
+          return true;
+        });
+        if (filtered.length !== arr.length) {
+          console.warn(`[PHASE-2D] Dropped ${arr.length - filtered.length} tombstoned ${collection} row(s) re-introduced by a merge (seed-window/resurrection guard).`);
+          data[collection] = filtered;
+        }
+      }
+    } catch (e) {
+      console.warn("[PHASE-2D] tombstone drop pass skipped:", e?.message || e);
+    }
+  }
   _dropDirtyTombstonedEmployees(dirtySnapshot) {
     const tbEmp = getTombstones(this.data).employees || {};
     if (!Object.keys(tbEmp).length) return;
@@ -31876,6 +31950,7 @@ Sakar & SVN Group`;
               if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
             }
             this.data = mergeStores(this.data, rmwRow.payload, "base", { baseTs: this._storeTsHint(), incomingTs: Date.parse(rmwRow.updated_at || "") || null });
+            this._dropCloudTombstonedCollections(this._cloudTombstones);
             if (dirtySnapshot.size > 0) {
               const emps = this.data.employees || [];
               for (let i = 0; i < emps.length; i++) {
@@ -31921,6 +31996,7 @@ Sakar & SVN Group`;
                 if (e && this._dirtyEmployeeIds.has(e.id)) dirtySnapshot.set(e.id, e);
               }
               this.data = mergeStores(this.data, remoteRow.payload, "base", { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteRow.updated_at || "") || null });
+              this._dropCloudTombstonedCollections(this._cloudTombstones);
               if (dirtySnapshot.size > 0) {
                 const emps = this.data.employees || [];
                 for (let i = 0; i < emps.length; i++) {
@@ -32069,6 +32145,8 @@ Sakar & SVN Group`;
           return;
         }
         this.data = mergeStores(this.data, row.payload, "incoming", { baseTs: this._storeTsHint(), incomingTs: Date.parse(remoteUpdatedAt || "") || null });
+        this._cloudTombstones = getTombstones(row.payload);
+        this._dropCloudTombstonedCollections(this._cloudTombstones);
         this._loadedVersion = remoteUpdatedAt || "";
         this._storeLoadedTs = Date.parse(remoteUpdatedAt || "") || null;
         this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
@@ -37399,3 +37477,4 @@ serve-static/index.js:
    * MIT Licensed
    *)
 */
+//# sourceMappingURL=_app.cjs.map

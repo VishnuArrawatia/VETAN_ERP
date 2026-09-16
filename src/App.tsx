@@ -481,6 +481,9 @@ export default function App() {
   const [backupPromptOpen, setBackupPromptOpen] = useState(false);
   const [backupStats, setBackupStats] = useState<{ employeesCount: number; savedAt: string } | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
+  // PHASE-2D: restore is a SUPER_HR+PIN operation — the prompt collects the
+  // Security PIN from the human instead of silently firing the request.
+  const [backupRestorePin, setBackupRestorePin] = useState('');
 
   const isServerDataDummy = (employeesList: any[]) => {
     if (!employeesList || employeesList.length === 0) return true;
@@ -498,7 +501,7 @@ export default function App() {
         const payload = JSON.parse(backupStr);
         const res = await fetch('/api/restore-json', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-security-pin': backupRestorePin },
           body: JSON.stringify(payload)
         });
         if (res.ok) {
@@ -527,6 +530,7 @@ export default function App() {
       setErrorBanner(`❌ Error: ${e.message || e}`);
     } finally {
       setRestoringBackup(false);
+      setBackupRestorePin('');
     }
   };
 
@@ -624,26 +628,15 @@ export default function App() {
                 serverLooksReset && !isBackupDummy && stats.employeesCount > 0;
               
               if (shouldRestoreSilently) {
-                console.log(`[Auto-Restore] Silent auto-restore triggered: Server is dummy/reset, but local backup contains real data.`);
-                
-                const restoreRes = await fetch('/api/restore-json', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(backup)
-                });
-                if (restoreRes.ok) {
-                  console.log(`[Auto-Restore] Successfully restored ${stats.employeesCount} employees and records silently.`);
-                  localStorage.setItem('vetan_last_restore_time', new Date().toISOString());
-                  // Refresh all data
-                  fetchEmployees();
-                  fetchLeaveApps();
-                  fetchPayrollRuns();
-                  fetchFAndF();
-                  fetchLoans();
-                  fetchRevisions();
-                  setSuccessBanner('🎉 Database Auto-Restored: All records successfully recovered from persistent storage.');
-                  return;
-                }
+                // PHASE-2D SAFETY FIX: a FULL-STORE restore is a destructive,
+                // HR-identity server write. Auto-firing it (previously silent,
+                // on a 1.5s timer) could overwrite newer production data with a
+                // stale browser backup whenever the server transiently looked
+                // "reset" (e.g. cold-start/seed window). The recovery prompt is
+                // still shown — the HUMAN decides, nothing runs unattended.
+                console.log(`[Auto-Restore] Server looks reset and a local backup exists — showing recovery prompt (silent auto-restore disabled for data safety).`);
+                setBackupPromptOpen(true);
+                return;
               }
               
               // If silent restore wasn't triggered or failed:
@@ -3126,7 +3119,15 @@ export default function App() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0 justify-end">
+                  <div className="flex gap-2 shrink-0 justify-end items-center">
+                    <input
+                      type="password"
+                      value={backupRestorePin}
+                      onChange={(e) => setBackupRestorePin(e.target.value)}
+                      placeholder="Security PIN"
+                      className="px-3 py-1.5 text-xs border border-amber-300 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                      autoComplete="off"
+                    />
                     <button 
                       onClick={() => setBackupPromptOpen(false)}
                       className="px-3 py-1.5 text-xs text-amber-800 hover:bg-amber-100 rounded-lg font-medium transition cursor-pointer"
@@ -3135,7 +3136,7 @@ export default function App() {
                     </button>
                     <button 
                       onClick={restoreBackup}
-                      disabled={restoringBackup}
+                      disabled={restoringBackup || !backupRestorePin}
                       className="px-4 py-1.5 text-xs bg-amber-800 hover:bg-amber-900 text-white rounded-lg font-bold shadow-sm transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                     >
                       {restoringBackup ? 'Restoring...' : 'Restore All Data Instantly'}
