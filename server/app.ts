@@ -2519,6 +2519,128 @@ export async function createApp(supabaseAdmin?: any) {
   // No automatic arrear calculation anywhere in this module. Future increment
   // foundation fields (actual/revised/differences) are stored but never auto-computed.
 
+  // ─── Gratuity Provision — register, manual entry, auto-generation, import, reconciliation ───
+  // Monthly provision = (effective Basic × 15/26) ÷ 12  (mirrors PayrollDatabase.GRATUITY_DAYS/DIVISOR/MONTHS).
+  // Payment happens ONLY via F&F — deliberately NO pay route here. MANUAL rows never auto-overwritten.
+  const GRAT_RATE = 15 / 26 / 12;
+
+  // GET /api/gratuity-provisions?employee_id=&month=&company=&unit=&department=
+  app.get('/api/gratuity-provisions', (req, res) => {
+    try {
+      const { employee_id, month, company, unit, department } = req.query as Record<string, string>;
+      let rows = db.getGratuityProvisions();
+      if (employee_id) rows = rows.filter((g: any) => g.employee_id === employee_id);
+      if (month) rows = rows.filter((g: any) => g.month === month);
+      if (company && company !== 'ALL') rows = rows.filter((g: any) => g.company === company);
+      if (unit && unit !== 'ALL') rows = rows.filter((g: any) => (g.unit || '') === unit);
+      if (department && department !== 'ALL') rows = rows.filter((g: any) => (g.department || '') === department);
+      rows = rows.slice().sort((a: any, b: any) => (a.month || '').localeCompare(b.month || '') || String(a.employee_name || '').localeCompare(String(b.employee_name || '')));
+      const manualTotal = rows.filter((g: any) => g.source === 'MANUAL').reduce((s: number, g: any) => s + (Number(g.amount) || 0), 0);
+      const total = rows.reduce((s: number, g: any) => s + (Number(g.amount) || 0), 0);
+      const byEmployee: Record<string, number> = {};
+      const byMonth: Record<string, number> = {};
+      for (const g of rows) {
+        byEmployee[g.employee_id] = (byEmployee[g.employee_id] || 0) + (Number(g.amount) || 0);
+        byMonth[g.month] = (byMonth[g.month] || 0) + (Number(g.amount) || 0);
+      }
+      res.json({
+        formula: '(Basic × 15/26) ÷ 12 — payment only via F&F',
+        rows,
+        totals: { overall: total, manual_total: manualTotal, auto_total: total - manualTotal, employee_wise: byEmployee, month_wise: byMonth }
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/gratuity-reconciliation — READ-ONLY provision-vs-paid view (F&F untouched)
+  app.get('/api/gratuity-reconciliation', (req, res) => {
+    try {
+      res.json(db.getGratuityReconciliation());
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/gratuity-provisions — single MANUAL entry (duplicate-protected)
+  app.post('/api/gratuity-provisions', async (req, res) => {
+    try {
+      const a = req.body || {};
+      if (!a.employee_id) return res.status(400).json({ error: 'Employee is required' });
+      const emp = db.getEmployeeById(String(a.employee_id));
+      if (!emp) return res.status(404).json({ error: 'Employee not found' });
+      const month = (typeof a.month === 'string' ? a.month : '').trim();
+      if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'Month must be YYYY-MM' });
+      const basic = Number(a.base_salary) > 0 ? Number(a.base_salary) : (db as any)._effectiveBasicForMonth(emp, month);
+      if (!(basic > 0)) return res.status(400).json({ error: 'Basic missing/invalid and employee has no Basic' });
+      const amount = Number(a.amount) > 0 ? Math.round(Number(a.amount)) : Math.round(basic * GRAT_RATE);
+      const id = `GRAT-${emp.id}-${month}`;
+      const existing = db.getGratuityProvisions().find((g: any) => g.id === id);
+      if (existing && existing.source === 'MANUAL') return res.status(409).json({ success: false, duplicate: true, error: `${month}: manual provision already exists for this employee` });
+      const result = db.saveGratuityProvision({
+        id, employee_id: emp.id, emp_code: emp.emp_code || emp.id, employee_name: emp.name,
+        company: emp.company, unit: emp.unit || '', department: emp.department || '',
+        month, base_salary: basic, accrual_rate: Number(GRAT_RATE.toFixed(6)), amount,
+        source: 'MANUAL', status: 'ACCUMULATED',
+        remarks: a.remarks || null, created_by: getOperator(req)
+      });
+      if (!result.success) return res.status(result.duplicate ? 409 : 400).json(result);
+      db.logAudit('Gratuity Provision Entry', `${emp.name}: ${month} manual provision INR ${amount} (Basic INR ${basic})`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — provision not saved' });
+      res.json({ success: true, id, amount });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/gratuity-provisions/generate — idempotent auto-generation from effective Basic
+  app.post('/api/gratuity-provisions/generate', async (req, res) => {
+    try {
+      const { from_month, to_month } = req.body || {};
+      const result = db.generateAutomaticGratuityProvisions({ fromMonth: from_month || undefined, toMonth: to_month || undefined, operator: getOperator(req) });
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — generation not saved' });
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/gratuity-provisions/import — bulk MANUAL import (Excel rows)
+  app.post('/api/gratuity-provisions/import', async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No rows to import' });
+      if (rows.length > 1000) return res.status(400).json({ error: 'Too many rows (max 1000 per import)' });
+      const operator = getOperator(req);
+      const result = db.importGratuityProvisions(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed - import not saved' });
+      }
+      res.json({ success: true, ...result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/gratuity-provisions/:id', async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== 'SUPER_HR') return res.status(403).json({ error: 'Only Super Admin can delete gratuity provisions' });
+      const existing = db.getGratuityProvisions().find((g: any) => g.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Gratuity provision not found' });
+      db.deleteGratuityProvision(req.params.id);
+      db.logAudit('Gratuity Provision Deleted', `${existing.employee_name} ${existing.month} (${existing.source}) deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || 'Cloud persistence failed — delete not saved' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/arrears?employee_id=&month=&company=&unit=
   app.get('/api/arrears', (req, res) => {
     try {

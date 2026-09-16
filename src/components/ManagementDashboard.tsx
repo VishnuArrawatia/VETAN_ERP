@@ -85,6 +85,7 @@ export default function ManagementDashboard({
   // MD read-only Bonus Provision + Arrear totals — fetched here (read-only GETs) so App.tsx stays untouched.
   const [bonusProvision, setBonusProvision] = useState<{ total: number; manual: number; auto: number; loaded: boolean } | null>(null);
   const [arrearTotal, setArrearTotal] = useState<{ total: number; count: number; loaded: boolean } | null>(null);
+  const [gratuityLiability, setGratuityLiability] = useState<{ total: number; vested: number; loaded: boolean } | null>(null);
   useEffect(() => {
     let alive = true;
     fetch('/api/bonus-provisions', { credentials: 'include' })
@@ -95,6 +96,10 @@ export default function ManagementDashboard({
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(d => { if (alive) setArrearTotal({ total: Number(d?.total) || 0, count: Array.isArray(d?.rows) ? d.rows.length : 0, loaded: true }); })
       .catch(() => { if (alive) setArrearTotal({ total: 0, count: 0, loaded: false }); });
+    fetch('/api/gratuity-provisions', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(d => { if (alive) setGratuityLiability({ total: Number(d?.totals?.overall) || 0, vested: 0, loaded: true }); })
+      .catch(() => { if (alive) setGratuityLiability({ total: 0, vested: 0, loaded: false }); });
     return () => { alive = false; };
   }, []);
 
@@ -685,6 +690,14 @@ export default function ManagementDashboard({
                   <span className="text-[9px] text-slate-500 block">
                     {arrearTotal && arrearTotal.count > 0 ? `${arrearTotal.count} manual entr${arrearTotal.count === 1 ? 'y' : 'ies'}` : "Manual month-wise register"}
                   </span>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-1">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Gratuity Liability (Provision)</span>
+                  <p className="text-xl font-black font-mono text-lime-400 tracking-tight">
+                    {gratuityLiability === null ? "…" : gratuityLiability.total === 0 ? "Not Generated Yet" : `₹${gratuityLiability.total.toLocaleString('en-IN')}`}
+                  </p>
+                  <span className="text-[9px] text-slate-500 block">(Basic × 15/26) ÷ 12 — payout via F&amp;F</span>
                 </div>
 
               </div>

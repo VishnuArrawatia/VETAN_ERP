@@ -24318,14 +24318,15 @@ var require_sqlite3 = __commonJS({
   }
 });
 
-// server/app.ts
-var app_exports = {};
-__export(app_exports, {
+// api/server-entry.ts
+var server_entry_exports = {};
+__export(server_entry_exports, {
   createApp: () => createApp,
-  default: () => app_default,
   getAppDb: () => getAppDb
 });
-module.exports = __toCommonJS(app_exports);
+module.exports = __toCommonJS(server_entry_exports);
+
+// server/app.ts
 var import_express = __toESM(require_express2(), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
@@ -25253,7 +25254,8 @@ var PayrollDatabase = class _PayrollDatabase {
       attendance_upload_batches: [],
       // Bonus Provision register + Manual Arrear register (additive)
       bonus_provisions: [],
-      arrears: []
+      arrears: [],
+      gratuity_provisions: []
     };
     this.inMemoryOnly = false;
     /** When true, persistData() will NOT push to Supabase (seed data protection). */
@@ -26319,6 +26321,26 @@ var PayrollDatabase = class _PayrollDatabase {
       created_by TEXT,
       created_at TEXT,
       updated_by TEXT,
+      updated_at TEXT
+    )`);
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS gratuity_provisions (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT,
+      emp_code TEXT,
+      employee_name TEXT,
+      company TEXT,
+      unit TEXT,
+      department TEXT,
+      month TEXT,
+      base_salary REAL,
+      accrual_rate REAL,
+      amount REAL,
+      source TEXT DEFAULT 'MANUAL',
+      status TEXT DEFAULT 'ACCUMULATED',
+      ff_settlement_id TEXT,
+      remarks TEXT,
+      created_by TEXT,
+      created_at TEXT,
       updated_at TEXT
     )`);
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS salary_revisions (
@@ -30222,6 +30244,271 @@ var PayrollDatabase = class _PayrollDatabase {
     }
     this.dbSqlite.run(`DELETE FROM arrears WHERE id = ?`, [id]);
     this.persistData();
+  }
+  static {
+    // ═══════════════ GRATUITY PROVISION — continuous liability register ═══════════════
+    //
+    // Payment formula (existing F&F, unchanged): (Basic / 26) × 15 × floor(service years), vested ≥ 5 yrs.
+    // Monthly provision formula (this register): (effective Basic × 15/26) ÷ 12  ≈ 4.81% of Basic.
+    // Base = Basic only — VETAN has no DA component (established business rule).
+    // Payment happens ONLY via F&F — there is deliberately NO direct pay route here.
+    // MANUAL rows are NEVER overwritten by auto-generation. Idempotent by deterministic id.
+    this.GRATUITY_DAYS = 15;
+  }
+  static {
+    // Payment of Gratuity Act, 1972
+    this.GRATUITY_DIVISOR = 26;
+  }
+  static {
+    this.GRATUITY_MONTHS = 12;
+  }
+  static {
+    // annual accrual spread monthly
+    this.GRATUITY_VEST_YEARS = 5;
+  }
+  static {
+    this.GRATUITY_AUTO_FROM_MONTH = "2026-04";
+  }
+  // older months enter via Excel import
+  /** Effective Basic for a month — IDENTICAL resolution to the payroll engine /
+   *  generateAutomaticBonusProvisions: (1) latest revision effective ≤ month-end
+   *  wins; (2) no revision applies yet but future revisions exist → earliest
+   *  revision's old_salary (pre-increment rate); (3) no revisions → base_salary. */
+  _effectiveBasicForMonth(emp, month) {
+    const revisions = (this.data.salary_revisions || []).filter((r) => r.employee_code === emp.id || r.employee_id === emp.id).sort((a, b) => (a.effective_date || "").localeCompare(b.effective_date || ""));
+    const monthEnd = `${month}-31`;
+    const applicable = revisions.filter((r) => r.effective_date && r.effective_date <= monthEnd);
+    if (applicable.length > 0) return Number(applicable[applicable.length - 1].new_salary) || 0;
+    if (revisions.length > 0) return Number(revisions[0].old_salary) || 0;
+    return Number(emp.base_salary) || 0;
+  }
+  /** Vested service years (floor) as on `asOn` (defaults to today, or exit_date). */
+  _gratuityVestedYears(emp, asOn) {
+    if (!emp?.joining_date) return 0;
+    const start = new Date(emp.joining_date).getTime();
+    const end = asOn ? new Date(asOn).getTime() : emp.exit_date ? new Date(emp.exit_date).getTime() : Date.now();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    return Math.floor((end - start) / (1e3 * 60 * 60 * 24 * 365.25));
+  }
+  getGratuityProvisions() {
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    return this.data.gratuity_provisions;
+  }
+  saveGratuityProvision(prov) {
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    if (!prov.id || !prov.employee_id || !prov.month) return { success: false, error: "id, employee_id and month are required" };
+    const existing = this.data.gratuity_provisions.find((g) => g.id === prov.id);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (existing && existing.source === "MANUAL" && prov.source !== "MANUAL") {
+      return { success: false, duplicate: true, error: `${prov.month}: manual provision already exists` };
+    }
+    const record = { ...existing, ...prov, updated_at: nowIso, created_at: existing?.created_at || prov.created_at || nowIso };
+    if (existing) Object.assign(existing, record);
+    else this.data.gratuity_provisions.push(record);
+    this._mirrorGratuityProvision(record);
+    return { success: true };
+  }
+  deleteGratuityProvision(id) {
+    const doomed = (this.data.gratuity_provisions || []).find((g) => g.id === id);
+    if (doomed) this._tombstone("gratuity_provisions", doomed);
+    if (this.data.gratuity_provisions) {
+      this.data.gratuity_provisions = this.data.gratuity_provisions.filter((g) => g.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM gratuity_provisions WHERE id = ?`, [id]);
+    this.persistData();
+  }
+  /** Generate automatic gratuity provisions from each month's effective Basic.
+   *  IDEMPOTENT. MANUAL rows NEVER overwritten. SETTLED rows never re-written.
+   *  Future months beyond the current month are never generated.
+   *  Joining/exit boundaries respected (accrues only months actually served). */
+  generateAutomaticGratuityProvisions(opts) {
+    const fromMonth = opts?.fromMonth || _PayrollDatabase.GRATUITY_AUTO_FROM_MONTH;
+    const now = /* @__PURE__ */ new Date();
+    const cap = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let toMonth = opts?.toMonth || cap;
+    if (toMonth > cap) toMonth = cap;
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    const byId = new Map(this.data.gratuity_provisions.map((g) => [g.id, g]));
+    let created = 0, updated = 0, skippedManual = 0, skippedSettled = 0;
+    const rate = _PayrollDatabase.GRATUITY_DAYS / _PayrollDatabase.GRATUITY_DIVISOR / _PayrollDatabase.GRATUITY_MONTHS;
+    for (const emp of this.data.employees || []) {
+      const joinMonth = emp.joining_date ? emp.joining_date.slice(0, 7) : null;
+      const exitMonth = emp.exit_date ? emp.exit_date.slice(0, 7) : null;
+      for (const month of this._monthRange(fromMonth, toMonth)) {
+        if (joinMonth && month < joinMonth) continue;
+        if (exitMonth && month > exitMonth) continue;
+        const basic = this._effectiveBasicForMonth(emp, month);
+        if (basic <= 0) continue;
+        const id = `GRAT-${emp.id}-${month}`;
+        const existing = byId.get(id);
+        if (existing && existing.status === "SETTLED") {
+          skippedSettled++;
+          continue;
+        }
+        if (existing && existing.source === "MANUAL") {
+          skippedManual++;
+          continue;
+        }
+        const amount = Math.round(basic * rate);
+        const record = {
+          id,
+          employee_id: emp.id,
+          emp_code: emp.emp_code || emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          unit: emp.unit || "",
+          department: emp.department || "",
+          month,
+          base_salary: basic,
+          accrual_rate: Number(rate.toFixed(6)),
+          amount,
+          source: "SALARY_AUTO",
+          status: existing?.status === "FORFEITED" ? "FORFEITED" : "ACCUMULATED",
+          ff_settlement_id: existing?.ff_settlement_id ?? null,
+          remarks: existing?.remarks ?? null,
+          created_at: existing?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        if (existing) {
+          Object.assign(existing, record);
+          this._mirrorGratuityProvision(existing);
+          updated++;
+        } else {
+          this.data.gratuity_provisions.push(record);
+          byId.set(id, record);
+          this._mirrorGratuityProvision(record);
+          created++;
+        }
+      }
+    }
+    if ((created > 0 || updated > 0) && opts?.operator) {
+      this.logAudit("Gratuity Provisions Generated", `${created} created, ${updated} updated (${skippedManual} manual skipped) \u2014 period ${fromMonth} \u2192 ${toMonth}`, opts.operator);
+    }
+    return { created, updated, skippedManual, skippedSettled };
+  }
+  /** Bulk import of MANUAL provisions from Excel rows (template mirror of Bonus import).
+   *  Columns: EMPLOYEE CODE | MONTH | BASIC (optional) | GRATUITY AMOUNT (optional) | REMARKS. */
+  importGratuityProvisions(rows, operator) {
+    const results = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    const rate = _PayrollDatabase.GRATUITY_DAYS / _PayrollDatabase.GRATUITY_DIVISOR / _PayrollDatabase.GRATUITY_MONTHS;
+    rows.forEach((row, i) => {
+      const rowNo = i + 2;
+      const code = String(row["EMPLOYEE CODE"] ?? row["EMPLOYEE_CODE"] ?? "").trim();
+      if (!code) {
+        errors++;
+        results.push({ row: rowNo, employee: "", status: "ERROR", message: "Employee code missing" });
+        return;
+      }
+      const emp = this.data.employees?.find((e) => e.id === code || e.emp_code === code);
+      if (!emp) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Employee not found" });
+        return;
+      }
+      const month = this._normalizeImportMonth(row["MONTH"] ?? row["Month"]);
+      if (!month) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Invalid month (use Apr-26 \u2026 or 2026-04)" });
+        return;
+      }
+      const basicRaw = Number(String(row["BASIC"] ?? row["Basic"] ?? "").replace(/[^0-9.\-]/g, ""));
+      const basic = Number.isFinite(basicRaw) && basicRaw > 0 ? basicRaw : this._effectiveBasicForMonth(emp, month);
+      if (basic <= 0) {
+        errors++;
+        results.push({ row: rowNo, employee: code, status: "ERROR", message: "Basic missing/invalid and employee has no Basic" });
+        return;
+      }
+      const amtRaw = Number(String(row["GRATUITY AMOUNT"] ?? row["GRATUITY_AMOUNT"] ?? "").replace(/[^0-9.\-]/g, ""));
+      const amount = Number.isFinite(amtRaw) && amtRaw > 0 ? Math.round(amtRaw) : Math.round(basic * rate);
+      const id = `GRAT-${emp.id}-${month}`;
+      const existing = this.data.gratuity_provisions.find((g) => g.id === id);
+      if (existing && existing.source === "MANUAL") {
+        skipped++;
+        results.push({ row: rowNo, employee: code, status: "SKIPPED_DUPLICATE", message: `${month}: manual provision already exists` });
+        return;
+      }
+      const record = {
+        id,
+        employee_id: emp.id,
+        emp_code: emp.emp_code || emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        month,
+        base_salary: basic,
+        accrual_rate: Number(rate.toFixed(6)),
+        amount,
+        source: "MANUAL",
+        status: existing?.status === "SETTLED" ? "SETTLED" : existing?.status === "FORFEITED" ? "FORFEITED" : "ACCUMULATED",
+        ff_settlement_id: existing?.ff_settlement_id ?? null,
+        remarks: String(row["REMARKS"] ?? row["Remarks"] ?? "excel import"),
+        created_by: operator || "excel-import",
+        created_at: existing?.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (existing) Object.assign(existing, record);
+      else this.data.gratuity_provisions.push(record);
+      this._mirrorGratuityProvision(record);
+      imported++;
+      results.push({ row: rowNo, employee: code, status: "IMPORTED", message: `${month}: \u20B9${amount} (Basic \u20B9${basic} \xD7 ${(rate * 100).toFixed(2)}%)` });
+    });
+    if (imported > 0 && operator) this.logAudit("Gratuity Provisions Imported", `${imported} manual provisions imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
+  }
+  /** Best-effort SQLite mirror for a gratuity provision row (authoritative store = cloud). */
+  _mirrorGratuityProvision(g) {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO gratuity_provisions (id, employee_id, emp_code, employee_name, company, unit, department, month, base_salary, accrual_rate, amount, source, status, ff_settlement_id, remarks, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [g.id, g.employee_id ?? null, g.emp_code ?? null, g.employee_name ?? null, g.company ?? null, g.unit ?? null, g.department ?? null, g.month, g.base_salary ?? 0, g.accrual_rate ?? null, g.amount ?? 0, g.source ?? "MANUAL", g.status ?? "ACCUMULATED", g.ff_settlement_id ?? null, g.remarks ?? null, g.created_by ?? null, g.created_at ?? null, g.updated_at ?? null]
+      );
+    } catch {
+    }
+  }
+  /** READ-ONLY reconciliation: register provisions vs F&F-paid gratuity.
+   *  Writes nothing — F&F remains the single payment surface. */
+  getGratuityReconciliation() {
+    const provisions = this.getGratuityProvisions();
+    const settlements = this.data.ff_settlements || [];
+    const rows = [];
+    const empIds = /* @__PURE__ */ new Set([...provisions.map((g) => g.employee_id), ...settlements.map((f) => f.employee_id)]);
+    for (const empId of empIds) {
+      const emp = this.getEmployeeById(empId);
+      const provRows = provisions.filter((g) => g.employee_id === empId);
+      const cumulative = provRows.reduce((s, g) => s + (Number(g.amount) || 0), 0);
+      const ffRows = settlements.filter((f) => f.employee_id === empId && (Number(f.gratuity_earned) || 0) > 0);
+      const paid = ffRows.reduce((s, f) => s + (Number(f.gratuity_earned) || 0), 0);
+      const vestedYears = this._gratuityVestedYears(emp || {}, emp?.exit_date);
+      const vested = vestedYears >= _PayrollDatabase.GRATUITY_VEST_YEARS;
+      rows.push({
+        employee_id: empId,
+        employee_name: emp?.name || provRows[0]?.employee_name || ffRows[0]?.employee_name || empId,
+        company: emp?.company || provRows[0]?.company || "",
+        joining_date: emp?.joining_date || null,
+        exit_date: emp?.exit_date || null,
+        months_accrued: provRows.length,
+        cumulative_provision: Math.round(cumulative),
+        vested_years: vestedYears,
+        vested,
+        ff_status: ffRows.length > 0 ? ffRows[ffRows.length - 1].status || "PROCESSED" : null,
+        gratuity_paid: Math.round(paid),
+        balance_liability: Math.max(0, Math.round(cumulative - paid)),
+        variance: Math.round(cumulative - paid),
+        forfeited: !vested && ffRows.length > 0
+      });
+    }
+    rows.sort((a, b) => String(a.employee_name).localeCompare(String(b.employee_name)));
+    const totals = {
+      total_provision: Math.round(rows.reduce((s, r) => s + r.cumulative_provision, 0)),
+      total_paid: Math.round(rows.reduce((s, r) => s + r.gratuity_paid, 0)),
+      total_balance: Math.round(rows.reduce((s, r) => s + r.balance_liability, 0)),
+      vested_employees: rows.filter((r) => r.vested).length,
+      forfeited_cases: rows.filter((r) => r.forfeited).length
+    };
+    return { rows, totals, vest_years: _PayrollDatabase.GRATUITY_VEST_YEARS };
   }
   /** Best-effort SQLite mirror for an arrear row (authoritative store = cloud). */
   _mirrorArrear(a) {
@@ -34770,6 +35057,123 @@ async function createApp(supabaseAdmin) {
       res.status(500).json({ error: e.message });
     }
   });
+  const GRAT_RATE = 15 / 26 / 12;
+  app.get("/api/gratuity-provisions", (req, res) => {
+    try {
+      const { employee_id, month, company, unit, department } = req.query;
+      let rows = db.getGratuityProvisions();
+      if (employee_id) rows = rows.filter((g) => g.employee_id === employee_id);
+      if (month) rows = rows.filter((g) => g.month === month);
+      if (company && company !== "ALL") rows = rows.filter((g) => g.company === company);
+      if (unit && unit !== "ALL") rows = rows.filter((g) => (g.unit || "") === unit);
+      if (department && department !== "ALL") rows = rows.filter((g) => (g.department || "") === department);
+      rows = rows.slice().sort((a, b) => (a.month || "").localeCompare(b.month || "") || String(a.employee_name || "").localeCompare(String(b.employee_name || "")));
+      const manualTotal = rows.filter((g) => g.source === "MANUAL").reduce((s, g) => s + (Number(g.amount) || 0), 0);
+      const total = rows.reduce((s, g) => s + (Number(g.amount) || 0), 0);
+      const byEmployee = {};
+      const byMonth = {};
+      for (const g of rows) {
+        byEmployee[g.employee_id] = (byEmployee[g.employee_id] || 0) + (Number(g.amount) || 0);
+        byMonth[g.month] = (byMonth[g.month] || 0) + (Number(g.amount) || 0);
+      }
+      res.json({
+        formula: "(Basic \xD7 15/26) \xF7 12 \u2014 payment only via F&F",
+        rows,
+        totals: { overall: total, manual_total: manualTotal, auto_total: total - manualTotal, employee_wise: byEmployee, month_wise: byMonth }
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/gratuity-reconciliation", (req, res) => {
+    try {
+      res.json(db.getGratuityReconciliation());
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/gratuity-provisions", async (req, res) => {
+    try {
+      const a = req.body || {};
+      if (!a.employee_id) return res.status(400).json({ error: "Employee is required" });
+      const emp = db.getEmployeeById(String(a.employee_id));
+      if (!emp) return res.status(404).json({ error: "Employee not found" });
+      const month = (typeof a.month === "string" ? a.month : "").trim();
+      if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "Month must be YYYY-MM" });
+      const basic = Number(a.base_salary) > 0 ? Number(a.base_salary) : db._effectiveBasicForMonth(emp, month);
+      if (!(basic > 0)) return res.status(400).json({ error: "Basic missing/invalid and employee has no Basic" });
+      const amount = Number(a.amount) > 0 ? Math.round(Number(a.amount)) : Math.round(basic * GRAT_RATE);
+      const id = `GRAT-${emp.id}-${month}`;
+      const existing = db.getGratuityProvisions().find((g) => g.id === id);
+      if (existing && existing.source === "MANUAL") return res.status(409).json({ success: false, duplicate: true, error: `${month}: manual provision already exists for this employee` });
+      const result = db.saveGratuityProvision({
+        id,
+        employee_id: emp.id,
+        emp_code: emp.emp_code || emp.id,
+        employee_name: emp.name,
+        company: emp.company,
+        unit: emp.unit || "",
+        department: emp.department || "",
+        month,
+        base_salary: basic,
+        accrual_rate: Number(GRAT_RATE.toFixed(6)),
+        amount,
+        source: "MANUAL",
+        status: "ACCUMULATED",
+        remarks: a.remarks || null,
+        created_by: getOperator(req)
+      });
+      if (!result.success) return res.status(result.duplicate ? 409 : 400).json(result);
+      db.logAudit("Gratuity Provision Entry", `${emp.name}: ${month} manual provision INR ${amount} (Basic INR ${basic})`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 provision not saved" });
+      res.json({ success: true, id, amount });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/gratuity-provisions/generate", async (req, res) => {
+    try {
+      const { from_month, to_month } = req.body || {};
+      const result = db.generateAutomaticGratuityProvisions({ fromMonth: from_month || void 0, toMonth: to_month || void 0, operator: getOperator(req) });
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 generation not saved" });
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/gratuity-provisions/import", async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: "No rows to import" });
+      if (rows.length > 1e3) return res.status(400).json({ error: "Too many rows (max 1000 per import)" });
+      const operator = getOperator(req);
+      const result = db.importGratuityProvisions(rows, operator);
+      if (result.imported > 0) {
+        const pr = await db.persistDataSync();
+        if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed - import not saved" });
+      }
+      res.json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/gratuity-provisions/:id", async (req, res) => {
+    try {
+      const operatorRole = getOperatorRole(req);
+      if (operatorRole !== "SUPER_HR") return res.status(403).json({ error: "Only Super Admin can delete gratuity provisions" });
+      const existing = db.getGratuityProvisions().find((g) => g.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Gratuity provision not found" });
+      db.deleteGratuityProvision(req.params.id);
+      db.logAudit("Gratuity Provision Deleted", `${existing.employee_name} ${existing.month} (${existing.source}) deleted`, getOperator(req));
+      const pr = await db.persistDataSync();
+      if (!pr.ok) return res.status(500).json({ error: pr.error || "Cloud persistence failed \u2014 delete not saved" });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   app.get("/api/arrears", (req, res) => {
     try {
       const { employee_id, month, company, unit } = req.query;
@@ -36674,9 +37078,324 @@ HR Department`;
   app.locals.db = db;
   return app;
 }
-var app_default = createApp;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   createApp,
   getAppDb
 });
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Express application factory — shared by local dev (server.ts) and
+ * Vercel Serverless Functions (api/[[...]].ts).
+ */
+/*! Bundled license information:
+
+depd/index.js:
+  (*!
+   * depd
+   * Copyright(c) 2014-2018 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+bytes/index.js:
+  (*!
+   * bytes
+   * Copyright(c) 2012-2014 TJ Holowaychuk
+   * Copyright(c) 2015 Jed Watson
+   * MIT Licensed
+   *)
+
+content-type/index.js:
+  (*!
+   * content-type
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+statuses/index.js:
+  (*!
+   * statuses
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+toidentifier/index.js:
+  (*!
+   * toidentifier
+   * Copyright(c) 2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+http-errors/index.js:
+  (*!
+   * http-errors
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+destroy/index.js:
+  (*!
+   * destroy
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+unpipe/index.js:
+  (*!
+   * unpipe
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+raw-body/index.js:
+  (*!
+   * raw-body
+   * Copyright(c) 2013-2014 Jonathan Ong
+   * Copyright(c) 2014-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+ee-first/index.js:
+  (*!
+   * ee-first
+   * Copyright(c) 2014 Jonathan Ong
+   * MIT Licensed
+   *)
+
+on-finished/index.js:
+  (*!
+   * on-finished
+   * Copyright(c) 2013 Jonathan Ong
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+body-parser/lib/read.js:
+body-parser/lib/types/raw.js:
+body-parser/lib/types/text.js:
+body-parser/index.js:
+  (*!
+   * body-parser
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+media-typer/index.js:
+  (*!
+   * media-typer
+   * Copyright(c) 2014 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+mime-db/index.js:
+  (*!
+   * mime-db
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+mime-types/index.js:
+  (*!
+   * mime-types
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+type-is/index.js:
+  (*!
+   * type-is
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+body-parser/lib/types/json.js:
+body-parser/lib/types/urlencoded.js:
+  (*!
+   * body-parser
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+merge-descriptors/index.js:
+  (*!
+   * merge-descriptors
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+encodeurl/index.js:
+  (*!
+   * encodeurl
+   * Copyright(c) 2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+escape-html/index.js:
+  (*!
+   * escape-html
+   * Copyright(c) 2012-2013 TJ Holowaychuk
+   * Copyright(c) 2015 Andreas Lubbe
+   * Copyright(c) 2015 Tiancheng "Timothy" Gu
+   * MIT Licensed
+   *)
+
+parseurl/index.js:
+  (*!
+   * parseurl
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2014-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+finalhandler/index.js:
+  (*!
+   * finalhandler
+   * Copyright(c) 2014-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+express/lib/router/layer.js:
+express/lib/router/route.js:
+express/lib/router/index.js:
+express/lib/middleware/init.js:
+express/lib/middleware/query.js:
+express/lib/view.js:
+express/lib/application.js:
+express/lib/request.js:
+express/lib/express.js:
+express/index.js:
+  (*!
+   * express
+   * Copyright(c) 2009-2013 TJ Holowaychuk
+   * Copyright(c) 2013 Roman Shtylman
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+methods/index.js:
+  (*!
+   * methods
+   * Copyright(c) 2013-2014 TJ Holowaychuk
+   * Copyright(c) 2015-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+safe-buffer/index.js:
+  (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
+
+content-disposition/index.js:
+  (*!
+   * content-disposition
+   * Copyright(c) 2014-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+etag/index.js:
+  (*!
+   * etag
+   * Copyright(c) 2014-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+fresh/index.js:
+  (*!
+   * fresh
+   * Copyright(c) 2012 TJ Holowaychuk
+   * Copyright(c) 2016-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+range-parser/index.js:
+  (*!
+   * range-parser
+   * Copyright(c) 2012-2014 TJ Holowaychuk
+   * Copyright(c) 2015-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+send/index.js:
+  (*!
+   * send
+   * Copyright(c) 2012 TJ Holowaychuk
+   * Copyright(c) 2014-2022 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+forwarded/index.js:
+  (*!
+   * forwarded
+   * Copyright(c) 2014-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+proxy-addr/index.js:
+  (*!
+   * proxy-addr
+   * Copyright(c) 2014-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+express/lib/utils.js:
+express/lib/response.js:
+  (*!
+   * express
+   * Copyright(c) 2009-2013 TJ Holowaychuk
+   * Copyright(c) 2014-2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+negotiator/index.js:
+  (*!
+   * negotiator
+   * Copyright(c) 2012 Federico Romero
+   * Copyright(c) 2012-2014 Isaac Z. Schlueter
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+accepts/index.js:
+  (*!
+   * accepts
+   * Copyright(c) 2014 Jonathan Ong
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+cookie/index.js:
+  (*!
+   * cookie
+   * Copyright(c) 2012-2014 Roman Shtylman
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+vary/index.js:
+  (*!
+   * vary
+   * Copyright(c) 2014-2017 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+
+serve-static/index.js:
+  (*!
+   * serve-static
+   * Copyright(c) 2010 Sencha Inc.
+   * Copyright(c) 2011 TJ Holowaychuk
+   * Copyright(c) 2014-2016 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
+*/

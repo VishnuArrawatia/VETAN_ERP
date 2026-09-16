@@ -43,7 +43,8 @@ import {
   XCircle,
   ArrowRightLeft,
   Edit2,
-  Gift
+  Gift,
+  Scale
 } from 'lucide-react';
 
 import { 
@@ -94,6 +95,7 @@ import SalaryRevisionForm from './components/SalaryRevisionForm';
 import SalaryRestructure from './components/SalaryRestructure';
 import ArrearWorking from './components/ArrearWorking';
 import ArrearRegister from './components/ArrearRegister';
+import GratuityRegister from './components/GratuityRegister';
 import BulkSalaryRevisionUpload from './components/BulkSalaryRevisionUpload';
 import FestivalBanner from './components/FestivalBanner';
 import { LoanManagementView } from './components/LoanManagementView';
@@ -275,7 +277,7 @@ export default function App() {
   }, [activeCompany]);
 
   const [activeMonth, setActiveMonth] = useState('2026-05');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce' | 'bonus' | 'gratuity'>('dashboard');
   const [reportsSubTab, setReportsSubTab] = useState<'lifecycle' | 'analytics' | 'legacy' | 'salary'>('lifecycle');
   const [attendanceSubTab, setAttendanceSubTab] = useState<'daily' | 'monthly' | 'yearly' | 'corrections'>('monthly');
   const [correctionsList, setCorrectionsList] = useState<any[]>([]);
@@ -2882,6 +2884,16 @@ export default function App() {
               {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <Gift size={14} />}
             </button>
 
+            <button
+              id="sidebar-tab-gratuity"
+              disabled={activeHR.role === 'ATTENDANCE_ONLY_HR'}
+              onClick={() => setActiveTab('gratuity')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between ${activeHR.role === 'ATTENDANCE_ONLY_HR' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'cursor-pointer'} ${activeTab==='gratuity' ? 'bg-amber-600 text-white font-bold' : 'hover:bg-amber-50 text-amber-700'}`}
+            >
+              <span>🏛️ Gratuity Register</span>
+              {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={12} className="text-gray-400" /> : <Scale size={14} />}
+            </button>
+
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-3 pt-2.5 pb-1 block">Letters & Analytics</span>
 
             <button
@@ -3516,6 +3528,13 @@ export default function App() {
 
               {activeTab === 'bonus' && (
                 <BonusRegister
+                  activeCompany={activeCompany}
+                  employees={employees}
+                />
+              )}
+
+              {activeTab === 'gratuity' && (
+                <GratuityRegister
                   activeCompany={activeCompany}
                   employees={employees}
                 />

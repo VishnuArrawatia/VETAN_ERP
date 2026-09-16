@@ -86,6 +86,8 @@ interface Schema {
   bonus_provisions?: any[];
   /** ARREAR register — 100% manual month-wise entries + future increment foundation fields. */
   arrears?: any[];
+  /** GRATUITY PROVISION register — continuous monthly liability accrual (Basic × 15/26 ÷ 12). Payment happens ONLY via F&F. */
+  gratuity_provisions?: any[];
   /** PHASE-2B: durable deletion metadata — prevents stale-writer delete resurrection. */
   tombstones?: Record<string, Record<string, { deleted_at: string }>>;
 }
@@ -503,7 +505,8 @@ export class PayrollDatabase {
     attendance_upload_batches: [],
     // Bonus Provision register + Manual Arrear register (additive)
     bonus_provisions: [],
-    arrears: []
+    arrears: [],
+    gratuity_provisions: []
   };
 
   private dbSqlite!: any;
@@ -1511,6 +1514,29 @@ export class PayrollDatabase {
       created_by TEXT,
       created_at TEXT,
       updated_by TEXT,
+      updated_at TEXT
+    )`);
+
+    // GRATUITY PROVISION register — continuous monthly liability accrual.
+    // Formula: (effective Basic × 15/26) ÷ 12. Payment ONLY via F&F (no direct pay route).
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS gratuity_provisions (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT,
+      emp_code TEXT,
+      employee_name TEXT,
+      company TEXT,
+      unit TEXT,
+      department TEXT,
+      month TEXT,
+      base_salary REAL,
+      accrual_rate REAL,
+      amount REAL,
+      source TEXT DEFAULT 'MANUAL',
+      status TEXT DEFAULT 'ACCUMULATED',
+      ff_settlement_id TEXT,
+      remarks TEXT,
+      created_by TEXT,
+      created_at TEXT,
       updated_at TEXT
     )`);
 
@@ -5562,6 +5588,229 @@ export class PayrollDatabase {
     }
     this.dbSqlite.run(`DELETE FROM arrears WHERE id = ?`, [id]);
     this.persistData();
+  }
+
+  // ═══════════════ GRATUITY PROVISION — continuous liability register ═══════════════
+  //
+  // Payment formula (existing F&F, unchanged): (Basic / 26) × 15 × floor(service years), vested ≥ 5 yrs.
+  // Monthly provision formula (this register): (effective Basic × 15/26) ÷ 12  ≈ 4.81% of Basic.
+  // Base = Basic only — VETAN has no DA component (established business rule).
+  // Payment happens ONLY via F&F — there is deliberately NO direct pay route here.
+  // MANUAL rows are NEVER overwritten by auto-generation. Idempotent by deterministic id.
+
+  public static readonly GRATUITY_DAYS = 15;      // Payment of Gratuity Act, 1972
+  public static readonly GRATUITY_DIVISOR = 26;
+  public static readonly GRATUITY_MONTHS = 12;    // annual accrual spread monthly
+  public static readonly GRATUITY_VEST_YEARS = 5;
+  public static readonly GRATUITY_AUTO_FROM_MONTH = '2026-04'; // older months enter via Excel import
+
+  /** Effective Basic for a month — IDENTICAL resolution to the payroll engine /
+   *  generateAutomaticBonusProvisions: (1) latest revision effective ≤ month-end
+   *  wins; (2) no revision applies yet but future revisions exist → earliest
+   *  revision's old_salary (pre-increment rate); (3) no revisions → base_salary. */
+  private _effectiveBasicForMonth(emp: any, month: string): number {
+    const revisions = (this.data.salary_revisions || [])
+      .filter((r: any) => r.employee_code === emp.id || r.employee_id === emp.id)
+      .sort((a: any, b: any) => (a.effective_date || '').localeCompare(b.effective_date || ''));
+    const monthEnd = `${month}-31`;
+    const applicable = revisions.filter((r: any) => r.effective_date && r.effective_date <= monthEnd);
+    if (applicable.length > 0) return Number(applicable[applicable.length - 1].new_salary) || 0;
+    if (revisions.length > 0) return Number(revisions[0].old_salary) || 0;
+    return Number(emp.base_salary) || 0;
+  }
+
+  /** Vested service years (floor) as on `asOn` (defaults to today, or exit_date). */
+  public _gratuityVestedYears(emp: any, asOn?: string): number {
+    if (!emp?.joining_date) return 0;
+    const start = new Date(emp.joining_date).getTime();
+    const end = asOn ? new Date(asOn).getTime() : (emp.exit_date ? new Date(emp.exit_date).getTime() : Date.now());
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    return Math.floor((end - start) / (1000 * 60 * 60 * 24 * 365.25));
+  }
+
+  public getGratuityProvisions(): any[] {
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    return this.data.gratuity_provisions;
+  }
+
+  public saveGratuityProvision(prov: any): { success: boolean; error?: string; duplicate?: boolean } {
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    if (!prov.id || !prov.employee_id || !prov.month) return { success: false, error: 'id, employee_id and month are required' };
+    const existing = this.data.gratuity_provisions.find(g => g.id === prov.id);
+    const nowIso = new Date().toISOString();
+    if (existing && existing.source === 'MANUAL' && prov.source !== 'MANUAL') {
+      return { success: false, duplicate: true, error: `${prov.month}: manual provision already exists` };
+    }
+    const record = { ...existing, ...prov, updated_at: nowIso, created_at: existing?.created_at || prov.created_at || nowIso };
+    if (existing) Object.assign(existing, record);
+    else this.data.gratuity_provisions.push(record);
+    this._mirrorGratuityProvision(record);
+    return { success: true };
+  }
+
+  public deleteGratuityProvision(id: string): void {
+    const doomed = (this.data.gratuity_provisions || []).find(g => g.id === id);
+    if (doomed) this._tombstone('gratuity_provisions', doomed);
+    if (this.data.gratuity_provisions) {
+      this.data.gratuity_provisions = this.data.gratuity_provisions.filter(g => g.id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM gratuity_provisions WHERE id = ?`, [id]);
+    this.persistData();
+  }
+
+  /** Generate automatic gratuity provisions from each month's effective Basic.
+   *  IDEMPOTENT. MANUAL rows NEVER overwritten. SETTLED rows never re-written.
+   *  Future months beyond the current month are never generated.
+   *  Joining/exit boundaries respected (accrues only months actually served). */
+  public generateAutomaticGratuityProvisions(opts?: { fromMonth?: string; toMonth?: string; operator?: string }): { created: number; updated: number; skippedManual: number; skippedSettled: number } {
+    const fromMonth = opts?.fromMonth || PayrollDatabase.GRATUITY_AUTO_FROM_MONTH;
+    const now = new Date();
+    const cap = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let toMonth = opts?.toMonth || cap;
+    if (toMonth > cap) toMonth = cap; // never accrue future months
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+
+    const byId = new Map<string, any>(this.data.gratuity_provisions.map((g: any) => [g.id, g]));
+    let created = 0, updated = 0, skippedManual = 0, skippedSettled = 0;
+    const rate = PayrollDatabase.GRATUITY_DAYS / PayrollDatabase.GRATUITY_DIVISOR / PayrollDatabase.GRATUITY_MONTHS;
+
+    for (const emp of this.data.employees || []) {
+      const joinMonth = emp.joining_date ? emp.joining_date.slice(0, 7) : null;
+      const exitMonth = emp.exit_date ? emp.exit_date.slice(0, 7) : null;
+      for (const month of this._monthRange(fromMonth, toMonth)) {
+        if (joinMonth && month < joinMonth) continue;            // not joined yet
+        if (exitMonth && month > exitMonth) continue;            // already exited
+        const basic = this._effectiveBasicForMonth(emp, month);
+        if (basic <= 0) continue;
+        const id = `GRAT-${emp.id}-${month}`;
+        const existing = byId.get(id);
+        if (existing && existing.status === 'SETTLED') { skippedSettled++; continue; }
+        if (existing && existing.source === 'MANUAL') { skippedManual++; continue; }
+        const amount = Math.round(basic * rate);
+        const record = {
+          id,
+          employee_id: emp.id,
+          emp_code: emp.emp_code || emp.id,
+          employee_name: emp.name,
+          company: emp.company,
+          unit: emp.unit || '',
+          department: emp.department || '',
+          month,
+          base_salary: basic,
+          accrual_rate: Number(rate.toFixed(6)),
+          amount,
+          source: 'SALARY_AUTO',
+          status: existing?.status === 'FORFEITED' ? 'FORFEITED' : 'ACCUMULATED',
+          ff_settlement_id: existing?.ff_settlement_id ?? null,
+          remarks: existing?.remarks ?? null,
+          created_at: existing?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        if (existing) { Object.assign(existing, record); this._mirrorGratuityProvision(existing); updated++; }
+        else { this.data.gratuity_provisions.push(record); byId.set(id, record); this._mirrorGratuityProvision(record); created++; }
+      }
+    }
+    if ((created > 0 || updated > 0) && opts?.operator) {
+      this.logAudit('Gratuity Provisions Generated', `${created} created, ${updated} updated (${skippedManual} manual skipped) — period ${fromMonth} → ${toMonth}`, opts.operator);
+    }
+    return { created, updated, skippedManual, skippedSettled };
+  }
+
+  /** Bulk import of MANUAL provisions from Excel rows (template mirror of Bonus import).
+   *  Columns: EMPLOYEE CODE | MONTH | BASIC (optional) | GRATUITY AMOUNT (optional) | REMARKS. */
+  public importGratuityProvisions(rows: any[], operator?: string): { results: any[]; imported: number; skipped: number; errors: number } {
+    const results: any[] = [];
+    let imported = 0, skipped = 0, errors = 0;
+    if (!this.data.gratuity_provisions) this.data.gratuity_provisions = [];
+    const rate = PayrollDatabase.GRATUITY_DAYS / PayrollDatabase.GRATUITY_DIVISOR / PayrollDatabase.GRATUITY_MONTHS;
+
+    rows.forEach((row, i) => {
+      const rowNo = i + 2;
+      const code = String(row['EMPLOYEE CODE'] ?? row['EMPLOYEE_CODE'] ?? '').trim();
+      if (!code) { errors++; results.push({ row: rowNo, employee: '', status: 'ERROR', message: 'Employee code missing' }); return; }
+      const emp = this.data.employees?.find((e: any) => e.id === code || e.emp_code === code);
+      if (!emp) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Employee not found' }); return; }
+      const month = this._normalizeImportMonth(row['MONTH'] ?? row['Month']);
+      if (!month) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Invalid month (use Apr-26 … or 2026-04)' }); return; }
+      const basicRaw = Number(String(row['BASIC'] ?? row['Basic'] ?? '').replace(/[^0-9.\-]/g, ''));
+      const basic = Number.isFinite(basicRaw) && basicRaw > 0 ? basicRaw : this._effectiveBasicForMonth(emp, month);
+      if (basic <= 0) { errors++; results.push({ row: rowNo, employee: code, status: 'ERROR', message: 'Basic missing/invalid and employee has no Basic' }); return; }
+      const amtRaw = Number(String(row['GRATUITY AMOUNT'] ?? row['GRATUITY_AMOUNT'] ?? '').replace(/[^0-9.\-]/g, ''));
+      const amount = Number.isFinite(amtRaw) && amtRaw > 0 ? Math.round(amtRaw) : Math.round(basic * rate);
+      const id = `GRAT-${emp.id}-${month}`;
+      const existing = this.data.gratuity_provisions.find((g: any) => g.id === id);
+      if (existing && existing.source === 'MANUAL') {
+        skipped++; results.push({ row: rowNo, employee: code, status: 'SKIPPED_DUPLICATE', message: `${month}: manual provision already exists` }); return;
+      }
+      const record: any = {
+        id, employee_id: emp.id, emp_code: emp.emp_code || emp.id, employee_name: emp.name, company: emp.company, unit: emp.unit || '', department: emp.department || '',
+        month, base_salary: basic, accrual_rate: Number(rate.toFixed(6)), amount, source: 'MANUAL',
+        status: existing?.status === 'SETTLED' ? 'SETTLED' : existing?.status === 'FORFEITED' ? 'FORFEITED' : 'ACCUMULATED',
+        ff_settlement_id: existing?.ff_settlement_id ?? null,
+        remarks: String(row['REMARKS'] ?? row['Remarks'] ?? 'excel import'),
+        created_by: operator || 'excel-import',
+        created_at: existing?.created_at || new Date().toISOString(), updated_at: new Date().toISOString()
+      };
+      if (existing) Object.assign(existing, record);
+      else this.data.gratuity_provisions.push(record);
+      this._mirrorGratuityProvision(record);
+      imported++; results.push({ row: rowNo, employee: code, status: 'IMPORTED', message: `${month}: ₹${amount} (Basic ₹${basic} × ${(rate * 100).toFixed(2)}%)` });
+    });
+    if (imported > 0 && operator) this.logAudit('Gratuity Provisions Imported', `${imported} manual provisions imported from Excel (${skipped} skipped, ${errors} errors)`, operator);
+    return { results, imported, skipped, errors };
+  }
+
+  /** Best-effort SQLite mirror for a gratuity provision row (authoritative store = cloud). */
+  private _mirrorGratuityProvision(g: any): void {
+    try {
+      this.dbSqlite.run(
+        `INSERT OR REPLACE INTO gratuity_provisions (id, employee_id, emp_code, employee_name, company, unit, department, month, base_salary, accrual_rate, amount, source, status, ff_settlement_id, remarks, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [g.id, g.employee_id ?? null, g.emp_code ?? null, g.employee_name ?? null, g.company ?? null, g.unit ?? null, g.department ?? null, g.month, g.base_salary ?? 0, g.accrual_rate ?? null, g.amount ?? 0, g.source ?? 'MANUAL', g.status ?? 'ACCUMULATED', g.ff_settlement_id ?? null, g.remarks ?? null, g.created_by ?? null, g.created_at ?? null, g.updated_at ?? null]
+      );
+    } catch { /* local mirror only — never break business flow on mirror errors */ }
+  }
+
+  /** READ-ONLY reconciliation: register provisions vs F&F-paid gratuity.
+   *  Writes nothing — F&F remains the single payment surface. */
+  public getGratuityReconciliation(): any {
+    const provisions = this.getGratuityProvisions();
+    const settlements = this.data.ff_settlements || [];
+    const rows: any[] = [];
+    const empIds = new Set<string>([...provisions.map((g: any) => g.employee_id), ...settlements.map((f: any) => f.employee_id)]);
+    for (const empId of empIds) {
+      const emp = this.getEmployeeById(empId);
+      const provRows = provisions.filter((g: any) => g.employee_id === empId);
+      const cumulative = provRows.reduce((s: number, g: any) => s + (Number(g.amount) || 0), 0);
+      const ffRows = settlements.filter((f: any) => f.employee_id === empId && (Number(f.gratuity_earned) || 0) > 0);
+      const paid = ffRows.reduce((s: number, f: any) => s + (Number(f.gratuity_earned) || 0), 0);
+      const vestedYears = this._gratuityVestedYears(emp || {}, (emp as any)?.exit_date);
+      const vested = vestedYears >= PayrollDatabase.GRATUITY_VEST_YEARS;
+      rows.push({
+        employee_id: empId,
+        employee_name: emp?.name || provRows[0]?.employee_name || ffRows[0]?.employee_name || empId,
+        company: emp?.company || provRows[0]?.company || '',
+        joining_date: emp?.joining_date || null,
+        exit_date: (emp as any)?.exit_date || null,
+        months_accrued: provRows.length,
+        cumulative_provision: Math.round(cumulative),
+        vested_years: vestedYears,
+        vested,
+        ff_status: ffRows.length > 0 ? (ffRows[ffRows.length - 1].status || 'PROCESSED') : null,
+        gratuity_paid: Math.round(paid),
+        balance_liability: Math.max(0, Math.round(cumulative - paid)),
+        variance: Math.round(cumulative - paid),
+        forfeited: !vested && ffRows.length > 0
+      });
+    }
+    rows.sort((a, b) => String(a.employee_name).localeCompare(String(b.employee_name)));
+    const totals = {
+      total_provision: Math.round(rows.reduce((s, r) => s + r.cumulative_provision, 0)),
+      total_paid: Math.round(rows.reduce((s, r) => s + r.gratuity_paid, 0)),
+      total_balance: Math.round(rows.reduce((s, r) => s + r.balance_liability, 0)),
+      vested_employees: rows.filter(r => r.vested).length,
+      forfeited_cases: rows.filter(r => r.forfeited).length
+    };
+    return { rows, totals, vest_years: PayrollDatabase.GRATUITY_VEST_YEARS };
   }
 
   /** Best-effort SQLite mirror for an arrear row (authoritative store = cloud). */
