@@ -2996,8 +2996,11 @@ HR Department`;
     // PHASE-1 SECURITY FIX: arbitrary SQL is a destructive admin surface.
     // Previously it had NO role check — any authenticated identity could run
     // DELETE/UPDATE against live tables. Now SUPER_HR-only, server-resolved.
-    if (getOperatorRole(req) !== 'SUPER_HR') {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may execute SQL queries.' });
+    // OWNER-ONLY (user directive): SQL console is exclusively the owner's
+    // (Vishnu Arrawatia) tool — other SUPER_HRs are refused too.
+    const ownerUsername = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+    if (getOperatorRole(req) !== 'SUPER_HR' || ownerUsername !== 'vishnu') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may execute SQL queries.' });
     }
     const { sql } = req.body;
     if (!sql || typeof sql !== 'string') {

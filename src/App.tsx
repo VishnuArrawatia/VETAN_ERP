@@ -3121,14 +3121,16 @@ export default function App() {
                         <ShieldCheck size={12} />
                       </button>
 
-                      {/* SQLite console */}
-                      <button
-                        onClick={() => setActiveTab('sql')}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='sql' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
-                      >
-                        <span>SQLite Console</span>
-                        <Menu size={12} />
-                      </button>
+                      {/* SQLite console — OWNER-ONLY: visible to Vishnu Arrawatia only */}
+                      {activeHR?.username?.toLowerCase() === 'vishnu' && (
+                        <button
+                          onClick={() => setActiveTab('sql')}
+                          className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='sql' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
+                        >
+                          <span>SQLite Console</span>
+                          <Menu size={12} />
+                        </button>
+                      )}
 
                       {/* Business Logic Vault */}
                       {activeHR.username === 'vishnu' && (
@@ -5269,8 +5271,9 @@ export default function App() {
                 </div>
               )}
 
-              {/* SQL INTERACTIVE CONSOLE MODULE */}
-              {activeTab === 'sql' && (
+              {/* SQL INTERACTIVE CONSOLE MODULE — OWNER-ONLY guard (defense in
+                  depth: direct tab-switch via console/devtools also blocked) */}
+              {activeTab === 'sql' && activeHR?.username?.toLowerCase() === 'vishnu' && (
                 <div className="space-y-6">
                   <SqlConsole />
                 </div>

@@ -35588,8 +35588,9 @@ HR Department`;
     });
   });
   app.post("/api/sql/query", (req, res) => {
-    if (getOperatorRole(req) !== "SUPER_HR") {
-      return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may execute SQL queries." });
+    const ownerUsername = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+    if (getOperatorRole(req) !== "SUPER_HR" || ownerUsername !== "vishnu") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may execute SQL queries." });
     }
     const { sql } = req.body;
     if (!sql || typeof sql !== "string") {
