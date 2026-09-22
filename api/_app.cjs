@@ -25370,6 +25370,13 @@ var PayrollDatabase = class _PayrollDatabase {
     } catch (err) {
       console.error("sqlite3 package could not be loaded dynamically (likely native binary incompatibility):", err);
     }
+    if (process.env.VETAN_SKIP_SQLITE_MIRROR === "1") {
+      console.log("[INIT] VETAN_SKIP_SQLITE_MIRROR=1 \u2014 in-memory boot without SQLite mirror (test mode).");
+      this.dbSqlite = new MockDatabase();
+      this.inMemoryOnly = true;
+      this.enforceCompanyCorrections();
+      return;
+    }
     return new Promise((originalResolve, reject) => {
       const resolve = () => {
         this.enforceCompanyCorrections();
@@ -32151,7 +32158,12 @@ Sakar & SVN Group`;
         this._storeLoadedTs = Date.parse(remoteUpdatedAt || "") || null;
         this.lastLoadedAt = remoteUpdatedAt || (/* @__PURE__ */ new Date()).toISOString();
         this.inMemoryOnly = true;
-        console.log(`[Supabase] reloadFromSupabase OK \u2014 ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
+        const reloadedCount = this.data.employees?.length || 0;
+        if (reloadedCount > 0 && this.loadedFromSeed) {
+          this.loadedFromSeed = false;
+          console.log(`[Supabase] SELF-HEAL: real data loaded (${reloadedCount} employees) \u2014 loadedFromSeed cleared, cloud writes re-enabled.`);
+        }
+        console.log(`[Supabase] reloadFromSupabase OK \u2014 ${reloadedCount} employees, version: ${this._loadedVersion}`);
         return;
       } catch (e) {
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);
@@ -34751,7 +34763,7 @@ async function createApp(supabaseAdmin) {
         const totalLeave = plDays + clDays + slDays + compoffDays;
         if (totalLeave === 0) continue;
         const attId = `ATT-${emp.id}-${month}`;
-        let att = db.getAttendance().find((a) => a.employee_id === emp.id && a.month === month);
+        let att = db.getAttendance(month).find((a) => a.employee_id === emp.id);
         if (!att) {
           att = {
             id: attId,
@@ -34774,6 +34786,10 @@ async function createApp(supabaseAdmin) {
           };
           db.data.attendance.push(att);
         }
+        const prevPl = Number(att.leave_pl || 0);
+        const prevCl = Number(att.leave_cl || 0);
+        const prevSl = Number(att.leave_sl || 0);
+        const prevCo = Number(att.leave_coff || 0);
         att.leave_pl = plDays;
         att.leave_cl = clDays;
         att.leave_sl = slDays;
@@ -34782,10 +34798,14 @@ async function createApp(supabaseAdmin) {
         att.working_days = (att.present || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave;
         att.lop_days = (att.absent || 0) + (att.lwp || 0);
         att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave + (att.lwp || 0);
-        if (plDays > 0) emp.leave_balance_pl = Math.max(0, (emp.leave_balance_pl || 0) - plDays);
-        if (clDays > 0) emp.leave_balance_cl = Math.max(0, (emp.leave_balance_cl || 0) - clDays);
-        if (slDays > 0) emp.leave_balance_sl = Math.max(0, (emp.leave_balance_sl || 0) - slDays);
-        if (compoffDays > 0) emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - compoffDays);
+        const deltaPl = plDays - prevPl;
+        const deltaCl = clDays - prevCl;
+        const deltaSl = slDays - prevSl;
+        const deltaCo = compoffDays - prevCo;
+        if (deltaPl !== 0) emp.leave_balance_pl = Math.max(0, (emp.leave_balance_pl || 0) - deltaPl);
+        if (deltaCl !== 0) emp.leave_balance_cl = Math.max(0, (emp.leave_balance_cl || 0) - deltaCl);
+        if (deltaSl !== 0) emp.leave_balance_sl = Math.max(0, (emp.leave_balance_sl || 0) - deltaSl);
+        if (deltaCo !== 0) emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - deltaCo);
         if (db.dbSqlite && typeof db.dbSqlite.run === "function") {
           db.dbSqlite.run(
             `INSERT OR REPLACE INTO attendance (id, employee_id, month, total_days, working_days, lop_days, overtime_hours, present, absent, weekly_off, paid_holiday, leave, lwp, ot_hours, is_locked, leave_pl, leave_cl, leave_sl, leave_coff, pay_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

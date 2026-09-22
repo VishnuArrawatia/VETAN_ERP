@@ -635,6 +635,19 @@ export class PayrollDatabase {
       console.error('sqlite3 package could not be loaded dynamically (likely native binary incompatibility):', err);
     }
 
+    // TEST-HOOK: deterministic in-memory boot for automated harnesses (env is
+    // never set in production). The local SQLite mirror's background seed-import
+    // asynchronously REPLACES in-memory collections in staggered waves AFTER
+    // init() resolves — a local-dev artifact that does not exist on serverless
+    // (no Payroll.db there) but makes timing-sensitive integration tests flaky.
+    if (process.env.VETAN_SKIP_SQLITE_MIRROR === '1') {
+      console.log('[INIT] VETAN_SKIP_SQLITE_MIRROR=1 — in-memory boot without SQLite mirror (test mode).');
+      this.dbSqlite = new MockDatabase();
+      this.inMemoryOnly = true;
+      this.enforceCompanyCorrections();
+      return;
+    }
+
     return new Promise<void>((originalResolve, reject) => {
       const resolve = () => {
         this.enforceCompanyCorrections();
@@ -7649,7 +7662,15 @@ Sakar & SVN Group`;
         this._storeLoadedTs = Date.parse(remoteUpdatedAt || '') || null;
         this.lastLoadedAt = remoteUpdatedAt || new Date().toISOString();
         this.inMemoryOnly = true;
-        console.log(`[Supabase] reloadFromSupabase OK — ${this.data.employees?.length || 0} employees, version: ${this._loadedVersion}`);
+        // SELF-HEAL: if a previous cold start fell back to seed (loadedFromSeed=true)
+        // but a later reload now succeeds with real data, clear the seed flag so
+        // persistence resumes automatically — no redeploy needed to recover.
+        const reloadedCount = this.data.employees?.length || 0;
+        if (reloadedCount > 0 && this.loadedFromSeed) {
+          this.loadedFromSeed = false;
+          console.log(`[Supabase] SELF-HEAL: real data loaded (${reloadedCount} employees) — loadedFromSeed cleared, cloud writes re-enabled.`);
+        }
+        console.log(`[Supabase] reloadFromSupabase OK — ${reloadedCount} employees, version: ${this._loadedVersion}`);
         return;
       } catch (e: any) {
         console.error(`[Supabase] reloadFromSupabase attempt ${attempt} EXCEPTION:`, e?.message || e);

@@ -2031,7 +2031,11 @@ export async function createApp(supabaseAdmin?: any) {
 
         // Update attendance record for this month
         const attId = `ATT-${emp.id}-${month}`;
-        let att = db.getAttendance().find((a: any) => a.employee_id === emp.id && a.month === month);
+        // FIX: getAttendance() without a month argument filters every record out
+        // (a.month === undefined matches nothing), so this route never found the
+        // existing record — it re-created it with leave_pl=0 on EVERY upload and
+        // re-deducted the full utilization from balances each time.
+        let att = db.getAttendance(month).find((a: any) => a.employee_id === emp.id);
 
         if (!att) {
           // Create new attendance record
@@ -2057,6 +2061,15 @@ export async function createApp(supabaseAdmin?: any) {
           (db.data as any).attendance.push(att);
         }
 
+        // IDEMPOTENT DELTA DEDUCTION: deduct only the CHANGE vs the previously
+        // saved utilization for this month, so re-uploading the same monthly
+        // sheet never double-deducts balances. Upward corrections deduct the
+        // difference; downward corrections refund the difference.
+        const prevPl = Number(att.leave_pl || 0);
+        const prevCl = Number(att.leave_cl || 0);
+        const prevSl = Number(att.leave_sl || 0);
+        const prevCo = Number(att.leave_coff || 0);
+
         // Update leave counts
         att.leave_pl = plDays;
         att.leave_cl = clDays;
@@ -2069,11 +2082,15 @@ export async function createApp(supabaseAdmin?: any) {
         att.lop_days = (att.absent || 0) + (att.lwp || 0);
         att.total_days = (att.present || 0) + (att.absent || 0) + (att.weekly_off || 0) + (att.paid_holiday || 0) + att.leave + (att.lwp || 0);
 
-        // Deduct from employee leave balance
-        if (plDays > 0) emp.leave_balance_pl = Math.max(0, (emp.leave_balance_pl || 0) - plDays);
-        if (clDays > 0) emp.leave_balance_cl = Math.max(0, (emp.leave_balance_cl || 0) - clDays);
-        if (slDays > 0) emp.leave_balance_sl = Math.max(0, (emp.leave_balance_sl || 0) - slDays);
-        if (compoffDays > 0) emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - compoffDays);
+        // Deduct from employee leave balance (delta only — idempotent on re-upload)
+        const deltaPl = plDays - prevPl;
+        const deltaCl = clDays - prevCl;
+        const deltaSl = slDays - prevSl;
+        const deltaCo = compoffDays - prevCo;
+        if (deltaPl !== 0) emp.leave_balance_pl = Math.max(0, (emp.leave_balance_pl || 0) - deltaPl);
+        if (deltaCl !== 0) emp.leave_balance_cl = Math.max(0, (emp.leave_balance_cl || 0) - deltaCl);
+        if (deltaSl !== 0) emp.leave_balance_sl = Math.max(0, (emp.leave_balance_sl || 0) - deltaSl);
+        if (deltaCo !== 0) emp.leave_balance_compoff = Math.max(0, (emp.leave_balance_compoff || 0) - deltaCo);
 
         // Update SQLite
         if (db.dbSqlite && typeof db.dbSqlite.run === 'function') {
