@@ -4323,8 +4323,14 @@ HR Department`;
       // PHASE-1 SECURITY FIX: full-database overwrite is the most destructive
       // operation in the system. It now requires BOTH SUPER_HR authority
       // (server-resolved role — forge-proof) AND the Super Admin PIN.
-      if (getOperatorRole(req) !== 'SUPER_HR') {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only SUPER_HR may restore the database.' });
+      // OWNER-ONLY (user directive): even among SUPER_HRs, ONLY the owner
+      // account 'vishnu' (Vishnu Arrawatia) may execute a restore — another
+      // SUPER_HR with the PIN must still be refused. Username is resolved the
+      // same forge-proof way as getOperatorRole (server session subject, or the
+      // legacy header mapped against the server user record).
+      const ownerUsername = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+      if (getOperatorRole(req) !== 'SUPER_HR' || ownerUsername !== 'vishnu') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may restore the database.' });
       }
       const pin = req.headers['x-security-pin'] || req.query.pin || req.body?.pin;
       if (!(await verifyPin(pin))) {

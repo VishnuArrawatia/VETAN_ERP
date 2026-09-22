@@ -493,6 +493,14 @@ export default function App() {
   };
 
   const restoreBackup = async () => {
+    // OWNER-ONLY (user directive): the recovery banner/restore is exclusively
+    // the system owner's (Vishnu Arrawatia) tool — other HRs never see it and
+    // cannot invoke it. Server enforces the same rule independently.
+    if (activeHR?.username?.toLowerCase() !== 'vishnu') {
+      setErrorBanner('❌ Sirf system owner (Vishnu Arrawatia) data restore kar sakta hai.');
+      setBackupPromptOpen(false);
+      return;
+    }
     setRestoringBackup(true);
     setErrorBanner('');
     try {
@@ -3165,7 +3173,7 @@ export default function App() {
                 </div>
               )}
 
-              {backupPromptOpen && backupStats && (
+              {backupPromptOpen && backupStats && activeHR?.username?.toLowerCase() === 'vishnu' && (
                 <div className="p-4 mb-6 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex gap-3 items-start md:items-center">
                     <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0">

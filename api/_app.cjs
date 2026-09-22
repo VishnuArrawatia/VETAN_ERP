@@ -36708,8 +36708,9 @@ HR Department`;
   });
   app.post("/api/restore-json", async (req, res) => {
     try {
-      if (getOperatorRole(req) !== "SUPER_HR") {
-        return res.status(403).json({ error: "FORBIDDEN", message: "Only SUPER_HR may restore the database." });
+      const ownerUsername = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+      if (getOperatorRole(req) !== "SUPER_HR" || ownerUsername !== "vishnu") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may restore the database." });
       }
       const pin = req.headers["x-security-pin"] || req.query.pin || req.body?.pin;
       if (!await verifyPin(pin)) {
