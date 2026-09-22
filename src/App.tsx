@@ -479,6 +479,29 @@ export default function App() {
 
   // Backup and restore state
   const [backupPromptOpen, setBackupPromptOpen] = useState(false);
+  // BUILD-WATCHDOG: detects when a NEWER deployment exists on the server while
+  // this tab still runs an OLD bundle (SPA tabs keep stale JS in memory for
+  // days). Polls the live index.html every 5 min and offers a one-click reload
+  // — prevents "purani screen / purana banner" confusion after every deploy.
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const _bootBundleRef = useRef<string | null>(null);
+  useEffect(() => {
+    _bootBundleRef.current = Array.from(document.scripts).map(s => s.src).find(src => src.includes('/assets/index-')) || null;
+    const check = async () => {
+      try {
+        const res = await fetch('/', { cache: 'no-store' });
+        if (!res.ok) return;
+        const html = await res.text();
+        const m = html.match(/assets\/index-[^"']+\.js/);
+        if (m && _bootBundleRef.current && !String(_bootBundleRef.current).includes(m[0])) {
+          setUpdateAvailable(m[0]);
+        }
+      } catch { /* offline — retry next tick */ }
+    };
+    const t = setInterval(check, 5 * 60 * 1000);
+    check();
+    return () => clearInterval(t);
+  }, []);
   const [backupStats, setBackupStats] = useState<{ employeesCount: number; savedAt: string } | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
   // PHASE-2D: restore is a SUPER_HR+PIN operation — the prompt collects the
@@ -3178,6 +3201,25 @@ export default function App() {
                 <div className="p-3 mb-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs font-medium rounded-xl flex items-center gap-2">
                   <XCircle size={14} className="text-rose-500" />
                   {errorBanner}
+                </div>
+              )}
+
+              {/* BUILD-WATCHDOG banner: app naya deploy ho gaya, ye tab purana chala raha hai */}
+              {updateAvailable && (
+                <div className="p-4 mb-6 bg-sky-50 border border-sky-300 text-sky-900 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex gap-3 items-center">
+                    <span className="text-xl">🆕</span>
+                    <div>
+                      <h4 className="font-bold text-sm">Naya Update Available — ek baar Refresh karein</h4>
+                      <p className="text-xs text-sky-800 mt-0.5">System me naya version deploy ho chuka hai. Ye screen purani version chala rahi hai — data bilkul safe hai, bas update le lijiye.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-1.5 text-xs bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-bold shadow-sm transition shrink-0 cursor-pointer"
+                  >
+                    ⟳ Update Now
+                  </button>
                 </div>
               )}
 
