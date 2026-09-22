@@ -3091,14 +3091,17 @@ export default function App() {
                     {activeHR.role === 'ATTENDANCE_ONLY_HR' ? <Lock size={10} /> : <Settings size={12} />}
                   </button>
 
-                  {/* Database Health & Stability diagnostics */}
-                  <button
-                    onClick={() => setActiveTab('dbhealth')}
-                    className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='dbhealth' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
-                  >
-                    <span>Database Health</span>
-                    <Database size={12} />
-                  </button>
+                  {/* Database Health & Stability diagnostics — OWNER-ONLY:
+                      contains Purge/Restore-all destructive tools */}
+                  {activeHR?.username?.toLowerCase() === 'vishnu' && (
+                    <button
+                      onClick={() => setActiveTab('dbhealth')}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='dbhealth' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
+                    >
+                      <span>Database Health</span>
+                      <Database size={12} />
+                    </button>
+                  )}
 
                   {/* Super HR Settings */}
                   {activeHR.role === 'SUPER_HR' && (
@@ -3112,14 +3115,17 @@ export default function App() {
                         <ShieldCheck size={12} />
                       </button>
 
-                      {/* Compliance & Backups */}
-                      <button
-                        onClick={() => setActiveTab('audit')}
-                        className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='audit' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
-                      >
-                        <span>Compliance & Backups</span>
-                        <ShieldCheck size={12} />
-                      </button>
+                      {/* Compliance & Backups — OWNER-ONLY: security-mode toggle,
+                          payroll unlock, full restore live here */}
+                      {activeHR?.username?.toLowerCase() === 'vishnu' && (
+                        <button
+                          onClick={() => setActiveTab('audit')}
+                          className={`w-full text-left px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='audit' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'hover:bg-gray-100 text-slate-600'}`}
+                        >
+                          <span>Compliance & Backups</span>
+                          <ShieldCheck size={12} />
+                        </button>
+                      )}
 
                       {/* SQLite console — OWNER-ONLY: visible to Vishnu Arrawatia only */}
                       {activeHR?.username?.toLowerCase() === 'vishnu' && (
@@ -5248,8 +5254,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* SYSTEM AUDIT LOGS AND COMPLIANCE TOOLS */}
-              {activeTab === 'audit' && (
+              {/* SYSTEM AUDIT LOGS AND COMPLIANCE TOOLS — OWNER-ONLY guard */}
+              {activeTab === 'audit' && activeHR?.username?.toLowerCase() === 'vishnu' && (
                 <div className="space-y-6">
                   <AuditBackupsView 
                     activeMonth={activeMonth}
@@ -5279,8 +5285,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* DATABASE HEALTH VIEW */}
-              {activeTab === 'dbhealth' && (
+              {/* DATABASE HEALTH VIEW — OWNER-ONLY guard (Purge/Restore tools) */}
+              {activeTab === 'dbhealth' && activeHR?.username?.toLowerCase() === 'vishnu' && (
                 <DatabaseHealthView 
                   employeesCount={employees.length}
                   onRefreshAll={() => {

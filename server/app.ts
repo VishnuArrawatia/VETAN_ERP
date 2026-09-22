@@ -830,9 +830,11 @@ export async function createApp(supabaseAdmin?: any) {
     try {
       // PHASE-1 SECURITY FIX: this toggle controls whether passwords/PINs are
       // enforced — it must be SUPER_HR-only (server-side role, not client headers).
-      const operatorRole = getOperatorRole(req);
-      if (operatorRole !== 'SUPER_HR') {
-        return res.status(403).json({ success: false, error: 'Access Denied: Only Super Admin can modify production security settings.' });
+      // OWNER-ONLY (user directive): the security gate itself is owner-controlled —
+      // otherwise another admin could disable PIN enforcement.
+      const securityOwner = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+      if (getOperatorRole(req) !== 'SUPER_HR' || securityOwner !== 'vishnu') {
+        return res.status(403).json({ success: false, error: 'Access Denied: Only the system owner (Vishnu Arrawatia) can modify production security settings.' });
       }
       const { enabled } = req.body;
       const value = enabled ? '1' : '0';
@@ -4237,8 +4239,10 @@ HR Department`;
     try {
       // PHASE-1 SECURITY FIX: purge wipes ALL employees+payroll — SUPER_HR-only
       // (server-resolved role) in addition to the mandatory PIN.
-      if (getOperatorRole(req) !== 'SUPER_HR') {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only Super Admin may purge employee data.' });
+      // OWNER-ONLY (user directive): exclusively the owner's tool.
+      const purgeOwner = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+      if (getOperatorRole(req) !== 'SUPER_HR' || purgeOwner !== 'vishnu') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may purge employee data.' });
       }
       const pin = req.headers['x-security-pin'] || req.query.pin || req.body.pin;
       if (!(await verifyPin(pin))) {
@@ -4363,8 +4367,10 @@ HR Department`;
         return res.status(403).json({ error: 'PIN_INVALID', message: 'Invalid or missing Super Admin Security PIN.' });
       }
       // SECURITY-FIX V-5: restore requires SUPER_HR authority (PIN already required above).
-      if (getOperatorRole(req) !== 'SUPER_HR') {
-        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only SUPER_HR may restore the database.' });
+      // OWNER-ONLY (user directive): exclusively the owner's tool.
+      const restoreOwner = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+      if (getOperatorRole(req) !== 'SUPER_HR' || restoreOwner !== 'vishnu') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may restore the database.' });
       }
 
       if (!databaseBase64) {

@@ -33736,9 +33736,9 @@ async function createApp(supabaseAdmin) {
   });
   app.post("/api/settings/security-mode", async (req, res) => {
     try {
-      const operatorRole = getOperatorRole(req);
-      if (operatorRole !== "SUPER_HR") {
-        return res.status(403).json({ success: false, error: "Access Denied: Only Super Admin can modify production security settings." });
+      const securityOwner = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+      if (getOperatorRole(req) !== "SUPER_HR" || securityOwner !== "vishnu") {
+        return res.status(403).json({ success: false, error: "Access Denied: Only the system owner (Vishnu Arrawatia) can modify production security settings." });
       }
       const { enabled } = req.body;
       const value = enabled ? "1" : "0";
@@ -36633,8 +36633,9 @@ HR Department`;
   });
   app.post("/api/admin/purge-employees", async (req, res) => {
     try {
-      if (getOperatorRole(req) !== "SUPER_HR") {
-        return res.status(403).json({ error: "FORBIDDEN", message: "Only Super Admin may purge employee data." });
+      const purgeOwner = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+      if (getOperatorRole(req) !== "SUPER_HR" || purgeOwner !== "vishnu") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may purge employee data." });
       }
       const pin = req.headers["x-security-pin"] || req.query.pin || req.body.pin;
       if (!await verifyPin(pin)) {
@@ -36736,8 +36737,9 @@ HR Department`;
       if (!await verifyPin(pin)) {
         return res.status(403).json({ error: "PIN_INVALID", message: "Invalid or missing Super Admin Security PIN." });
       }
-      if (getOperatorRole(req) !== "SUPER_HR") {
-        return res.status(403).json({ error: "FORBIDDEN", message: "Only SUPER_HR may restore the database." });
+      const restoreOwner = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+      if (getOperatorRole(req) !== "SUPER_HR" || restoreOwner !== "vishnu") {
+        return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may restore the database." });
       }
       if (!databaseBase64) {
         return res.status(400).json({ error: "Missing databaseBase64 parameter" });
