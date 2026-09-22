@@ -310,6 +310,48 @@ export async function createApp(supabaseAdmin?: any) {
     });
   });
 
+  // OWNER-ONLY, READ-ONLY Supabase connectivity diagnostic — surfaces the REAL
+  // cloud error on-screen instead of leaving it buried in Vercel logs.
+  app.get('/api/supabase-diag', async (req, res) => {
+    const ownerUsername = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+    if (getOperatorRole(req) !== 'SUPER_HR' || ownerUsername !== 'vishnu') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may run cloud diagnostics.' });
+    }
+    const client: any = (db as any).supabaseAdmin;
+    if (!client) return res.json({ hasClient: false });
+    const out: any = { hasClient: true, probed_at: new Date().toISOString() };
+    // Probe 1: the exact query reloadFromSupabase uses.
+    try {
+      const t0 = Date.now();
+      const { data, error } = await Promise.race([
+        client.from('vetan_erp_store').select('payload, updated_at').eq('id', 'live').maybeSingle(),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout-10s')), 10_000))
+      ]);
+      out.store_query = {
+        ms: Date.now() - t0,
+        error: error ? { message: error.message, code: error.code, details: error.details, hint: error.hint } : null,
+        row_exists: !!data?.payload,
+        payload_bytes: data?.payload ? JSON.stringify(data.payload).length : 0,
+        updated_at: data?.updated_at || null
+      };
+    } catch (e: any) { out.store_query = { exception: e?.message || String(e) }; }
+    // Probe 2: can we even list the table (permission check)?
+    try {
+      const t1 = Date.now();
+      const { data, error } = await Promise.race([
+        client.from('vetan_erp_store').select('id').limit(5),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout-10s')), 10_000))
+      ]);
+      out.table_list = { ms: Date.now() - t1, error: error ? error.message : null, row_ids: (data || []).map((r: any) => r.id) };
+    } catch (e: any) { out.table_list = { exception: e?.message || String(e) }; }
+    // Probe 3: auth endpoint reachability (is the project paused?).
+    try {
+      const url: string = (client as any).rest?.__supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+      out.project_url = url ? `${url.slice(0, 30)}...` : 'unknown';
+    } catch { /* ignore */ }
+    res.json(out);
+  });
+
   // API ROUTES
 
   // Get active dashboard metrics, including multi-company statistics

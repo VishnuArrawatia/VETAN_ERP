@@ -33299,6 +33299,47 @@ async function createApp(supabaseAdmin) {
       initializationWarnings: warnings
     });
   });
+  app.get("/api/supabase-diag", async (req, res) => {
+    const ownerUsername = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+    if (getOperatorRole(req) !== "SUPER_HR" || ownerUsername !== "vishnu") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may run cloud diagnostics." });
+    }
+    const client = db.supabaseAdmin;
+    if (!client) return res.json({ hasClient: false });
+    const out = { hasClient: true, probed_at: (/* @__PURE__ */ new Date()).toISOString() };
+    try {
+      const t0 = Date.now();
+      const { data, error } = await Promise.race([
+        client.from("vetan_erp_store").select("payload, updated_at").eq("id", "live").maybeSingle(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout-10s")), 1e4))
+      ]);
+      out.store_query = {
+        ms: Date.now() - t0,
+        error: error ? { message: error.message, code: error.code, details: error.details, hint: error.hint } : null,
+        row_exists: !!data?.payload,
+        payload_bytes: data?.payload ? JSON.stringify(data.payload).length : 0,
+        updated_at: data?.updated_at || null
+      };
+    } catch (e) {
+      out.store_query = { exception: e?.message || String(e) };
+    }
+    try {
+      const t1 = Date.now();
+      const { data, error } = await Promise.race([
+        client.from("vetan_erp_store").select("id").limit(5),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout-10s")), 1e4))
+      ]);
+      out.table_list = { ms: Date.now() - t1, error: error ? error.message : null, row_ids: (data || []).map((r) => r.id) };
+    } catch (e) {
+      out.table_list = { exception: e?.message || String(e) };
+    }
+    try {
+      const url = client.rest?.__supabaseUrl || process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+      out.project_url = url ? `${url.slice(0, 30)}...` : "unknown";
+    } catch {
+    }
+    res.json(out);
+  });
   app.get("/api/dashboard/summary", (req, res) => {
     const { company } = req.query;
     const allowed = getAllowedCompanies(req);
@@ -37534,4 +37575,3 @@ serve-static/index.js:
    * MIT Licensed
    *)
 */
-//# sourceMappingURL=_app.cjs.map
