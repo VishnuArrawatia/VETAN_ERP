@@ -33352,6 +33352,40 @@ async function createApp(supabaseAdmin) {
       out.project_url = url ? `${url.slice(0, 30)}...` : "unknown";
     } catch {
     }
+    try {
+      const t2 = Date.now();
+      const headRes = await Promise.race([
+        client.from("vetan_erp_backups").select("id", { count: "exact", head: true }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout-10s")), 1e4))
+      ]);
+      let labels = [];
+      let labelErr = null;
+      try {
+        const lr = await Promise.race([
+          client.from("vetan_erp_backups").select("label, created_at").order("created_at", { ascending: false }).limit(1e3),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout-10s")), 1e4))
+        ]);
+        labels = lr.data || [];
+        labelErr = lr.error || null;
+      } catch (e) {
+        labelErr = e;
+      }
+      const count = typeof headRes?.count === "number" ? headRes.count : headRes?.error ? null : labels.length;
+      const autoCount = labels.filter((r) => String(r.label || "").startsWith("auto-")).length;
+      out.backups = {
+        ms: Date.now() - t2,
+        error: headRes?.error ? headRes.error.message : labelErr ? String(labelErr?.message || labelErr) : null,
+        count,
+        auto_labeled: autoCount,
+        other_labeled: count == null ? null : count - autoCount,
+        oldest: labels.length ? labels[labels.length - 1]?.created_at : null,
+        newest: labels.length ? labels[0]?.created_at : null,
+        estimated_payload_mb: count == null ? null : Math.round(count * 5.7),
+        note: "size \u2248 count \xD7 5.7 MB (avg snapshot); exact bytes = Dashboard \u2192 Reports \u2192 Database size"
+      };
+    } catch (e) {
+      out.backups = { exception: e?.message || String(e) };
+    }
     res.json(out);
   });
   app.post("/api/supabase/sync", async (req, res) => {
