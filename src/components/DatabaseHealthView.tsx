@@ -17,8 +17,7 @@ import {
   Trash2,
   Cloud
 } from 'lucide-react';
-import { createSupabaseBackup, supabaseSyncStatus } from '../lib/supabaseData';
-import { loadOfflineStore, saveStoreEverywhere } from '../lib/offlineStore';
+import { supabaseSyncStatus } from '../lib/supabaseData';
 
 interface DatabaseHealthViewProps {
   employeesCount: number;
@@ -72,30 +71,40 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
     return () => clearInterval(interval);
   }, []);
 
+  // RLS-SECURE PATH (supabase/004): the browser anon key can no longer write to
+  // the cloud — cloud sync goes through the owner-only server route, which
+  // reloads authoritative data + persists with the service_role key. The
+  // browser copy is never trusted wholesale, so a stale tab cannot wipe cloud
+  // records. Owner identity resolves from the logged-in HR session cookie.
+  const serverSyncToSupabase = async (): Promise<{ ok: boolean; message: string }> => {
+    const res = await fetch('/api/supabase/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      return { ok: true, message: data.message || 'Server-side cloud sync OK' };
+    }
+    return { ok: false, message: data.message || data.error || `Sync failed (HTTP ${res.status})` };
+  };
+
   const handleSyncToSupabase = async () => {
     setChecking(true);
     setMsg(null);
     try {
-      const store = await loadOfflineStore();
-      const push = await saveStoreEverywhere(store);
-      const label = `manual-${new Date().toISOString().slice(0, 19)}`;
-      const backup = await createSupabaseBackup(store, label, 'Manual backup from Database Health');
+      const sync = await serverSyncToSupabase();
       localStorage.setItem('vetan_last_save_time', new Date().toISOString());
       localStorage.setItem('vetan_last_backup_time', new Date().toISOString());
       await refreshSupabaseStatus();
-      if (!push.ok) {
-        setMsg({ type: 'error', text: `Live store NOT saved: ${push.error || 'unknown'}` });
-      } else {
-        setMsg({
-          type: backup.ok ? 'success' : 'error',
-          text: backup.ok
-            ? `Cloud sync OK. Live store + backup saved (${store.employees?.length || 0} employees).`
-            : `Live store saved, backup issue: ${backup.error || 'unknown'}`
-        });
-      }
-      onRefreshAll();
+      setMsg({
+        type: sync.ok ? 'success' : 'error',
+        text: sync.ok
+          ? `${sync.message} (RLS-secure server path)`
+          : sync.message
+      });
+      if (sync.ok) onRefreshAll();
     } catch (e: any) {
-      setMsg({ type: 'error', text: e?.message || 'Supabase sync failed. Did you run supabase/schema.sql?' });
+      setMsg({ type: 'error', text: e?.message || 'Supabase sync failed.' });
     } finally {
       setChecking(false);
     }
@@ -143,55 +152,20 @@ export default function DatabaseHealthView({ employeesCount, onRefreshAll }: Dat
     setChecking(true);
     setMsg(null);
     try {
-      // Prefer full local/Supabase path on Vercel (no Express /api)
-      const store = await loadOfflineStore();
-      if (store?.employees?.length) {
-        const push = await saveStoreEverywhere(store);
-        const label = new Date().toISOString().slice(0, 7);
-        await createSupabaseBackup(store, `sync-${label}-${Date.now()}`, 'Manual sync from Database Health');
-        const nowStr = new Date().toISOString();
-        localStorage.setItem('vetan_last_save_time', nowStr);
-        localStorage.setItem('vetan_last_backup_time', nowStr);
-        loadTimes();
-        await refreshSupabaseStatus();
-        setMsg({
-          type: push.ok ? 'success' : 'error',
-          text: push.ok
-            ? `Saved to browser + Supabase cloud. Verified ${store.employees.length} employees.`
-            : `Live store NOT saved to cloud: ${push.error || 'unknown'}`
-        });
-        onRefreshAll();
-        return;
-      }
-
-      const res = await fetch('/api/backup-json');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.employees && Array.isArray(data.employees)) {
-          localStorage.setItem('vetan_erp_auto_save_backup', JSON.stringify(data));
-          localStorage.setItem('vetan_erp_auto_save_backup_stats', JSON.stringify({
-            employeesCount: data.employees.length,
-            savedAt: new Date().toISOString()
-          }));
-          const nowStr = new Date().toISOString();
-          localStorage.setItem('vetan_last_save_time', nowStr);
-          localStorage.setItem('vetan_last_backup_time', nowStr);
-          const push = await saveStoreEverywhere(data);
-          loadTimes();
-          await refreshSupabaseStatus();
-          setMsg({
-            type: push.ok ? 'success' : 'error',
-            text: push.ok
-              ? `Database sync snapshot saved successfully! Backup verified for ${data.employees.length} employees.`
-              : `Live store NOT saved to cloud: ${push.error || 'unknown'}`
-          });
-          onRefreshAll();
-        } else {
-          setMsg({ type: 'error', text: 'Failed to generate correct backup structure.' });
-        }
-      } else {
-        setMsg({ type: 'error', text: 'Server returned error during backup generation.' });
-      }
+      // RLS-secure path: server reloads authoritative data and persists it.
+      const sync = await serverSyncToSupabase();
+      const nowStr = new Date().toISOString();
+      localStorage.setItem('vetan_last_save_time', nowStr);
+      localStorage.setItem('vetan_last_backup_time', nowStr);
+      loadTimes();
+      await refreshSupabaseStatus();
+      setMsg({
+        type: sync.ok ? 'success' : 'error',
+        text: sync.ok
+          ? `${sync.message} — verified via server.`
+          : sync.message
+      });
+      if (sync.ok) onRefreshAll();
     } catch (err: any) {
       setMsg({ type: 'error', text: 'Failed to sync database: ' + err.message });
     } finally {

@@ -352,6 +352,47 @@ export async function createApp(supabaseAdmin?: any) {
     res.json(out);
   });
 
+  // OWNER-ONLY cloud sync — the RLS-SECURE path for the Database Health buttons.
+  // Since the RLS write-lockdown (supabase/004), the browser (anon key) can no
+  // longer write to the cloud — all cloud writes MUST go through this server
+  // route, which uses the service_role client (RLS bypass).
+  // SAFETY MODEL: the browser copy is NEVER trusted wholesale. The server first
+  // reloads its authoritative view from the cloud (union-merge, OCC-safe), then
+  // persists THAT merged state back. A stale/tab-memory browser payload can
+  // never wipe cloud records this way.
+  app.post('/api/supabase/sync', async (req, res) => {
+    const ownerUsername = String(req.ess?.sub || req.headers['x-operator-username'] || '').trim().toLowerCase();
+    if (getOperatorRole(req) !== 'SUPER_HR' || ownerUsername !== 'vishnu') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Only the system owner (Vishnu Arrawatia) may run cloud sync.' });
+    }
+    if (!(db as any).supabaseAdmin) {
+      return res.status(503).json({ ok: false, error: 'Supabase client not configured on server' });
+    }
+    try {
+      // 1) Refresh authoritative view from cloud (skips when remote is not newer).
+      await db.reloadFromSupabase();
+      // 2) Persist the merged authoritative state (service_role — RLS bypass).
+      const persist = await db.forcePersistToSupabase();
+      // 3) Manual snapshot copy (pre-restore/purge-style backups are never pruned).
+      const label = `manual-server-${new Date().toISOString().slice(0, 19)}`;
+      const snap = await db.createCloudSnapshot(label, 'Manual server-side sync from Database Health (RLS-secure path)');
+      const count = (db.data?.employees || []).length;
+      console.log(`[Supabase] owner sync: reload+persist ${persist.ok ? 'OK' : 'FAILED'} (${count} employees), snapshot ${snap.ok ? 'created' : 'failed: ' + (snap.error || '')}`);
+      res.json({
+        ok: persist.ok && snap.ok,
+        employees: count,
+        persisted: persist,
+        snapshot: snap,
+        message: persist.ok
+          ? `Server-side cloud sync OK — ${count} employees persisted${snap.ok ? ' + manual backup row' : ''}`
+          : `Cloud persist failed: ${persist.error || 'unknown'}`
+      });
+    } catch (e: any) {
+      console.error('[Supabase] owner sync EXCEPTION:', e?.message || e);
+      res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+  });
+
   // API ROUTES
 
   // Get active dashboard metrics, including multi-company statistics

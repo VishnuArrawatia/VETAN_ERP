@@ -33354,6 +33354,33 @@ async function createApp(supabaseAdmin) {
     }
     res.json(out);
   });
+  app.post("/api/supabase/sync", async (req, res) => {
+    const ownerUsername = String(req.ess?.sub || req.headers["x-operator-username"] || "").trim().toLowerCase();
+    if (getOperatorRole(req) !== "SUPER_HR" || ownerUsername !== "vishnu") {
+      return res.status(403).json({ error: "FORBIDDEN", message: "Only the system owner (Vishnu Arrawatia) may run cloud sync." });
+    }
+    if (!db.supabaseAdmin) {
+      return res.status(503).json({ ok: false, error: "Supabase client not configured on server" });
+    }
+    try {
+      await db.reloadFromSupabase();
+      const persist = await db.forcePersistToSupabase();
+      const label = `manual-server-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 19)}`;
+      const snap = await db.createCloudSnapshot(label, "Manual server-side sync from Database Health (RLS-secure path)");
+      const count = (db.data?.employees || []).length;
+      console.log(`[Supabase] owner sync: reload+persist ${persist.ok ? "OK" : "FAILED"} (${count} employees), snapshot ${snap.ok ? "created" : "failed: " + (snap.error || "")}`);
+      res.json({
+        ok: persist.ok && snap.ok,
+        employees: count,
+        persisted: persist,
+        snapshot: snap,
+        message: persist.ok ? `Server-side cloud sync OK \u2014 ${count} employees persisted${snap.ok ? " + manual backup row" : ""}` : `Cloud persist failed: ${persist.error || "unknown"}`
+      });
+    } catch (e) {
+      console.error("[Supabase] owner sync EXCEPTION:", e?.message || e);
+      res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+  });
   app.get("/api/dashboard/summary", (req, res) => {
     const { company } = req.query;
     const allowed = getAllowedCompanies(req);
