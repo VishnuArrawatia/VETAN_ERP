@@ -31936,6 +31936,20 @@ Sakar & SVN Group`;
         const res = await this.createCloudSnapshot(`auto-${key}`, "Automatic daily cloud snapshot");
         if (res.ok) console.log(`[Supabase] Daily cloud snapshot auto-${key} created.`);
       }
+      try {
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1e3).toISOString();
+        const { data: stale, error: staleErr } = await this.supabaseAdmin.from("vetan_erp_backups").select("id").like("label", "auto-%").lt("created_at", cutoff);
+        if (!staleErr && Array.isArray(stale) && stale.length > 0) {
+          const staleIds = stale.map((r) => r?.id).filter(Boolean);
+          if (staleIds.length > 0) {
+            const { error: delErr } = await this.supabaseAdmin.from("vetan_erp_backups").delete().in("id", staleIds);
+            if (!delErr) console.log(`[Supabase] Backup retention: pruned ${staleIds.length} auto-backup(s) older than 7 days.`);
+            else console.warn("[Supabase] Backup retention delete failed:", delErr.message);
+          }
+        }
+      } catch (retErr) {
+        console.warn("[Supabase] Backup retention skipped:", retErr?.message || retErr);
+      }
     } catch {
     }
   }
@@ -37575,3 +37589,4 @@ serve-static/index.js:
    * MIT Licensed
    *)
 */
+//# sourceMappingURL=_app.cjs.map

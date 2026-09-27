@@ -7336,6 +7336,31 @@ Sakar & SVN Group`;
         const res = await this.createCloudSnapshot(`auto-${key}`, 'Automatic daily cloud snapshot');
         if (res.ok) console.log(`[Supabase] Daily cloud snapshot auto-${key} created.`);
       }
+      // RETENTION (free-tier space guard): auto-backups older than 7 days are
+      // pruned on the daily snapshot cycle so the backups table cannot grow
+      // unbounded (~5.7 MB/day was exhausting the 500 MB free-tier DB).
+      // Manual / pre-restore snapshots are NEVER touched — only 'auto-*' labels.
+      try {
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: stale, error: staleErr } = await this.supabaseAdmin
+          .from('vetan_erp_backups')
+          .select('id')
+          .like('label', 'auto-%')
+          .lt('created_at', cutoff);
+        if (!staleErr && Array.isArray(stale) && stale.length > 0) {
+          const staleIds = stale.map((r: any) => r?.id).filter(Boolean);
+          if (staleIds.length > 0) {
+            const { error: delErr } = await this.supabaseAdmin
+              .from('vetan_erp_backups')
+              .delete()
+              .in('id', staleIds);
+            if (!delErr) console.log(`[Supabase] Backup retention: pruned ${staleIds.length} auto-backup(s) older than 7 days.`);
+            else console.warn('[Supabase] Backup retention delete failed:', delErr.message);
+          }
+        }
+      } catch (retErr: any) {
+        console.warn('[Supabase] Backup retention skipped:', retErr?.message || retErr);
+      }
     } catch { /* best-effort */ }
   }
 
