@@ -34050,7 +34050,7 @@ async function createApp(supabaseAdmin) {
         matches = verifyPassword(enteredPassword, currentPassword);
       }
       if (!matches) {
-        return res.status(401).json({ success: false, error: "Incorrect Password. Note: First-time password is your Employee Code (e.g. EMP001)." });
+        return res.status(401).json({ success: false, error: "Incorrect Password. Use the password given by HR (last 4 digits of your phone number + your birth year), or ask HR to reset it." });
       }
       const needsChange = !!employee.needs_password_change || isFirstTime;
       if (matches && !isFirstTime && !isHashed(employee.password) && employee.password) {

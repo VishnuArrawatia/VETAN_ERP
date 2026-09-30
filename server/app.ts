@@ -1195,7 +1195,9 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       if (!matches) {
-        return res.status(401).json({ success: false, error: 'Incorrect Password. Note: First-time password is your Employee Code (e.g. EMP001).' });
+        // NOTE: first-time passwords are HR-generated (phone last-4 + birth year),
+        // NOT the employee code — the old hint sent users in circles.
+        return res.status(401).json({ success: false, error: 'Incorrect Password. Use the password given by HR (last 4 digits of your phone number + your birth year), or ask HR to reset it.' });
       }
 
       const needsChange = !!employee.needs_password_change || isFirstTime;
