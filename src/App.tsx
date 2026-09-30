@@ -59,6 +59,7 @@ import {
   CompanyMaster,
   SalaryRevision
 } from './types';
+import { compressImageDataUrl } from './lib/photoCompress';
 
 // Importing custom components built in the previous steps
 import { CompanyMasterView } from './components/CompanyMasterView';
@@ -5810,12 +5811,14 @@ export default function App() {
                               <input 
                                 type="file" 
                                 accept="image/*"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
                                     const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      setManualPhoto(reader.result as string);
+                                    reader.onloadend = async () => {
+                                      // AUTO-COMPRESS: max 400px / JPEG ~72 — keeps the shared JSON blob small.
+                                      const compressed = await compressImageDataUrl(reader.result as string);
+                                      setManualPhoto(compressed);
                                     };
                                     reader.readAsDataURL(file);
                                   }
@@ -6945,12 +6948,14 @@ export default function App() {
                                 <input 
                                   type="file" 
                                   accept="image/*"
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const file = e.target.files?.[0];
                                     if (file) {
                                       const reader = new FileReader();
-                                      reader.onloadend = () => {
-                                        setEditPhoto(reader.result as string);
+                                      reader.onloadend = async () => {
+                                        // AUTO-COMPRESS: max 400px / JPEG ~72 — keeps the shared JSON blob small.
+                                        const compressed = await compressImageDataUrl(reader.result as string);
+                                        setEditPhoto(compressed);
                                       };
                                       reader.readAsDataURL(file);
                                     }
