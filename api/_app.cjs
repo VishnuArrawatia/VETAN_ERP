@@ -33885,6 +33885,12 @@ async function createApp(supabaseAdmin) {
         return res.status(400).json({ error: "Username, Name, and Role are required" });
       }
       const users = db.getUsers();
+      const existingUser = user.id ? users.find((u) => u.id === user.id) : void 0;
+      if (!user.password) {
+        user.password = existingUser ? existingUser.password : "password123";
+      } else if (!isHashed(user.password)) {
+        user.password = hashPassword(String(user.password));
+      }
       if (!user.id) {
         const exists = users.some((u) => u.username.toLowerCase() === user.username.toLowerCase());
         if (exists) {

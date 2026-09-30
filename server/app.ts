@@ -987,7 +987,19 @@ export async function createApp(supabaseAdmin?: any) {
       }
 
       const users = db.getUsers();
-      
+
+      // PASSWORD-WIPE GUARD (Sep-2026 lockout fix): GET /api/hr/users strips
+      // passwords, and the UI sends that stripped object back on edit AND on
+      // the disable/enable toggle. An empty/missing password therefore means
+      // "keep the stored one" — never wipe. A non-empty value means "set new
+      // password" and is normalized to a scrypt hash at rest.
+      const existingUser = user.id ? users.find((u: any) => u.id === user.id) : undefined;
+      if (!user.password) {
+        user.password = existingUser ? existingUser.password : 'password123';
+      } else if (!isHashed(user.password)) {
+        user.password = hashPassword(String(user.password));
+      }
+
       // Generate ID if new
       if (!user.id) {
         // Ensure username is unique
