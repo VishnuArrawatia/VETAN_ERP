@@ -107,6 +107,50 @@ import { LoanManagementView } from './components/LoanManagementView';
 import WorkforceModule from './components/WorkforceModule';
 import { fetchJsonWithOfflineFallback, filterEmployeesByCompany } from './lib/offlineStore';
 
+/**
+ * TAB SAFETY NET — catches any render-time crash inside the main workspace
+ * (e.g. a bad employee record hitting an unguarded field) and shows a recovery
+ * card instead of blanking the entire app to white.
+ */
+class WorkspaceErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[WorkspaceErrorBoundary] render crash caught:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-8 max-w-xl mx-auto mt-16">
+          <div className="bg-white border border-rose-200 rounded-2xl shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-rose-100 text-rose-600 p-2.5 rounded-xl font-black text-lg">!</div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">This screen hit an unexpected error</h3>
+                <p className="text-[11px] text-slate-500">Your data is safe — nothing was lost. Reloading usually fixes it.</p>
+              </div>
+            </div>
+            <pre className="text-[10px] bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-600 overflow-x-auto whitespace-pre-wrap">{this.state.error.message}</pre>
+            <div className="flex gap-2">
+              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700">Reload App</button>
+              <button onClick={() => this.setState({ error: null })} className="px-4 py-2 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-200">Try Again</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Define simulated HR Users & Powers
 const SIMULATED_HR_USERS = [
   {
@@ -3249,6 +3293,7 @@ export default function App() {
 
         {/* Content Body */}
         <main className="flex-1 min-w-0">
+        <WorkspaceErrorBoundary>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -4685,12 +4730,14 @@ export default function App() {
 
                               const sets = getCompanySettings(emp.company);
                               const isLockedPercentage = emp.salary_structure_type === 'PERCENTAGE' || isFormulaMonth;
-                              const rate_base = emp.base_salary;
-                              const rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : emp.hra);
+                              // Guard against undefined salary fields (e.g. employees created without pay data) —
+                              // an undefined here crashed .toLocaleString() and blanked the whole app.
+                              const rate_base = emp.base_salary || 0;
+                              const rate_hra = isHidden('hra') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_hra_percent / 100)) : (emp.hra || 0));
                               const rate_conveyance = isHidden('conveyance_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * 0.08) : (emp.conveyance_allowance || 0));
                               const rate_edu = isHidden('edu_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * 0.02) : (emp.edu_allowance || 0));
                               const rate_medical = isHidden('medical_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * 0.05) : (emp.medical_allowance || 0));
-                              const rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : emp.special_allowance);
+                              const rate_special = isHidden('special_allowance') ? 0 : (isLockedPercentage ? Math.round(rate_base * (sets.salary_special_percent / 100)) : (emp.special_allowance || 0));
                               const rate_da = 0; // DA completely removed
 
                               const gross_salary = rate_base + rate_hra + rate_conveyance + rate_edu + rate_medical + rate_special + rate_da;
@@ -5488,6 +5535,7 @@ export default function App() {
 
             </motion.div>
           </AnimatePresence>
+        </WorkspaceErrorBoundary>
         </main>
 
       </div>
