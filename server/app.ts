@@ -4220,6 +4220,199 @@ HR Department`;
     }
   });
 
+  // ======================= RECRUITMENT MODULE =======================
+  // Jobs + candidate pipeline. Reads: any authenticated session (ESS can browse
+  // openings). Writes: HR-only — ESS cannot create/modify jobs or candidates
+  // (the global ESS admin-surface middleware already blocks non-GET on these
+  // paths for employee sessions; legacy-header callers still pass role checks
+  // via getOperatorRole on writes below).
+  app.get('/api/recruitment/jobs', (req, res) => {
+    try {
+      const { company } = req.query as { company?: string };
+      let jobs = db.getJobOpenings();
+      const allowed = getAllowedCompanies(req);
+      if (allowed) jobs = jobs.filter(j => !j.company || allowed.includes(j.company));
+      if (company && company !== 'ALL') jobs = jobs.filter(j => !j.company || j.company === company);
+      // Attach candidate counts for pipeline visibility
+      const cands = db.getJobCandidates();
+      res.json(jobs.map(j => ({
+        ...j,
+        candidate_count: cands.filter(c => c.opening_id === j.id).length,
+        hired_count: cands.filter(c => c.opening_id === j.id && c.stage === 'HIRED').length
+      })));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/recruitment/jobs', (req, res) => {
+    try {
+      if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const job = req.body;
+      if (!job.title || !job.company) {
+        return res.status(400).json({ error: 'Title and Company are required' });
+      }
+      const saved = db.saveJobOpening(job);
+      db.logAudit('Job Opening Saved', `${saved.id} — ${saved.title} (${saved.company})`, getOperator(req));
+      res.json({ success: true, job: saved });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/recruitment/jobs/:id', (req, res) => {
+    try {
+      if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const ok = db.deleteJobOpening(req.params.id);
+      if (!ok) return res.status(404).json({ error: 'Job opening not found' });
+      db.logAudit('Job Opening Deleted', req.params.id, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/recruitment/candidates', (req, res) => {
+    try {
+      const { opening_id } = req.query as { opening_id?: string };
+      res.json(db.getJobCandidates(opening_id));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/recruitment/candidates', (req, res) => {
+    try {
+      if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const cand = req.body;
+      if (!cand.name || !cand.opening_id) {
+        return res.status(400).json({ error: 'Candidate name and opening are required' });
+      }
+      const saved = db.saveJobCandidate(cand);
+      db.logAudit('Candidate Saved', `${saved.id} — ${saved.name} (stage: ${saved.stage})`, getOperator(req));
+      res.json({ success: true, candidate: saved });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/recruitment/candidates/:id', (req, res) => {
+    try {
+      if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const ok = db.deleteJobCandidate(req.params.id);
+      if (!ok) return res.status(404).json({ error: 'Candidate not found' });
+      db.logAudit('Candidate Deleted', req.params.id, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ======================= EXPENSE MANAGEMENT MODULE =======================
+  // Paperless expense claims: employees submit (ESS), HR approves/rejects/marks paid.
+  // ESS constraint: employees can only touch their OWN claims (server-enforced,
+  // both for legacy headers and ESS sessions).
+  app.get('/api/expenses', (req, res) => {
+    try {
+      const { company } = req.query as { company?: string };
+      const ess = req.ess && req.ess.kind === 'ESS' ? req.ess : null;
+      if (ess) {
+        return res.json(db.getExpenseClaims({ employeeId: ess.sub }));
+      }
+      const allowed = getAllowedCompanies(req);
+      let claims = db.getExpenseClaims({ company: company as string });
+      if (allowed) claims = claims.filter(c => !c.company || allowed.includes(c.company));
+      res.json(claims);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/expenses', (req, res) => {
+    try {
+      const claim = req.body;
+      const ess = req.ess && req.ess.kind === 'ESS' ? req.ess : null;
+      if (!claim.title || !claim.amount) {
+        return res.status(400).json({ error: 'Title and amount are required' });
+      }
+      if (ess) {
+        // ESS submit: identity comes from the signed session — client cannot
+        // claim on behalf of someone else.
+        const emp = db.getEmployeeById(ess.sub);
+        claim.employee_id = emp?.id || ess.sub;
+        claim.employee_name = emp?.name || ess.sub;
+        claim.company = emp?.company || null;
+        claim.status = 'SUBMITTED';
+        claim.decided_by = null; claim.decided_at = null; claim.paid_at = null;
+      }
+      const saved = db.saveExpenseClaim(claim);
+      db.logAudit('Expense Claim ' + (req.body.id ? 'Updated' : 'Submitted'), `${saved.claim_no} — ${saved.employee_name}: ₹${saved.amount} (${saved.title})`, getOperator(req));
+      res.json({ success: true, claim: saved });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/expenses/:id/decision', (req, res) => {
+    try {
+      // HR-only decision endpoint (approve/reject/mark-paid)
+      if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const { status, note } = req.body;
+      if (!['APPROVED', 'REJECTED', 'PAID', 'SUBMITTED'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      const existing = db.getExpenseClaims().find(c => c.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Claim not found' });
+      const updated = db.saveExpenseClaim({
+        ...existing,
+        status,
+        decision_note: note ?? existing.decision_note,
+        decided_by: getOperator(req),
+        decided_at: new Date().toISOString(),
+        paid_at: status === 'PAID' ? new Date().toISOString() : existing.paid_at
+      });
+      db.logAudit('Expense ' + status, `${updated.claim_no} — ${updated.employee_name} ₹${updated.amount}`, getOperator(req));
+      res.json({ success: true, claim: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/expenses/:id', (req, res) => {
+    try {
+      const existing = db.getExpenseClaims().find(c => c.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Claim not found' });
+      const ess = req.ess && req.ess.kind === 'ESS' ? req.ess : null;
+      if (ess) {
+        // Employees may withdraw only their own PENDING claims.
+        if (existing.employee_id.toLowerCase() !== ess.sub.toLowerCase()) {
+          return res.status(403).json({ error: 'FORBIDDEN', message: 'You can only withdraw your own claims.' });
+        }
+        if (!['SUBMITTED'].includes(existing.status)) {
+          return res.status(400).json({ error: 'Only claims still awaiting approval can be withdrawn.' });
+        }
+      } else if (!['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'HR authorization required.' });
+      }
+      const ok = db.deleteExpenseClaim(req.params.id);
+      if (!ok) return res.status(404).json({ error: 'Claim not found' });
+      db.logAudit('Expense Claim Withdrawn', `${existing.claim_no} — ${existing.employee_name}`, getOperator(req));
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Audit Logs, Lock/Unlock and Backup/Restore APIs
   app.get('/api/audit-logs', (req, res) => {
     db.getAuditLogs()

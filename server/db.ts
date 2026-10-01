@@ -1664,6 +1664,56 @@ export class PayrollDatabase {
       created_by TEXT
     )`);
 
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS job_openings (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      company TEXT,
+      department TEXT,
+      location TEXT,
+      openings INTEGER,
+      employment_type TEXT,
+      status TEXT,
+      description TEXT,
+      closing_date TEXT,
+      created_at TEXT,
+      created_by TEXT
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS job_candidates (
+      id TEXT PRIMARY KEY,
+      opening_id TEXT,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      source TEXT,
+      stage TEXT,
+      rating INTEGER,
+      resume_link TEXT,
+      notes TEXT,
+      applied_at TEXT,
+      updated_at TEXT
+    )`);
+
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS expense_claims (
+      id TEXT PRIMARY KEY,
+      claim_no TEXT,
+      employee_id TEXT,
+      employee_name TEXT,
+      company TEXT,
+      title TEXT,
+      category TEXT,
+      expense_date TEXT,
+      amount REAL,
+      description TEXT,
+      lines_json TEXT,
+      status TEXT,
+      submitted_at TEXT,
+      decided_by TEXT,
+      decided_at TEXT,
+      decision_note TEXT,
+      paid_at TEXT
+    )`);
+
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS email_logs (
       id TEXT PRIMARY KEY,
       employee_id TEXT,
@@ -8544,6 +8594,143 @@ Sakar & SVN Group`;
     );
     // PHASE-2A: persist-before-success — route also persists (sync); this makes
     // the function safe when invoked directly (double persist is single-flight coalesced)
+    this.persistData();
+    return true;
+  }
+
+  // ======================= RECRUITMENT MODULE =======================
+
+  public getJobOpenings(): any[] {
+    if (!this.data.job_openings) this.data.job_openings = [];
+    return this.data.job_openings;
+  }
+
+  public saveJobOpening(job: any): any {
+    if (!this.data.job_openings) this.data.job_openings = [];
+    const idx = this.data.job_openings.findIndex((j: any) => j.id === job.id);
+    const nowIso = new Date().toISOString();
+    if (idx >= 0) {
+      this.data.job_openings[idx] = { ...this.data.job_openings[idx], ...job };
+    } else {
+      const nextNum = Math.max(0, ...this.data.job_openings.map((j: any) => {
+        const n = j.id ? parseInt(String(j.id).replace('JOB', ''), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      job.id = job.id || `JOB${String(nextNum).padStart(4, '0')}`;
+      job.created_at = job.created_at || nowIso;
+      job.status = job.status || 'OPEN';
+      this.data.job_openings.push(job);
+    }
+    const s = this.data.job_openings[idx >= 0 ? idx : this.data.job_openings.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO job_openings (id, title, company, department, location, openings, employment_type, status, description, closing_date, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.title, s.company, s.department, s.location, s.openings || 1, s.employment_type || 'FULL_TIME', s.status || 'OPEN', s.description || null, s.closing_date || null, s.created_at || nowIso, s.created_by || null]
+    );
+    this.persistData();
+    return s;
+  }
+
+  public deleteJobOpening(id: string): boolean {
+    const doomed = (this.data.job_openings || []).find((j: any) => j.id === id);
+    if (!doomed) return false;
+    this._tombstone('job_openings', doomed);
+    this.data.job_openings = this.data.job_openings.filter((j: any) => j.id !== id);
+    // Cascading candidate cleanup (opening deleted → its pipeline goes too)
+    const cands = (this.data.job_candidates || []).filter((c: any) => c.opening_id === id);
+    for (const c of cands) this._tombstone('job_candidates', c);
+    if (this.data.job_candidates) {
+      this.data.job_candidates = this.data.job_candidates.filter((c: any) => c.opening_id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM job_candidates WHERE opening_id = ?`, [id]);
+    this.dbSqlite.run(`DELETE FROM job_openings WHERE id = ?`, [id]);
+    this.persistData();
+    return true;
+  }
+
+  public getJobCandidates(openingId?: string): any[] {
+    if (!this.data.job_candidates) this.data.job_candidates = [];
+    const list = this.data.job_candidates;
+    return openingId ? list.filter((c: any) => c.opening_id === openingId) : list;
+  }
+
+  public saveJobCandidate(cand: any): any {
+    if (!this.data.job_candidates) this.data.job_candidates = [];
+    const idx = this.data.job_candidates.findIndex((c: any) => c.id === cand.id);
+    const nowIso = new Date().toISOString();
+    if (idx >= 0) {
+      this.data.job_candidates[idx] = { ...this.data.job_candidates[idx], ...cand, updated_at: nowIso };
+    } else {
+      const nextNum = Math.max(0, ...this.data.job_candidates.map((c: any) => {
+        const n = c.id ? parseInt(String(c.id).replace('CAND', ''), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      cand.id = cand.id || `CAND${String(nextNum).padStart(4, '0')}`;
+      cand.applied_at = cand.applied_at || nowIso;
+      cand.stage = cand.stage || 'APPLIED';
+      cand.updated_at = nowIso;
+      this.data.job_candidates.push(cand);
+    }
+    const s = this.data.job_candidates[idx >= 0 ? idx : this.data.job_candidates.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO job_candidates (id, opening_id, name, email, phone, source, stage, rating, resume_link, notes, applied_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.opening_id || null, s.name, s.email || null, s.phone || null, s.source || 'DIRECT', s.stage || 'APPLIED', s.rating || null, s.resume_link || null, s.notes || null, s.applied_at || nowIso, s.updated_at || nowIso]
+    );
+    this.persistData();
+    return s;
+  }
+
+  public deleteJobCandidate(id: string): boolean {
+    const doomed = (this.data.job_candidates || []).find((c: any) => c.id === id);
+    if (!doomed) return false;
+    this._tombstone('job_candidates', doomed);
+    this.data.job_candidates = this.data.job_candidates.filter((c: any) => c.id !== id);
+    this.dbSqlite.run(`DELETE FROM job_candidates WHERE id = ?`, [id]);
+    this.persistData();
+    return true;
+  }
+
+  // ======================= EXPENSE MANAGEMENT MODULE =======================
+
+  public getExpenseClaims(filter?: { employeeId?: string; company?: string }): any[] {
+    if (!this.data.expense_claims) this.data.expense_claims = [];
+    let list = this.data.expense_claims;
+    if (filter?.employeeId) list = list.filter((c: any) => c.employee_id === filter.employeeId);
+    if (filter?.company && filter.company !== 'ALL') list = list.filter((c: any) => c.company === filter.company);
+    return list;
+  }
+
+  public saveExpenseClaim(claim: any): any {
+    if (!this.data.expense_claims) this.data.expense_claims = [];
+    const idx = this.data.expense_claims.findIndex((c: any) => c.id === claim.id);
+    const nowIso = new Date().toISOString();
+    if (idx >= 0) {
+      this.data.expense_claims[idx] = { ...this.data.expense_claims[idx], ...claim };
+    } else {
+      const nextNum = Math.max(0, ...this.data.expense_claims.map((c: any) => {
+        const n = c.claim_no ? parseInt(String(c.claim_no).replace('EXP-', ''), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      claim.id = claim.id || `EXPC${String(nextNum).padStart(4, '0')}`;
+      claim.claim_no = claim.claim_no || `EXP-${String(nextNum).padStart(4, '0')}`;
+      claim.submitted_at = claim.submitted_at || nowIso;
+      claim.status = claim.status || 'SUBMITTED';
+      this.data.expense_claims.push(claim);
+    }
+    const s = this.data.expense_claims[idx >= 0 ? idx : this.data.expense_claims.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO expense_claims (id, claim_no, employee_id, employee_name, company, title, category, expense_date, amount, description, lines_json, status, submitted_at, decided_by, decided_at, decision_note, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.claim_no, s.employee_id, s.employee_name, s.company, s.title, s.category || 'OTHER', s.expense_date || null, s.amount || 0, s.description || null, s.lines ? JSON.stringify(s.lines) : null, s.status || 'SUBMITTED', s.submitted_at || nowIso, s.decided_by || null, s.decided_at || null, s.decision_note || null, s.paid_at || null]
+    );
+    this.persistData();
+    return s;
+  }
+
+  public deleteExpenseClaim(id: string): boolean {
+    const doomed = (this.data.expense_claims || []).find((c: any) => c.id === id);
+    if (!doomed) return false;
+    this._tombstone('expense_claims', doomed);
+    this.data.expense_claims = this.data.expense_claims.filter((c: any) => c.id !== id);
+    this.dbSqlite.run(`DELETE FROM expense_claims WHERE id = ?`, [id]);
     this.persistData();
     return true;
   }

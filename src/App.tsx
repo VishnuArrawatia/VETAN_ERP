@@ -44,7 +44,9 @@ import {
   ArrowRightLeft,
   Edit2,
   Gift,
-  Scale
+  Scale,
+  Briefcase,
+  Receipt
 } from 'lucide-react';
 
 import { 
@@ -65,6 +67,8 @@ import { compressImageDataUrl } from './lib/photoCompress';
 import { CompanyMasterView } from './components/CompanyMasterView';
 import LeavesController from './components/LeavesController';
 import FactoryGatePassView from './components/FactoryGatePassView';
+import RecruitmentView from './components/RecruitmentView';
+import ExpenseManagementView from './components/ExpenseManagementView';
 import PayrollRegister from './components/PayrollRegister';
 import AccountingSheets from './components/AccountingSheets';
 import BonusRegister from './components/BonusRegister';
@@ -278,7 +282,7 @@ export default function App() {
   }, [activeCompany]);
 
   const [activeMonth, setActiveMonth] = useState('2026-05');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce' | 'bonus' | 'gratuity'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'payroll' | 'leaves' | 'gatepass' | 'form16' | 'ff' | 'sql' | 'org' | 'companies' | 'audit' | 'letters' | 'users' | 'hods' | 'shifts' | 'revisions' | 'loans' | 'reports' | 'guide' | 'dbhealth' | 'vault' | 'workforce' | 'bonus' | 'gratuity' | 'recruitment' | 'expenses'>('dashboard');
   // ── Strong Refresh engine state ──
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -317,6 +321,7 @@ export default function App() {
   const [compoffRequests, setCompoffRequests] = useState<any[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [gatePasses, setGatePasses] = useState<any[]>([]);
+  const [expenseClaims, setExpenseClaims] = useState<any[]>([]);
 
   // Selected Employee Profile detailed view
   const [selectedEmployeeProfile, setSelectedEmployeeProfile] = useState<Employee | null>(null);
@@ -783,6 +788,7 @@ export default function App() {
       fetchRevisions();
       fetchCompoffRequests();
       fetchGatePasses();
+      fetchExpenseClaims();
     } else {
       // For COMBINED/GROUP, fetch unfiltered/all allowed data
       fetchEmployees();
@@ -794,6 +800,7 @@ export default function App() {
       fetchRevisions();
       fetchCompoffRequests();
       fetchGatePasses();
+      fetchExpenseClaims();
     }
   }, [activeCompany, activeMonth, currentSessionMode, activeHR]);
 
@@ -1481,6 +1488,47 @@ export default function App() {
     } catch (e) {
       console.error('Error fetching gate passes list', e);
     }
+  };
+
+  const fetchExpenseClaims = async () => {
+    try {
+      const isMgmt = currentSessionMode === 'HR' && (activeHR?.role === 'MANAGEMENT' || activeHR?.role === 'SUPER_HR');
+      const companyParam = isMgmt ? 'ALL' : activeCompany;
+      const data = await fetchJsonWithOfflineFallback(`/api/expenses?company=${companyParam}`, (store) =>
+        store.expense_claims || []
+      );
+      setExpenseClaims(data);
+    } catch (e) {
+      console.error('Error fetching expense claims', e);
+    }
+  };
+
+  const handleExpenseDecision = async (id: string, status: 'APPROVED' | 'REJECTED' | 'PAID', note?: string) => {
+    try {
+      const res = await fetch(`/api/expenses/${encodeURIComponent(id)}/decision`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, note })
+      });
+      if (res.ok) fetchExpenseClaims();
+    } catch (e) { console.error('expense decision failed', e); }
+  };
+
+  const handleExpenseCreate = async (draft: any) => {
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft)
+      });
+      if (res.ok) fetchExpenseClaims();
+    } catch (e) { console.error('expense create failed', e); }
+  };
+
+  const handleExpenseDelete = async (id: string) => {
+    if (!confirm('Delete this expense claim?')) return;
+    try {
+      const res = await fetch(`/api/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (res.ok) fetchExpenseClaims();
+    } catch (e) { console.error('expense delete failed', e); }
   };
 
   const fetchEmployeeProfileData = async (employeeArg: Employee) => {
@@ -2952,6 +3000,24 @@ export default function App() {
             >
               <span>Workforce Module</span>
               <Users size={14} />
+            </button>
+
+            <button
+              id="sidebar-tab-recruitment"
+              onClick={() => setActiveTab('recruitment')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='recruitment' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
+            >
+              <span>Recruitment</span>
+              <Briefcase size={14} />
+            </button>
+
+            <button
+              id="sidebar-tab-expenses"
+              onClick={() => setActiveTab('expenses')}
+              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold tracking-wide transition flex items-center justify-between cursor-pointer ${activeTab==='expenses' ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-gray-100 text-slate-700'}`}
+            >
+              <span>Expense Management</span>
+              <Receipt size={14} />
             </button>
 
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-3 pt-2.5 pb-1 block">Comp & Benefits</span>
@@ -5246,6 +5312,32 @@ export default function App() {
                     loggedInEmployeeId={loggedInEmployee?.id}
                     activeHR={activeHR}
                     onRefresh={fetchGatePasses}
+                  />
+                </div>
+              )}
+
+              {/* RECRUITMENT TAB PANEL */}
+              {activeTab === 'recruitment' && (
+                <div className="space-y-6">
+                  <RecruitmentView
+                    companies={companies}
+                    activeCompany={activeCompany}
+                    canEdit={currentSessionMode === 'HR' && ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(activeHR?.role)}
+                  />
+                </div>
+              )}
+
+              {/* EXPENSE MANAGEMENT TAB PANEL */}
+              {activeTab === 'expenses' && (
+                <div className="space-y-6">
+                  <ExpenseManagementView
+                    claims={expenseClaims}
+                    companies={companies}
+                    activeCompany={activeCompany}
+                    canDecide={currentSessionMode === 'HR' && ['SUPER_HR', 'MANAGEMENT', 'COMPANY_HR'].includes(activeHR?.role)}
+                    onDecide={handleExpenseDecision}
+                    onCreate={handleExpenseCreate}
+                    onDelete={handleExpenseDelete}
                   />
                 </div>
               )}

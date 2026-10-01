@@ -26437,6 +26437,53 @@ var PayrollDatabase = class _PayrollDatabase {
       created_at TEXT,
       created_by TEXT
     )`);
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS job_openings (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      company TEXT,
+      department TEXT,
+      location TEXT,
+      openings INTEGER,
+      employment_type TEXT,
+      status TEXT,
+      description TEXT,
+      closing_date TEXT,
+      created_at TEXT,
+      created_by TEXT
+    )`);
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS job_candidates (
+      id TEXT PRIMARY KEY,
+      opening_id TEXT,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      source TEXT,
+      stage TEXT,
+      rating INTEGER,
+      resume_link TEXT,
+      notes TEXT,
+      applied_at TEXT,
+      updated_at TEXT
+    )`);
+    this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS expense_claims (
+      id TEXT PRIMARY KEY,
+      claim_no TEXT,
+      employee_id TEXT,
+      employee_name TEXT,
+      company TEXT,
+      title TEXT,
+      category TEXT,
+      expense_date TEXT,
+      amount REAL,
+      description TEXT,
+      lines_json TEXT,
+      status TEXT,
+      submitted_at TEXT,
+      decided_by TEXT,
+      decided_at TEXT,
+      decision_note TEXT,
+      paid_at TEXT
+    )`);
     this.dbSqlite.run(`CREATE TABLE IF NOT EXISTS email_logs (
       id TEXT PRIMARY KEY,
       employee_id TEXT,
@@ -33085,6 +33132,131 @@ Sakar & SVN Group`;
     this.persistData();
     return true;
   }
+  // ======================= RECRUITMENT MODULE =======================
+  getJobOpenings() {
+    if (!this.data.job_openings) this.data.job_openings = [];
+    return this.data.job_openings;
+  }
+  saveJobOpening(job) {
+    if (!this.data.job_openings) this.data.job_openings = [];
+    const idx = this.data.job_openings.findIndex((j) => j.id === job.id);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (idx >= 0) {
+      this.data.job_openings[idx] = { ...this.data.job_openings[idx], ...job };
+    } else {
+      const nextNum = Math.max(0, ...this.data.job_openings.map((j) => {
+        const n = j.id ? parseInt(String(j.id).replace("JOB", ""), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      job.id = job.id || `JOB${String(nextNum).padStart(4, "0")}`;
+      job.created_at = job.created_at || nowIso;
+      job.status = job.status || "OPEN";
+      this.data.job_openings.push(job);
+    }
+    const s = this.data.job_openings[idx >= 0 ? idx : this.data.job_openings.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO job_openings (id, title, company, department, location, openings, employment_type, status, description, closing_date, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.title, s.company, s.department, s.location, s.openings || 1, s.employment_type || "FULL_TIME", s.status || "OPEN", s.description || null, s.closing_date || null, s.created_at || nowIso, s.created_by || null]
+    );
+    this.persistData();
+    return s;
+  }
+  deleteJobOpening(id) {
+    const doomed = (this.data.job_openings || []).find((j) => j.id === id);
+    if (!doomed) return false;
+    this._tombstone("job_openings", doomed);
+    this.data.job_openings = this.data.job_openings.filter((j) => j.id !== id);
+    const cands = (this.data.job_candidates || []).filter((c) => c.opening_id === id);
+    for (const c of cands) this._tombstone("job_candidates", c);
+    if (this.data.job_candidates) {
+      this.data.job_candidates = this.data.job_candidates.filter((c) => c.opening_id !== id);
+    }
+    this.dbSqlite.run(`DELETE FROM job_candidates WHERE opening_id = ?`, [id]);
+    this.dbSqlite.run(`DELETE FROM job_openings WHERE id = ?`, [id]);
+    this.persistData();
+    return true;
+  }
+  getJobCandidates(openingId) {
+    if (!this.data.job_candidates) this.data.job_candidates = [];
+    const list = this.data.job_candidates;
+    return openingId ? list.filter((c) => c.opening_id === openingId) : list;
+  }
+  saveJobCandidate(cand) {
+    if (!this.data.job_candidates) this.data.job_candidates = [];
+    const idx = this.data.job_candidates.findIndex((c) => c.id === cand.id);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (idx >= 0) {
+      this.data.job_candidates[idx] = { ...this.data.job_candidates[idx], ...cand, updated_at: nowIso };
+    } else {
+      const nextNum = Math.max(0, ...this.data.job_candidates.map((c) => {
+        const n = c.id ? parseInt(String(c.id).replace("CAND", ""), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      cand.id = cand.id || `CAND${String(nextNum).padStart(4, "0")}`;
+      cand.applied_at = cand.applied_at || nowIso;
+      cand.stage = cand.stage || "APPLIED";
+      cand.updated_at = nowIso;
+      this.data.job_candidates.push(cand);
+    }
+    const s = this.data.job_candidates[idx >= 0 ? idx : this.data.job_candidates.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO job_candidates (id, opening_id, name, email, phone, source, stage, rating, resume_link, notes, applied_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.opening_id || null, s.name, s.email || null, s.phone || null, s.source || "DIRECT", s.stage || "APPLIED", s.rating || null, s.resume_link || null, s.notes || null, s.applied_at || nowIso, s.updated_at || nowIso]
+    );
+    this.persistData();
+    return s;
+  }
+  deleteJobCandidate(id) {
+    const doomed = (this.data.job_candidates || []).find((c) => c.id === id);
+    if (!doomed) return false;
+    this._tombstone("job_candidates", doomed);
+    this.data.job_candidates = this.data.job_candidates.filter((c) => c.id !== id);
+    this.dbSqlite.run(`DELETE FROM job_candidates WHERE id = ?`, [id]);
+    this.persistData();
+    return true;
+  }
+  // ======================= EXPENSE MANAGEMENT MODULE =======================
+  getExpenseClaims(filter) {
+    if (!this.data.expense_claims) this.data.expense_claims = [];
+    let list = this.data.expense_claims;
+    if (filter?.employeeId) list = list.filter((c) => c.employee_id === filter.employeeId);
+    if (filter?.company && filter.company !== "ALL") list = list.filter((c) => c.company === filter.company);
+    return list;
+  }
+  saveExpenseClaim(claim) {
+    if (!this.data.expense_claims) this.data.expense_claims = [];
+    const idx = this.data.expense_claims.findIndex((c) => c.id === claim.id);
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    if (idx >= 0) {
+      this.data.expense_claims[idx] = { ...this.data.expense_claims[idx], ...claim };
+    } else {
+      const nextNum = Math.max(0, ...this.data.expense_claims.map((c) => {
+        const n = c.claim_no ? parseInt(String(c.claim_no).replace("EXP-", ""), 10) : NaN;
+        return isNaN(n) ? 0 : n;
+      })) + 1;
+      claim.id = claim.id || `EXPC${String(nextNum).padStart(4, "0")}`;
+      claim.claim_no = claim.claim_no || `EXP-${String(nextNum).padStart(4, "0")}`;
+      claim.submitted_at = claim.submitted_at || nowIso;
+      claim.status = claim.status || "SUBMITTED";
+      this.data.expense_claims.push(claim);
+    }
+    const s = this.data.expense_claims[idx >= 0 ? idx : this.data.expense_claims.length - 1];
+    this.dbSqlite.run(
+      `INSERT OR REPLACE INTO expense_claims (id, claim_no, employee_id, employee_name, company, title, category, expense_date, amount, description, lines_json, status, submitted_at, decided_by, decided_at, decision_note, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.claim_no, s.employee_id, s.employee_name, s.company, s.title, s.category || "OTHER", s.expense_date || null, s.amount || 0, s.description || null, s.lines ? JSON.stringify(s.lines) : null, s.status || "SUBMITTED", s.submitted_at || nowIso, s.decided_by || null, s.decided_at || null, s.decision_note || null, s.paid_at || null]
+    );
+    this.persistData();
+    return s;
+  }
+  deleteExpenseClaim(id) {
+    const doomed = (this.data.expense_claims || []).find((c) => c.id === id);
+    if (!doomed) return false;
+    this._tombstone("expense_claims", doomed);
+    this.data.expense_claims = this.data.expense_claims.filter((c) => c.id !== id);
+    this.dbSqlite.run(`DELETE FROM expense_claims WHERE id = ?`, [id]);
+    this.persistData();
+    return true;
+  }
 };
 
 // server/app.ts
@@ -36628,6 +36800,176 @@ HR Department`;
       } else {
         res.status(404).json({ error: "Gate pass not found" });
       }
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/recruitment/jobs", (req, res) => {
+    try {
+      const { company } = req.query;
+      let jobs = db.getJobOpenings();
+      const allowed = getAllowedCompanies(req);
+      if (allowed) jobs = jobs.filter((j) => !j.company || allowed.includes(j.company));
+      if (company && company !== "ALL") jobs = jobs.filter((j) => !j.company || j.company === company);
+      const cands = db.getJobCandidates();
+      res.json(jobs.map((j) => ({
+        ...j,
+        candidate_count: cands.filter((c) => c.opening_id === j.id).length,
+        hired_count: cands.filter((c) => c.opening_id === j.id && c.stage === "HIRED").length
+      })));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/recruitment/jobs", (req, res) => {
+    try {
+      if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const job = req.body;
+      if (!job.title || !job.company) {
+        return res.status(400).json({ error: "Title and Company are required" });
+      }
+      const saved = db.saveJobOpening(job);
+      db.logAudit("Job Opening Saved", `${saved.id} \u2014 ${saved.title} (${saved.company})`, getOperator(req));
+      res.json({ success: true, job: saved });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/recruitment/jobs/:id", (req, res) => {
+    try {
+      if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const ok = db.deleteJobOpening(req.params.id);
+      if (!ok) return res.status(404).json({ error: "Job opening not found" });
+      db.logAudit("Job Opening Deleted", req.params.id, getOperator(req));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/recruitment/candidates", (req, res) => {
+    try {
+      const { opening_id } = req.query;
+      res.json(db.getJobCandidates(opening_id));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/recruitment/candidates", (req, res) => {
+    try {
+      if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const cand = req.body;
+      if (!cand.name || !cand.opening_id) {
+        return res.status(400).json({ error: "Candidate name and opening are required" });
+      }
+      const saved = db.saveJobCandidate(cand);
+      db.logAudit("Candidate Saved", `${saved.id} \u2014 ${saved.name} (stage: ${saved.stage})`, getOperator(req));
+      res.json({ success: true, candidate: saved });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/recruitment/candidates/:id", (req, res) => {
+    try {
+      if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const ok = db.deleteJobCandidate(req.params.id);
+      if (!ok) return res.status(404).json({ error: "Candidate not found" });
+      db.logAudit("Candidate Deleted", req.params.id, getOperator(req));
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.get("/api/expenses", (req, res) => {
+    try {
+      const { company } = req.query;
+      const ess = req.ess && req.ess.kind === "ESS" ? req.ess : null;
+      if (ess) {
+        return res.json(db.getExpenseClaims({ employeeId: ess.sub }));
+      }
+      const allowed = getAllowedCompanies(req);
+      let claims = db.getExpenseClaims({ company });
+      if (allowed) claims = claims.filter((c) => !c.company || allowed.includes(c.company));
+      res.json(claims);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/expenses", (req, res) => {
+    try {
+      const claim = req.body;
+      const ess = req.ess && req.ess.kind === "ESS" ? req.ess : null;
+      if (!claim.title || !claim.amount) {
+        return res.status(400).json({ error: "Title and amount are required" });
+      }
+      if (ess) {
+        const emp = db.getEmployeeById(ess.sub);
+        claim.employee_id = emp?.id || ess.sub;
+        claim.employee_name = emp?.name || ess.sub;
+        claim.company = emp?.company || null;
+        claim.status = "SUBMITTED";
+        claim.decided_by = null;
+        claim.decided_at = null;
+        claim.paid_at = null;
+      }
+      const saved = db.saveExpenseClaim(claim);
+      db.logAudit("Expense Claim " + (req.body.id ? "Updated" : "Submitted"), `${saved.claim_no} \u2014 ${saved.employee_name}: \u20B9${saved.amount} (${saved.title})`, getOperator(req));
+      res.json({ success: true, claim: saved });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.post("/api/expenses/:id/decision", (req, res) => {
+    try {
+      if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const { status, note } = req.body;
+      if (!["APPROVED", "REJECTED", "PAID", "SUBMITTED"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      const existing = db.getExpenseClaims().find((c) => c.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Claim not found" });
+      const updated = db.saveExpenseClaim({
+        ...existing,
+        status,
+        decision_note: note ?? existing.decision_note,
+        decided_by: getOperator(req),
+        decided_at: (/* @__PURE__ */ new Date()).toISOString(),
+        paid_at: status === "PAID" ? (/* @__PURE__ */ new Date()).toISOString() : existing.paid_at
+      });
+      db.logAudit("Expense " + status, `${updated.claim_no} \u2014 ${updated.employee_name} \u20B9${updated.amount}`, getOperator(req));
+      res.json({ success: true, claim: updated });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  app.delete("/api/expenses/:id", (req, res) => {
+    try {
+      const existing = db.getExpenseClaims().find((c) => c.id === req.params.id);
+      if (!existing) return res.status(404).json({ error: "Claim not found" });
+      const ess = req.ess && req.ess.kind === "ESS" ? req.ess : null;
+      if (ess) {
+        if (existing.employee_id.toLowerCase() !== ess.sub.toLowerCase()) {
+          return res.status(403).json({ error: "FORBIDDEN", message: "You can only withdraw your own claims." });
+        }
+        if (!["SUBMITTED"].includes(existing.status)) {
+          return res.status(400).json({ error: "Only claims still awaiting approval can be withdrawn." });
+        }
+      } else if (!["SUPER_HR", "MANAGEMENT", "COMPANY_HR"].includes(getOperatorRole(req))) {
+        return res.status(403).json({ error: "FORBIDDEN", message: "HR authorization required." });
+      }
+      const ok = db.deleteExpenseClaim(req.params.id);
+      if (!ok) return res.status(404).json({ error: "Claim not found" });
+      db.logAudit("Expense Claim Withdrawn", `${existing.claim_no} \u2014 ${existing.employee_name}`, getOperator(req));
+      res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
